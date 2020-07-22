@@ -13,7 +13,7 @@ pub struct Registers {
     e: u8,
     h: u8,
     l: u8,
-    f: Flags,
+    f: Flag,
 }
 
 impl Registers {
@@ -117,11 +117,11 @@ impl Registers {
         self.l
     }
 
-    pub fn set_f<F: Into<Flags>>(&mut self, flag: F) {
+    pub fn set_f<F: Into<Flag>>(&mut self, flag: F) {
         self.f = flag.into();
     }
 
-    pub fn get_f(&self) -> Flags {
+    pub fn get_f(&self) -> Flag {
         self.f
     }
 
@@ -139,27 +139,67 @@ impl Registers {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub struct Flags {
-    zf: bool, // Zero Flag
-    n: bool,  // Addition / Subtraction Flag
-    h: bool,  // Half Carry Flag
-    cy: bool, // Carry Flag
-}
+pub struct Flag(u8);
 
-impl From<u8> for Flags {
-    fn from(value: u8) -> Self {
-        Flags {
-            zf: (value >> 7) == 1,
-            n: (value >> 6) & 0x01 == 1,
-            h: (value >> 5) & 0x01 == 1,
-            cy: (value >> 4) & 0x01 == 1,
+impl Flag {
+    pub fn get_zf(&self) -> bool {
+        (self.0 >> 7) == 1
+    }
+
+    pub fn set_zf(&mut self, enabled: bool) {
+        if enabled {
+            self.0 |= 0b10000000; // Set
+        } else {
+            self.0 &= 0b01111111; // Clear
+        }
+    }
+
+    pub fn get_n(&self) -> bool {
+        ((self.0 >> 6) & 0x01) == 1
+    }
+
+    pub fn set_n(&mut self, enabled: bool) {
+        if enabled {
+            self.0 |= 0b01000000; // Set
+        } else {
+            self.0 &= 0b10111111; // Clear
+        }
+    }
+
+    pub fn get_h(&self) -> bool {
+        ((self.0 >> 5) & 0x01) == 1
+    }
+
+    pub fn set_h(&mut self, enabled: bool) {
+        if enabled {
+            self.0 |= 0b00100000; // Set
+        } else {
+            self.0 &= 0b11011111; // Clear
+        }
+    }
+
+    pub fn get_cy(&self) -> bool {
+        ((self.0 >> 4) & 0x01) == 1
+    }
+
+    pub fn set_cy(&mut self, enabled: bool) {
+        if enabled {
+            self.0 |= 0b00010000; // Set
+        } else {
+            self.0 &= 0b11101111; // Clear
         }
     }
 }
 
-impl From<Flags> for u8 {
-    fn from(flags: Flags) -> u8 {
-        (flags.zf as u8) << 7 | (flags.n as u8) << 6 | (flags.h as u8) << 5 | (flags.cy as u8) << 4
+impl From<u8> for Flag {
+    fn from(value: u8) -> Self {
+        Self(value & 0xF0) // Throw out bits 0 -> 3
+    }
+}
+
+impl From<Flag> for u8 {
+    fn from(flag: Flag) -> Self {
+        flag.0
     }
 }
 
@@ -168,69 +208,98 @@ mod test {
     use super::*;
 
     #[test]
-    fn u8_to_flags_works() {
-        let ex1: Flags = 0b11110000.into();
-        assert_eq!(ex1.zf && ex1.n && ex1.h && ex1.cy, true);
+    fn flag_zf_works() {
+        let mut flag: Flag = Default::default();
 
-        let ex2: Flags = 0b00110000.into();
-        assert_eq!((ex2.zf && ex2.n) == false && ex2.h && ex2.cy, true);
+        flag.set_zf(true);
+        assert_eq!(u8::from(flag), 0b10000000);
+        assert!(flag.get_zf());
 
-        let ex3: Flags = 0b10100000.into();
-        assert_eq!((ex3.n && ex3.cy) == false && ex3.zf && ex3.h, true);
-
-        let ex4: Flags = 0b11000000.into();
-        assert_eq!((ex4.h && ex4.cy) == false && ex4.zf && ex4.n, true);
-
-        let ex5: Flags = 0b01010000.into();
-        assert_eq!((ex5.zf && ex5.h) == false && ex5.n && ex5.cy, true);
+        flag.set_zf(false);
+        assert_eq!(u8::from(flag), 0b00000000);
+        assert!(!flag.get_zf());
     }
 
     #[test]
-    fn flags_to_u8_works() {
-        let ex1: u8 = Flags {
-            zf: true,
-            n: true,
-            h: true,
-            cy: true,
-        }
-        .into();
-        assert_eq!(ex1, 0b11110000);
+    fn flag_n_works() {
+        let mut flag: Flag = Default::default();
 
-        let ex2: u8 = Flags {
-            zf: false,
-            n: false,
-            h: true,
-            cy: true,
-        }
-        .into();
-        assert_eq!(ex2, 0b00110000);
+        flag.set_n(true);
+        assert_eq!(u8::from(flag), 0b01000000);
+        assert!(flag.get_n());
 
-        let ex3: u8 = Flags {
-            zf: true,
-            n: false,
-            h: true,
-            cy: false,
-        }
-        .into();
-        assert_eq!(ex3, 0b10100000);
+        flag.set_n(false);
+        assert_eq!(u8::from(flag), 0b00000000);
+        assert!(!flag.get_n());
+    }
 
-        let ex4: u8 = Flags {
-            zf: true,
-            n: true,
-            h: false,
-            cy: false,
-        }
-        .into();
-        assert_eq!(ex4, 0b11000000);
+    #[test]
+    fn flag_h_works() {
+        let mut flag: Flag = Default::default();
 
-        let ex5: u8 = Flags {
-            zf: false,
-            n: true,
-            h: false,
-            cy: true,
-        }
-        .into();
-        assert_eq!(ex5, 0b01010000);
+        flag.set_h(true);
+        assert_eq!(u8::from(flag), 0b00100000);
+        assert!(flag.get_h());
+
+        flag.set_h(false);
+        assert_eq!(u8::from(flag), 0b00000000);
+        assert!(!flag.get_h());
+    }
+
+    #[test]
+    fn flags_work_together() {
+        let mut flag: Flag = Default::default();
+        assert_eq!(u8::from(flag), 0b00000000);
+
+        flag.set_zf(true);
+        flag.set_cy(true);
+        flag.set_h(true);
+        flag.set_n(true);
+
+        assert_eq!(u8::from(flag), 0b11110000);
+        assert!(flag.get_zf());
+        assert!(flag.get_n());
+        assert!(flag.get_h());
+        assert!(flag.get_cy());
+
+        flag.set_cy(false);
+        assert_eq!(u8::from(flag), 0b11100000);
+        assert!(!flag.get_cy());
+
+        flag.set_n(false);
+        assert_eq!(u8::from(flag), 0b10100000);
+        assert!(!flag.get_n());
+    }
+
+    #[test]
+    fn flag_to_u8_and_back_works() {
+        let flag: Flag = 0b10011111.into();
+        assert_eq!(u8::from(flag), 0b10010000);
+        assert_eq!(flag.0, 0b10010000);
+        assert!(flag.get_zf());
+        assert!(!flag.get_n());
+        assert!(!flag.get_h());
+        assert!(flag.get_cy());
+
+        let mut base: Flag = Default::default();
+        base.set_h(true);
+        base.set_zf(true);
+
+        assert_eq!(base.0, 0b10100000);
+        assert_eq!(u8::from(base), 0b10100000);
+    }
+
+    #[test]
+    fn flag_cy_works() {
+        let mut flag: Flag = Default::default();
+
+        flag.set_cy(true);
+        assert_eq!(u8::from(flag), 0b00010000);
+        assert!(flag.get_cy());
+
+        flag.set_cy(false);
+        assert_eq!(u8::from(flag), 0b00000000);
+        assert!(!flag.get_cy());
     }
 
     #[test]
