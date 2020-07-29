@@ -33,7 +33,7 @@ impl Instruction {
     /// `LD A, n` Store value n into register A.
     /// ### Arguments
     /// * `A` The A register
-    /// * `n` Any valid 8-bit register (including `A`),`(BC)`, `(DE)`, `(HL)`, `(nn)`, and #.
+    /// * `n` Any valid 8-bit register (including `A`),`(BC)`, `(DE)`, `(HL)`, `(nn)`, and `#`.
     ///     * `nn` A two byte immediate value (Least significant byte first).
     pub fn ld_A_n(A: &mut u8, n: u8) {
         unimplemented!()
@@ -133,4 +133,39 @@ impl Instruction {
     }
 
     // *** 16-bit Loads ***
+
+    /// `LD n, nn` Store value nn in n.(really?)
+    /// ### Arguments
+    /// * `n` Any 16-bit register (including `SP`).
+    /// * `nn` A 16-bit immediate value.
+    pub fn ld_n_nn(n: &mut u16, nn: u16) {
+        unimplemented!()
+    }
+
+    /// `LD SP, HL` Put HL into the stack pointer.
+    /// ### Arguments
+    /// * `SP` The stack pointer register.
+    /// * `HL` The HL register.
+    pub fn ld_SP_HL(SP: &mut u16, HL: u16) {
+        unimplemented!()
+    }
+
+    // `LD HL, SP + n` is identical to `LDHL SP, n`.
+
+    /// `LDHL SP, n` "Put SP + n effective address into HL".
+    /// ### Arguments
+    /// * `HL` The HL register.
+    /// * `SP` The stack pointer register.
+    /// * `n` 8-bit **signed** integer.
+    ///
+    /// ### Flags
+    /// * `ZF` Reset.
+    /// * `N` Reset.
+    /// * `H` Set / Reset depending on operation.
+    /// * `CY` Set / Reset depending on operation.
+    pub fn ld_HL_SP_n(HL: &mut u16, SP: u16, n: i8) {
+        unimplemented!()
+    }
+
+    pub fn nop() {}
 }
