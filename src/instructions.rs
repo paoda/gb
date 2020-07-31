@@ -1,3 +1,4 @@
+use super::cpu::Flag;
 /// Sharp SM83 Instructions
 /// ### Definitions
 /// * "Any valid 8-bit register" refers to the registers `B`, `C`, `D`, `E`, `H` and `L`.
@@ -35,7 +36,7 @@ impl Instruction {
     /// * `A` The A register
     /// * `n` Any valid 8-bit register (including `A`),`(BC)`, `(DE)`, `(HL)`, `(nn)`, and `#`.
     ///     * `nn` A two byte immediate value (Least significant byte first).
-    pub fn ld_A_n(A: &mut u8, n: u8) {
+    pub fn ld_a_n(A: &mut u8, n: u8) {
         unimplemented!()
     }
 
@@ -44,7 +45,7 @@ impl Instruction {
     /// * `n` Any valid 8-bit register (including `A`), `(BC)`, `(DE)`, `(HL)`, and `(nn)`.
     ///     * `nn` A two byte immediate value (Least significant byte first).
     /// * `A` The A register.
-    pub fn ld_n_A(n: &mut u8, A: u8) {
+    pub fn ld_n_a(n: &mut u8, A: u8) {
         unimplemented!()
     }
 
@@ -52,7 +53,7 @@ impl Instruction {
     /// ### Arguments
     /// * `A` The A register.
     /// * `C` The C register.
-    pub fn ld_A_C(A: &mut u8, C: u8) {
+    pub fn ld_a_c(A: &mut u8, C: u8) {
         unimplemented!()
     }
 
@@ -60,7 +61,7 @@ impl Instruction {
     /// ### Arguments
     /// * `C` The C register.
     /// * `A` The A register.
-    pub fn ld_C_A(C: u8, A: u8) {
+    pub fn ld_c_a(C: u8, A: u8) {
         unimplemented!()
     }
 
@@ -73,7 +74,7 @@ impl Instruction {
     /// ### Arguments
     /// * `A The A register.
     /// * `HL` The HL register
-    pub fn ldd_A_HL(A: &mut u8, HL: u16) {
+    pub fn ldd_a_hl(A: &mut u8, HL: u16) {
         unimplemented!()
     }
 
@@ -86,7 +87,7 @@ impl Instruction {
     /// ### Arguments
     /// * `HL` The HL register.
     /// * `A` The A register.
-    pub fn ldd_HL_A(HL: u16, A: u8) {
+    pub fn ldd_hl_a(HL: u16, A: u8) {
         unimplemented!()
     }
 
@@ -99,7 +100,7 @@ impl Instruction {
     /// ### Arguments
     /// * `A` The A register.
     /// * `HL` The HL register.
-    pub fn ldi_A_HL(A: &mut u8, HL: u16) {
+    pub fn ldi_a_hl(A: &mut u8, HL: u16) {
         unimplemented!()
     }
 
@@ -112,7 +113,7 @@ impl Instruction {
     /// ### Arguments
     /// * `HL` The HL register.
     /// * `A` The A register.
-    pub fn ldi_HL_A(HL: u16, A: u8) {
+    pub fn ldi_hl_a(HL: u16, A: u8) {
         unimplemented!()
     }
 
@@ -120,7 +121,7 @@ impl Instruction {
     /// ### Arguments
     /// * `n` An 8-bit immediate value.
     /// * `A` The A register.
-    pub fn ldh_n_A(n: u8, A: u8) {
+    pub fn ldh_n_a(n: u8, A: u8) {
         unimplemented!()
     }
 
@@ -128,7 +129,7 @@ impl Instruction {
     /// ### Arguments
     /// * `A` The A register.
     /// * `n` An 8-bit immediate value
-    pub fn ldh_A_n(A: &mut u8, n: u8) {
+    pub fn ldh_a_n(A: &mut u8, n: u8) {
         unimplemented!()
     }
 
@@ -146,7 +147,7 @@ impl Instruction {
     /// ### Arguments
     /// * `SP` The stack pointer register.
     /// * `HL` The HL register.
-    pub fn ld_SP_HL(SP: &mut u16, HL: u16) {
+    pub fn ld_sp_hl(SP: &mut u16, HL: u16) {
         unimplemented!()
     }
 
@@ -157,15 +158,32 @@ impl Instruction {
     /// * `HL` The HL register.
     /// * `SP` The stack pointer register.
     /// * `n` 8-bit **signed** integer.
+    /// * `f` CPU flags.
     ///
     /// ### Flags
     /// * `ZF` Reset.
     /// * `N` Reset.
     /// * `H` Set / Reset depending on operation.
     /// * `CY` Set / Reset depending on operation.
-    pub fn ld_HL_SP_n(HL: &mut u16, SP: u16, n: i8) {
+    pub fn ldhl_sp_n(HL: &mut u16, SP: u16, n: i8, f: &mut Flag) {
         unimplemented!()
     }
 
-    pub fn nop() {}
+    /// `LD (nn), SP` Store stack pointer at $nn.
+    /// ### Arguments
+    /// * `nn` A 16-bit immediate address.
+    /// * `SP` The stack pointer register.
+    pub fn ld_nn_sp(nn: u16, SP: u16) {
+        unimplemented!()
+    }
+
+    /// `PUSH nn` Push 16-bit register onto the stack, then
+    /// decrement the stack pointer twice.
+    /// ### Arguments
+    /// * `nn` Any valid 16-bit address (including AF).
+    /// * `SP` The stack pointer register.
+    /// * `stack` The stack.
+    pub fn push_nn(nn: u16, SP: &mut u16, stack: &[u16]) {
+        unimplemented!()
+    }
 }
