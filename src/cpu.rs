@@ -1,10 +1,10 @@
-use super::instructions::Instruction;
+// use super::instructions::Instruction;
 
 // Gameboy CPU
 pub struct LR35902 {
-    sp: u16,
-    pc: u16,
-    reg: Registers,
+    _sp: u16,
+    _pc: u16,
+    _reg: Registers,
 }
 
 impl LR35902 {
@@ -23,7 +23,7 @@ impl LR35902 {
         // x = the opcode's 1st octal digit (i.e. bits 7-6)
         // y = the opcode's 2nd octal digit (i.e. bits 5-3)
         // z = the opcode's 3rd octal digit (i.e. bits 2-0)
-        // p = y rightshifted one position (i.e. bits 5-4)
+        // p = y right-shifted one position (i.e. bits 5-4)
         // q = y modulo 2 (i.e. bit 3)
 
         let x = opcode >> 6;
@@ -32,12 +32,12 @@ impl LR35902 {
         let p = y >> 1;
         let q = y & 0b00000001; // 0b001 = 0x1;
 
-        let d: i8 = 0; // Displacement Byte
-        let n: u8 = 0; // 8-bit Immediate Operand
-        let nn: u16 = 0; // 16-bit Immediate Operand
+        let _d: i8 = 0; // Displacement Byte
+        let _n: u8 = 0; // 8-bit Immediate Operand
+        let _nn: u16 = 0; // 16-bit Immediate Operand
 
         match (x, z, q, y, p) {
-            (0, 0, _, 0, _) => Instruction::nop(),
+            (0, 0, _, 0, _) => {}
             _ => panic!("Unexpected Opcode!"),
         }
     }
