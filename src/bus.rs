@@ -1,10 +1,8 @@
 #[derive(Debug, Copy, Clone)]
-pub struct MemoryBus {
-
-}
+pub struct MemoryBus {}
 
 impl MemoryBus {
-    pub fn read_byte(&self, _address: u16) {
+    pub fn read_byte(&self, _address: u16) -> u8 {
         unimplemented!()
     }
 
