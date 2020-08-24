@@ -29,6 +29,7 @@ pub enum Instruction {
     XOR,
     OR,
     CP,
+    RET(Condition),
 }
 
 pub enum AllRegisters {
@@ -152,6 +153,19 @@ impl Instruction {
                 Self::arg_table_r(z),
             ),
             (2, z, _, y, _) => Self::table_alu(y, z),
+            (3, 0, _, 0..=3, _) => Instruction::RET(
+                // RET cc[y]
+                Self::table_cc(y),
+            ),
+            (3, 0, _, 4, _) => Instruction::LD(
+                // LD (0xFF00 + n), A
+                Argument::IndirectImmediateByte(0xFF00 + (n as u16)),
+                Argument::Register(Register::A),
+            ),
+            (3, 0, _, 5, _) => Instruction::ADD(
+                Argument::RegisterPair(RegisterPair::SP),
+                Argument::ImmediateByte(d),
+            ),
             _ => unreachable!(),
         }
     }
