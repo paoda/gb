@@ -164,7 +164,7 @@ impl Instruction {
             ),
             (3, 0, _, 5, _) => Instruction::ADD(
                 Argument::RegisterPair(RegisterPair::SP),
-                Argument::ImmediateByte(d),
+                Argument::ImmediateByte(n),
             ),
             _ => unreachable!(),
         }
