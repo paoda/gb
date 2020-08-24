@@ -21,6 +21,7 @@ pub enum Instruction {
     CPL,
     SCF,
     CCF,
+    HALT,
 }
 
 pub enum AllRegisters {
@@ -126,13 +127,7 @@ impl Instruction {
             (0, 5, _, y, _) => Instruction::DEC(Self::table_r(y)),                     // DEC r[y]
             (0, 6, _, y, _) => Instruction::LD(
                 // LD r[y], n
-                {
-                    match Self::table_r(y) {
-                        AllRegisters::U8(reg) => Argument::Register(reg),
-                        AllRegisters::IndirectHL => Argument::IndirectRegister(RegisterPair::HL),
-                        _ => unreachable!(),
-                    }
-                },
+                Self::ld_table_r(y),
                 Argument::ImmediateByte(n),
             ),
             (0, 7, _, 0, _) => Instruction::RLCA,
@@ -143,12 +138,26 @@ impl Instruction {
             (0, 7, _, 5, _) => Instruction::CPL,
             (0, 7, _, 6, _) => Instruction::SCF,
             (0, 7, _, 7, _) => Instruction::CCF,
+            (1, 6, _, 6, _) => Instruction::HALT,
+            (1, z, _, y, _) => Instruction::LD(
+                // LD r[y], r[z]
+                Self::ld_table_r(y),
+                Self::ld_table_r(z),
+            ),
             _ => unreachable!(),
         }
     }
 
     pub fn from_prefixed_byte(cpu: &Cpu, byte: u8) -> Instruction {
         unimplemented!()
+    }
+
+    fn ld_table_r(index: u8) -> Argument {
+        match Self::table_r(index) {
+            AllRegisters::U8(register) => Argument::Register(register),
+            AllRegisters::IndirectHL => Argument::IndirectRegister(RegisterPair::HL),
+            _ => unreachable!(),
+        }
     }
 
     fn table_r(index: u8) -> AllRegisters {
