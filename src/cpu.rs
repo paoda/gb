@@ -24,6 +24,25 @@ impl Cpu {
     }
 }
 
+
+impl Cpu {
+    pub fn read_byte(&self, address: u16) -> u8 {
+        self.bus.read_byte(address)
+    }
+
+    pub fn write_byte(&mut self, address: u16, byte: u8) {
+        self.bus.write_byte(address, byte)
+    }
+
+    pub fn read_word(&self, address: u16) -> u16 {
+        self.bus.read_word(address)
+    }
+
+    pub fn write_word(&mut self, address: u16, word: u16) {
+        self.bus.write_word(address, word)
+    }
+}
+
 enum State {
     Execute,
     Halt,
