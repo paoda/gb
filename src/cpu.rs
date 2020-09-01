@@ -6,24 +6,22 @@ pub struct Cpu {
     flags: Flags,
     ime: bool,
     state: State,
-
 }
 
 impl Cpu {
-    pub fn fetch(&self) -> u8 {
+    fn fetch(&self) -> u8 {
         self.bus.read_byte(self.reg.pc)
         // TODO: Figure out where to increment the program counter.
     }
 
-    pub fn decode(&self, opcode: u8) -> Instruction {
+    fn decode(&self, opcode: u8) -> Instruction {
         Instruction::from_byte(self, opcode)
     }
 
-    pub fn execute(&mut self, instruction: Instruction) {
-        unimplemented!()
+    fn execute(&mut self, instruction: Instruction) {
+        Instruction::execute(self, instruction);
     }
 }
-
 
 impl Cpu {
     pub fn read_byte(&self, address: u16) -> u8 {
@@ -49,7 +47,6 @@ enum State {
     Stop,
 }
 
-
 impl Cpu {
     pub fn set_register(&mut self, register: Register, value: u8) {
         match register {
@@ -60,7 +57,7 @@ impl Cpu {
             Register::E => self.reg.e = value,
             Register::H => self.reg.h = value,
             Register::L => self.reg.l = value,
-            Register::Flags => self.reg.a = value.into()
+            Register::Flags => self.reg.a = value.into(),
         }
     }
 
@@ -73,7 +70,7 @@ impl Cpu {
             Register::E => self.reg.e,
             Register::H => self.reg.h,
             Register::L => self.reg.l,
-            Register::Flags => self.flags.into()
+            Register::Flags => self.flags.into(),
         }
     }
 
@@ -91,7 +88,7 @@ impl Cpu {
     pub fn set_register_pair(&mut self, pair: RegisterPair, value: u16) {
         let high = (value >> 8) as u8;
         let low = value as u8;
-        
+
         match pair {
             RegisterPair::AF => {
                 self.reg.a = high;
@@ -115,8 +112,6 @@ impl Cpu {
     }
 }
 
-
-
 pub enum Register {
     A,
     B,
@@ -137,7 +132,6 @@ pub enum RegisterPair {
     PC,
 }
 
-
 struct Registers {
     a: u8,
     b: u8,
@@ -150,13 +144,12 @@ struct Registers {
     pc: u16,
 }
 
-
 #[derive(Debug, Copy, Clone)]
-struct Flags {
-    z: bool, // Zero Flag
-    n: bool, // Negative Flag
-    h: bool, // Half-Carry Flag
-    c: bool, // Carry Flag
+pub struct Flags {
+    pub z: bool, // Zero Flag
+    pub n: bool, // Negative Flag
+    pub h: bool, // Half-Carry Flag
+    pub c: bool, // Carry Flag
 }
 
 impl From<u8> for Flags {
