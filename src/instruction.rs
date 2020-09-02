@@ -5,8 +5,8 @@ pub enum Instruction {
     STOP,
     JR(JumpCondition, i8),
     ADD(MATHTarget, MATHTarget),
-    INC(AllRegisters),
-    DEC(AllRegisters),
+    INC(Registers),
+    DEC(Registers),
     RLCA,
     RRCA,
     RLA,
@@ -58,28 +58,28 @@ impl Instruction {
                     }
                     Cycles(12)
                 }
-                (LDTarget::IndirectRegister(pair), LDTarget::Register(InstrRegisters::A)) => {
+                (LDTarget::IndirectRegister(pair), LDTarget::Register(InstrRegister::A)) => {
                     let a = cpu.register(Register::A);
 
                     match pair {
-                        InstrRegisterPairs::BC => {
+                        InstrRegisterPair::BC => {
                             // LD (BC), A | Put A into memory address BC
                             let addr = cpu.register_pair(RegisterPair::BC);
                             cpu.write_byte(addr, a);
                         }
-                        InstrRegisterPairs::DE => {
+                        InstrRegisterPair::DE => {
                             // LD (DE), A | Put A into memory address DE
                             let addr = cpu.register_pair(RegisterPair::DE);
                             cpu.write_byte(addr, a);
                         }
-                        InstrRegisterPairs::IncrementHL => {
+                        InstrRegisterPair::IncrementHL => {
                             // LD (HL+), A | Put A into memory address HL, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, a);
 
                             cpu.set_register_pair(RegisterPair::HL, addr + 1);
                         }
-                        InstrRegisterPairs::DecrementHL => {
+                        InstrRegisterPair::DecrementHL => {
                             // LD (HL-), A | Put A into memory address HL, then decrement HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, a);
@@ -90,26 +90,26 @@ impl Instruction {
                     }
                     Cycles(8)
                 }
-                (LDTarget::Register(InstrRegisters::A), LDTarget::IndirectRegister(pair)) => {
+                (LDTarget::Register(InstrRegister::A), LDTarget::IndirectRegister(pair)) => {
                     match pair {
-                        InstrRegisterPairs::BC => {
+                        InstrRegisterPair::BC => {
                             // LD A, (BC) | Put value at address BC into A
                             let addr = cpu.register_pair(RegisterPair::BC);
                             cpu.set_register(Register::A, cpu.read_byte(addr));
                         }
-                        InstrRegisterPairs::DE => {
+                        InstrRegisterPair::DE => {
                             // LD A, (DE) | Put value at address DE into A
                             let addr = cpu.register_pair(RegisterPair::DE);
                             cpu.set_register(Register::A, cpu.read_byte(addr));
                         }
-                        InstrRegisterPairs::IncrementHL => {
+                        InstrRegisterPair::IncrementHL => {
                             // LD A, (HL+) | Put value at address HL into A, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.set_register(Register::A, cpu.read_byte(addr));
 
                             cpu.set_register_pair(RegisterPair::HL, addr + 1);
                         }
-                        InstrRegisterPairs::DecrementHL => {
+                        InstrRegisterPair::DecrementHL => {
                             // LD A, (HL-) | Put value at address HL into A, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.set_register(Register::A, cpu.read_byte(addr));
@@ -125,40 +125,40 @@ impl Instruction {
                     let cycles: Cycles;
 
                     match reg {
-                        InstrRegisters::B => {
+                        InstrRegister::B => {
                             cpu.set_register(Register::B, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::C => {
+                        InstrRegister::C => {
                             cpu.set_register(Register::C, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::D => {
+                        InstrRegister::D => {
                             cpu.set_register(Register::D, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::E => {
+                        InstrRegister::E => {
                             cpu.set_register(Register::E, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::H => {
+                        InstrRegister::H => {
                             cpu.set_register(Register::H, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::L => {
+                        InstrRegister::L => {
                             cpu.set_register(Register::L, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::IndirectHL => {
+                        InstrRegister::IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, n);
                             cycles = Cycles(12);
                         }
-                        InstrRegisters::A => {
+                        InstrRegister::A => {
                             cpu.set_register(Register::A, n);
                             cycles = Cycles(8);
                         }
-                        InstrRegisters::IndirectC => unreachable!(),
+                        InstrRegister::IndirectC => unreachable!(),
                     }
                     cycles
                 }
@@ -169,7 +169,7 @@ impl Instruction {
                 // JR cc[y - 4], d | If condition is true, then add d to current address and jump
                 // JR d | Add d to current address and jump
                 let prev = cpu.register_pair(RegisterPair::PC);
-                let flags: Flags = cpu.register(Register::Flags).into();
+                let flags: Flags = cpu.register(Register::Flag).into();
                 let new_address = (prev as i16 + offset as i16) as u16;
 
                 match cond {
@@ -212,7 +212,7 @@ impl Instruction {
                 (MATHTarget::RegisterPair(RegisterPair::HL), MATHTarget::RegisterPair(pair)) => {
                     // ADD HL, rp[p] | add register pair to HL.
                     let hl = cpu.register_pair(RegisterPair::HL);
-                    let mut flags: Flags = cpu.register(Register::Flags).into();
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
                     let sum;
 
                     match pair {
@@ -233,13 +233,13 @@ impl Instruction {
                         }
                         _ => unreachable!(),
                     }
-                    cpu.set_register(Register::Flags, flags.into());
+                    cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register_pair(RegisterPair::HL, sum);
                     Cycles(8)
                 }
                 _ => unimplemented!(),
             },
-            Instruction::INC(AllRegisters::Word(pair)) => {
+            Instruction::INC(Registers::Word(pair)) => {
                 // INC rp[p] | Increment Register Pair
                 match pair {
                     RegisterPair::BC => {
@@ -262,58 +262,58 @@ impl Instruction {
                 }
                 Cycles(8)
             }
-            Instruction::INC(AllRegisters::Byte(reg)) => {
+            Instruction::INC(Registers::Byte(reg)) => {
                 // INC r[y] | Increment Register
-                let mut flags: Flags = cpu.register(Register::Flags).into();
+                let mut flags: Flags = cpu.register(Register::Flag).into();
                 let cycles: Cycles;
 
                 match reg {
-                    InstrRegisters::B => {
+                    InstrRegister::B => {
                         let b = cpu.register(Register::B);
                         cpu.set_register(Register::B, Self::inc_register(b, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::C => {
+                    InstrRegister::C => {
                         let c = cpu.register(Register::C);
                         cpu.set_register(Register::C, Self::inc_register(c, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::D => {
+                    InstrRegister::D => {
                         let d = cpu.register(Register::D);
                         cpu.set_register(Register::D, Self::inc_register(d, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::E => {
+                    InstrRegister::E => {
                         let e = cpu.register(Register::E);
                         cpu.set_register(Register::E, Self::inc_register(e, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::H => {
+                    InstrRegister::H => {
                         let h = cpu.register(Register::H);
                         cpu.set_register(Register::H, Self::inc_register(h, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::L => {
+                    InstrRegister::L => {
                         let l = cpu.register(Register::L);
                         cpu.set_register(Register::L, Self::inc_register(l, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::IndirectHL => {
+                    InstrRegister::IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         cpu.write_byte(addr, Self::inc_register(cpu.read_byte(addr), &mut flags));
                         cycles = Cycles(12);
                     }
-                    InstrRegisters::A => {
+                    InstrRegister::A => {
                         let a = cpu.register(Register::A);
                         cpu.set_register(Register::A, Self::inc_register(a, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::IndirectC => unreachable!(),
+                    InstrRegister::IndirectC => unreachable!(),
                 }
-                cpu.set_register(Register::Flags, flags.into());
+                cpu.set_register(Register::Flag, flags.into());
                 cycles
             }
-            Instruction::DEC(AllRegisters::Word(pair)) => {
+            Instruction::DEC(Registers::Word(pair)) => {
                 // DEC rp[p] | Decrement Register Pair
                 match pair {
                     RegisterPair::BC => {
@@ -336,89 +336,154 @@ impl Instruction {
                 }
                 Cycles(8)
             }
-            Instruction::DEC(AllRegisters::Byte(reg)) => {
+            Instruction::DEC(Registers::Byte(reg)) => {
                 // DEC r[y] | Decrement Register
-                let mut flags: Flags = cpu.register(Register::Flags).into();
+                let mut flags: Flags = cpu.register(Register::Flag).into();
                 let cycles: Cycles;
 
                 match reg {
-                    InstrRegisters::B => {
+                    InstrRegister::B => {
                         let b = cpu.register(Register::B);
                         cpu.set_register(Register::B, Self::dec_register(b, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::C => {
+                    InstrRegister::C => {
                         let c = cpu.register(Register::C);
                         cpu.set_register(Register::C, Self::dec_register(c, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::D => {
+                    InstrRegister::D => {
                         let d = cpu.register(Register::D);
                         cpu.set_register(Register::D, Self::dec_register(d, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::E => {
+                    InstrRegister::E => {
                         let e = cpu.register(Register::E);
                         cpu.set_register(Register::E, Self::dec_register(e, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::H => {
+                    InstrRegister::H => {
                         let h = cpu.register(Register::H);
                         cpu.set_register(Register::H, Self::dec_register(h, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::L => {
+                    InstrRegister::L => {
                         let l = cpu.register(Register::L);
                         cpu.set_register(Register::L, Self::dec_register(l, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::IndirectHL => {
+                    InstrRegister::IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         cpu.write_byte(addr, Self::dec_register(cpu.read_byte(addr), &mut flags));
                         cycles = Cycles(12);
                     }
-                    InstrRegisters::A => {
+                    InstrRegister::A => {
                         let a = cpu.register(Register::A);
                         cpu.set_register(Register::A, Self::dec_register(a, &mut flags));
                         cycles = Cycles(4);
                     }
-                    InstrRegisters::IndirectC => unreachable!(),
+                    InstrRegister::IndirectC => unreachable!(),
                 }
-                cpu.set_register(Register::Flags, flags.into());
+                cpu.set_register(Register::Flag, flags.into());
                 cycles
             }
             Instruction::RLCA => {
-                // FIXME: Pretty sure this is an incorrect implementation
-                let mut flags: Flags = cpu.register(Register::Flags).into();
+                let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let carry_bit = (a & 0x80) >> 7;
-                let new_a = a << 1;
+                let cache = a >> 7; // get the 7th bit (this will be the carry bit + the one that is wrapped around)
+                let rot_a = (a << 1) | (cache << 0); // (rotate a left), then set the first bit (which will be a 0 by default)
 
-                flags.z = 0 == new_a;
+                flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = carry_bit == 0x01;
+                flags.c = cache == 0x01;
 
-                cpu.set_register(Register::A, new_a);
+                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_register(Register::A, rot_a);
                 Cycles(4)
             }
             Instruction::RRCA => {
-                // FIXME: Pretty sure this is an incorrect implementation
-                let mut flags: Flags = cpu.register(Register::Flags).into();
+                let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let carry_bit = a & 0x01;
-                let new_a = a >> 1;
+                let cache = a & 0x01; // RLCA but the other way around
+                let rot_a = (a >> 1) | (cache << 7);
 
-                flags.z = new_a == 0;
+                flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = carry_bit == 0x01;
+                flags.c = cache == 0x01;
 
-                cpu.set_register(Register::A, new_a);
+                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_register(Register::A, rot_a);
                 Cycles(4)
             }
+            Instruction::RLA => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+
+                let a = cpu.register(Register::A);
+                let cache = a >> 7;
+                let rot_a = (a << 1) | ((flags.c as u8) << 0);
+
+                flags.z = false;
+                flags.n = false;
+                flags.h = false;
+                flags.c = cache == 0x01;
+
+                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_register(Register::A, rot_a);
+                Cycles(4)
+            }
+            Instruction::RRA => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+
+                let a = cpu.register(Register::A);
+                let cache = a & 0x01;
+                let rot_a = (a >> 1) | ((flags.c as u8) << 7);
+
+                flags.z = false;
+                flags.n = false;
+                flags.h = false;
+                flags.c = cache == 0x01;
+
+                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_register(Register::A, rot_a);
+                Cycles(4)
+            }
+            Instruction::DAA => unimplemented!(),
+            Instruction::CPL => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let a = cpu.register(Register::A);
+
+                flags.n = true;
+                flags.h = true;
+
+                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_register(Register::A, !a); // Bitwise not is ! instead of ~
+                Cycles(4)
+            }
+            Instruction::SCF => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+
+                flags.n = false;
+                flags.h = false;
+                flags.c = true;
+
+                cpu.set_register(Register::Flag, flags.into());
+                Cycles(4)
+            }
+            Instruction::CCF => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+
+                flags.n = false;
+                flags.h = false;
+                flags.c = !flags.c;
+
+                cpu.set_register(Register::Flag, flags.into());
+                Cycles(4)
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -503,59 +568,59 @@ impl Instruction {
             ),
             (0, 2, 0, _, 0) => Instruction::LD(
                 // LD (BC), A
-                LDTarget::IndirectRegister(InstrRegisterPairs::BC),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::BC),
+                LDTarget::Register(InstrRegister::A),
             ),
             (0, 2, 0, _, 1) => Instruction::LD(
                 // LD (DE), A
-                LDTarget::IndirectRegister(InstrRegisterPairs::DE),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::DE),
+                LDTarget::Register(InstrRegister::A),
             ),
             (0, 2, 1, _, 0) => Instruction::LD(
                 // LD A, (BC)
-                LDTarget::Register(InstrRegisters::A),
-                LDTarget::IndirectRegister(InstrRegisterPairs::BC),
+                LDTarget::Register(InstrRegister::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::BC),
             ),
             (0, 2, 1, _, 1) => Instruction::LD(
                 // LD A, (DE)
-                LDTarget::Register(InstrRegisters::A),
-                LDTarget::IndirectRegister(InstrRegisterPairs::DE),
+                LDTarget::Register(InstrRegister::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::DE),
             ),
             (0, 2, 0, _, 2) => Instruction::LD(
                 // LD (HL+), A
-                LDTarget::IndirectRegister(InstrRegisterPairs::IncrementHL),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::IncrementHL),
+                LDTarget::Register(InstrRegister::A),
             ),
             (0, 2, 0, _, 3) => Instruction::LD(
                 // LD (HL-), A
-                LDTarget::IndirectRegister(InstrRegisterPairs::DecrementHL),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::DecrementHL),
+                LDTarget::Register(InstrRegister::A),
             ),
             (0, 2, 1, _, 2) => Instruction::LD(
                 // LD A, (HL+)
-                LDTarget::Register(InstrRegisters::A),
-                LDTarget::IndirectRegister(InstrRegisterPairs::IncrementHL),
+                LDTarget::Register(InstrRegister::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::IncrementHL),
             ),
             (0, 2, 1, _, 3) => Instruction::LD(
                 // LD A, (HL-)
-                LDTarget::Register(InstrRegisters::A),
-                LDTarget::IndirectRegister(InstrRegisterPairs::DecrementHL),
+                LDTarget::Register(InstrRegister::A),
+                LDTarget::IndirectRegister(InstrRegisterPair::DecrementHL),
             ),
             (0, 3, 0, _, _) => Instruction::INC(
                 // INC rp[p]
-                AllRegisters::Word(Table::rp(p)),
+                Registers::Word(Table::rp(p)),
             ),
             (0, 3, 1, _, _) => Instruction::DEC(
                 // DEC rp[p]
-                AllRegisters::Word(Table::rp(p)),
+                Registers::Word(Table::rp(p)),
             ),
             (0, 4, _, _, _) => Instruction::INC(
                 // INC r[y]
-                AllRegisters::Byte(Table::r(y)),
+                Registers::Byte(Table::r(y)),
             ),
             (0, 5, _, _, _) => Instruction::DEC(
                 // DEC r[y]
-                AllRegisters::Byte(Table::r(y)),
+                Registers::Byte(Table::r(y)),
             ),
             (0, 6, _, _, _) => Instruction::LD(
                 // LD r[y], n
@@ -581,7 +646,7 @@ impl Instruction {
             (3, 0, _, 4, _) => Instruction::LD(
                 // LD (0xFF00 + n), A
                 LDTarget::ByteAtAddress(0xFF00 + (n as u16)), // TODO: Do we want to do any calculations here?
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::Register(InstrRegister::A),
             ),
             (3, 0, _, 5, _) => Instruction::ADD(
                 // ADD SP, d
@@ -590,7 +655,7 @@ impl Instruction {
             ),
             (3, 0, _, 6, _) => Instruction::LD(
                 // LD A, (0xFF00 + n)
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::Register(InstrRegister::A),
                 LDTarget::ByteAtAddress(0xFF00 + (n as u16)), // TODO: DO we want to do any calculations here?
             ),
             (3, 0, _, 7, _) => Instruction::LDHL(n as i8), // LD HL, SP + d
@@ -614,22 +679,22 @@ impl Instruction {
             ),
             (3, 2, _, 4, _) => Instruction::LD(
                 // LD (0xFF00 + C) ,A
-                LDTarget::Register(InstrRegisters::IndirectC),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::Register(InstrRegister::IndirectC),
+                LDTarget::Register(InstrRegister::A),
             ),
             (3, 2, _, 5, _) => Instruction::LD(
                 // LD (nn), A
                 LDTarget::ByteAtAddress(nn),
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::Register(InstrRegister::A),
             ),
             (3, 2, _, 6, _) => Instruction::LD(
                 // LD A, (0xFF00 + C)
-                LDTarget::Register(InstrRegisters::A),
-                LDTarget::Register(InstrRegisters::IndirectC),
+                LDTarget::Register(InstrRegister::A),
+                LDTarget::Register(InstrRegister::IndirectC),
             ),
             (3, 2, _, 7, _) => Instruction::LD(
                 // LD A, (nn)
-                LDTarget::Register(InstrRegisters::A),
+                LDTarget::Register(InstrRegister::A),
                 LDTarget::ByteAtAddress(nn),
             ),
             (3, 3, _, 0, _) => Instruction::JP(
@@ -672,29 +737,29 @@ pub enum JPTarget {
     ImmediateWord(u16),
 }
 
-pub enum AllRegisters {
-    Byte(InstrRegisters),
+pub enum Registers {
+    Byte(InstrRegister),
     Word(RegisterPair),
 }
 
 pub enum MATHTarget {
     HL,
     SP,
-    Register(InstrRegisters),
+    Register(InstrRegister),
     RegisterPair(RegisterPair),
     ImmediateByte(u8),
 }
 
 pub enum LDTarget {
-    Register(InstrRegisters),
-    IndirectRegister(InstrRegisterPairs),
+    Register(InstrRegister),
+    IndirectRegister(InstrRegisterPair),
     ByteAtAddress(u16),
     ImmediateWord(u16),
     ImmediateByte(u8),
     RegisterPair(RegisterPair),
 }
 
-enum InstrRegisterPairs {
+enum InstrRegisterPair {
     AF,
     BC,
     DE,
@@ -705,7 +770,7 @@ enum InstrRegisterPairs {
     DecrementHL,
 }
 
-enum InstrRegisters {
+enum InstrRegister {
     A,
     B,
     C,
@@ -728,16 +793,16 @@ pub enum JumpCondition {
 struct Table;
 
 impl Table {
-    pub fn r(index: u8) -> InstrRegisters {
+    pub fn r(index: u8) -> InstrRegister {
         match index {
-            0 => InstrRegisters::B,
-            1 => InstrRegisters::C,
-            2 => InstrRegisters::D,
-            3 => InstrRegisters::E,
-            4 => InstrRegisters::H,
-            5 => InstrRegisters::L,
-            6 => InstrRegisters::IndirectHL,
-            7 => InstrRegisters::A,
+            0 => InstrRegister::B,
+            1 => InstrRegister::C,
+            2 => InstrRegister::D,
+            3 => InstrRegister::E,
+            4 => InstrRegister::H,
+            5 => InstrRegister::L,
+            6 => InstrRegister::IndirectHL,
+            7 => InstrRegister::A,
             _ => unreachable!("Index {} is out of bounds in r[]", index),
         }
     }
@@ -776,18 +841,18 @@ impl Table {
         match fn_index {
             0 => Instruction::ADD(
                 // ADD A, r[z]
-                MATHTarget::Register(InstrRegisters::A),
+                MATHTarget::Register(InstrRegister::A),
                 MATHTarget::Register(Self::r(r_index)),
             ),
             1 => Instruction::ADC(
                 // ADC A, r[z]
-                MATHTarget::Register(InstrRegisters::A),
+                MATHTarget::Register(InstrRegister::A),
                 MATHTarget::Register(Self::r(r_index)),
             ),
             2 => Instruction::SUB(MATHTarget::Register(Self::r(r_index))), // SUB r[z]
             3 => Instruction::SBC(
                 // SBC A, r[z]
-                MATHTarget::Register(InstrRegisters::A),
+                MATHTarget::Register(InstrRegister::A),
                 MATHTarget::Register(Self::r(r_index)),
             ),
             4 => Instruction::AND(MATHTarget::Register(Self::r(r_index))), // AND r[z]

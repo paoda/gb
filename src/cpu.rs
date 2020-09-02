@@ -57,7 +57,7 @@ impl Cpu {
             Register::E => self.reg.e = value,
             Register::H => self.reg.h = value,
             Register::L => self.reg.l = value,
-            Register::Flags => self.reg.a = value.into(),
+            Register::Flag => self.reg.a = value.into(),
         }
     }
 
@@ -70,7 +70,7 @@ impl Cpu {
             Register::E => self.reg.e,
             Register::H => self.reg.h,
             Register::L => self.reg.l,
-            Register::Flags => self.flags.into(),
+            Register::Flag => self.flags.into(),
         }
     }
 
@@ -120,7 +120,7 @@ pub enum Register {
     E,
     H,
     L,
-    Flags,
+    Flag,
 }
 
 pub enum RegisterPair {
