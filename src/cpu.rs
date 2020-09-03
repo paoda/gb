@@ -1,5 +1,7 @@
 use super::bus::Bus;
 use super::instruction::Instruction;
+
+#[derive(Debug, Copy, Clone)]
 pub struct Cpu {
     bus: Bus,
     reg: Registers,
@@ -41,6 +43,7 @@ impl Cpu {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 enum State {
     Execute,
     Halt,
@@ -112,6 +115,7 @@ impl Cpu {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Register {
     A,
     B,
@@ -123,6 +127,7 @@ pub enum Register {
     Flag,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum RegisterPair {
     AF,
     BC,
@@ -132,6 +137,7 @@ pub enum RegisterPair {
     PC,
 }
 
+#[derive(Debug, Copy, Clone)]
 struct Registers {
     a: u8,
     b: u8,

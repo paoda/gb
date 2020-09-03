@@ -1,4 +1,6 @@
 use super::cpu::{Cpu, Flags, Register, RegisterPair};
+use std::convert::TryFrom;
+#[derive(Debug, Copy, Clone)]
 pub enum Instruction {
     NOP,
     LD(LDTarget, LDTarget),
@@ -35,6 +37,7 @@ pub enum Instruction {
     RST(u8),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Cycles(u8);
 
 impl Instruction {
@@ -47,29 +50,26 @@ impl Instruction {
                     cpu.write_word(nn, cpu.register_pair(RegisterPair::SP));
                     Cycles(20)
                 }
-                (LDTarget::RegisterPair(pairs), LDTarget::ImmediateWord(nn)) => {
+                (LDTarget::RegisterPair(pair), LDTarget::ImmediateWord(nn)) => {
                     // LD rp[p], nn | Put value nn into register pair
-                    match pairs {
-                        RegisterPair::BC => cpu.set_register_pair(RegisterPair::BC, nn),
-                        RegisterPair::DE => cpu.set_register_pair(RegisterPair::DE, nn),
-                        RegisterPair::HL => cpu.set_register_pair(RegisterPair::HL, nn),
-                        RegisterPair::SP => cpu.set_register_pair(RegisterPair::SP, nn),
+                    match pair {
+                        RegisterPair::BC
+                        | RegisterPair::DE
+                        | RegisterPair::HL
+                        | RegisterPair::SP => {
+                            cpu.set_register_pair(RegisterPair::try_from(pair).unwrap(), nn)
+                        }
                         _ => unreachable!(),
                     }
                     Cycles(12)
                 }
                 (LDTarget::IndirectRegister(pair), LDTarget::Register(InstrRegister::A)) => {
                     let a = cpu.register(Register::A);
-
                     match pair {
-                        InstrRegisterPair::BC => {
+                        InstrRegisterPair::BC | InstrRegisterPair::DE => {
                             // LD (BC), A | Put A into memory address BC
-                            let addr = cpu.register_pair(RegisterPair::BC);
-                            cpu.write_byte(addr, a);
-                        }
-                        InstrRegisterPair::DE => {
                             // LD (DE), A | Put A into memory address DE
-                            let addr = cpu.register_pair(RegisterPair::DE);
+                            let addr = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
                             cpu.write_byte(addr, a);
                         }
                         InstrRegisterPair::IncrementHL => {
@@ -92,14 +92,10 @@ impl Instruction {
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::IndirectRegister(pair)) => {
                     match pair {
-                        InstrRegisterPair::BC => {
+                        InstrRegisterPair::BC | InstrRegisterPair::DE => {
                             // LD A, (BC) | Put value at address BC into A
-                            let addr = cpu.register_pair(RegisterPair::BC);
-                            cpu.set_register(Register::A, cpu.read_byte(addr));
-                        }
-                        InstrRegisterPair::DE => {
                             // LD A, (DE) | Put value at address DE into A
-                            let addr = cpu.register_pair(RegisterPair::DE);
+                            let addr = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
                             cpu.set_register(Register::A, cpu.read_byte(addr));
                         }
                         InstrRegisterPair::IncrementHL => {
@@ -122,46 +118,26 @@ impl Instruction {
                 }
                 (LDTarget::Register(reg), LDTarget::ImmediateByte(n)) => {
                     // LD r[y], n | Store n in Register
-                    let cycles: Cycles;
-
                     match reg {
-                        InstrRegister::B => {
-                            cpu.set_register(Register::B, n);
-                            cycles = Cycles(8);
-                        }
-                        InstrRegister::C => {
-                            cpu.set_register(Register::C, n);
-                            cycles = Cycles(8);
-                        }
-                        InstrRegister::D => {
-                            cpu.set_register(Register::D, n);
-                            cycles = Cycles(8);
-                        }
-                        InstrRegister::E => {
-                            cpu.set_register(Register::E, n);
-                            cycles = Cycles(8);
-                        }
-                        InstrRegister::H => {
-                            cpu.set_register(Register::H, n);
-                            cycles = Cycles(8);
-                        }
-                        InstrRegister::L => {
-                            cpu.set_register(Register::L, n);
-                            cycles = Cycles(8);
-                        }
                         InstrRegister::IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, n);
-                            cycles = Cycles(12);
+                            Cycles(12)
                         }
-                        InstrRegister::A => {
-                            cpu.set_register(Register::A, n);
-                            cycles = Cycles(8);
+                        InstrRegister::A
+                        | InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L => {
+                            cpu.set_register(Register::try_from(reg).unwrap(), n);
+                            Cycles(8)
                         }
                         InstrRegister::IndirectC => unreachable!(),
                     }
-                    cycles
                 }
+                (LDTarget::Register(lhs), LDTarget::Register(rhs)) => unimplemented!(),
                 _ => unimplemented!(),
             },
             Instruction::STOP => Cycles(4),
@@ -211,30 +187,22 @@ impl Instruction {
             Instruction::ADD(lhs, rhs) => match (lhs, rhs) {
                 (MATHTarget::RegisterPair(RegisterPair::HL), MATHTarget::RegisterPair(pair)) => {
                     // ADD HL, rp[p] | add register pair to HL.
-                    let hl = cpu.register_pair(RegisterPair::HL);
                     let mut flags: Flags = cpu.register(Register::Flag).into();
-                    let sum;
 
                     match pair {
-                        RegisterPair::BC => {
-                            let bc = cpu.register_pair(RegisterPair::BC);
-                            sum = Self::add_u16s(hl, bc, &mut flags);
-                        }
-                        RegisterPair::DE => {
-                            let de = cpu.register_pair(RegisterPair::DE);
-                            sum = Self::add_u16s(hl, de, &mut flags);
-                        }
-                        RegisterPair::HL => {
-                            sum = Self::add_u16s(hl, hl, &mut flags);
-                        }
-                        RegisterPair::SP => {
-                            let sp = cpu.register_pair(RegisterPair::SP);
-                            sum = Self::add_u16s(hl, sp, &mut flags);
+                        RegisterPair::BC
+                        | RegisterPair::DE
+                        | RegisterPair::HL
+                        | RegisterPair::SP => {
+                            let hl_value = cpu.register_pair(RegisterPair::HL);
+                            let value = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
+                            let sum = Self::add_u16s(hl_value, value, &mut flags);
+
+                            cpu.set_register_pair(RegisterPair::HL, sum);
                         }
                         _ => unreachable!(),
                     }
                     cpu.set_register(Register::Flag, flags.into());
-                    cpu.set_register_pair(RegisterPair::HL, sum);
                     Cycles(8)
                 }
                 _ => unimplemented!(),
@@ -242,21 +210,9 @@ impl Instruction {
             Instruction::INC(Registers::Word(pair)) => {
                 // INC rp[p] | Increment Register Pair
                 match pair {
-                    RegisterPair::BC => {
-                        let bc = cpu.register_pair(RegisterPair::BC);
-                        cpu.set_register_pair(RegisterPair::BC, bc + 1);
-                    }
-                    RegisterPair::DE => {
-                        let de = cpu.register_pair(RegisterPair::DE);
-                        cpu.set_register_pair(RegisterPair::DE, de + 1);
-                    }
-                    RegisterPair::HL => {
-                        let hl = cpu.register_pair(RegisterPair::HL);
-                        cpu.set_register_pair(RegisterPair::HL, hl + 1);
-                    }
-                    RegisterPair::SP => {
-                        let sp = cpu.register_pair(RegisterPair::SP);
-                        cpu.set_register_pair(RegisterPair::SP, sp + 1);
+                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::SP => {
+                        let value = cpu.register_pair(pair);
+                        cpu.set_register_pair(pair, value + 1);
                     }
                     _ => unreachable!(),
                 }
@@ -268,45 +224,23 @@ impl Instruction {
                 let cycles: Cycles;
 
                 match reg {
-                    InstrRegister::B => {
-                        let b = cpu.register(Register::B);
-                        cpu.set_register(Register::B, Self::inc_register(b, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::C => {
-                        let c = cpu.register(Register::C);
-                        cpu.set_register(Register::C, Self::inc_register(c, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::D => {
-                        let d = cpu.register(Register::D);
-                        cpu.set_register(Register::D, Self::inc_register(d, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::E => {
-                        let e = cpu.register(Register::E);
-                        cpu.set_register(Register::E, Self::inc_register(e, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::H => {
-                        let h = cpu.register(Register::H);
-                        cpu.set_register(Register::H, Self::inc_register(h, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::L => {
-                        let l = cpu.register(Register::L);
-                        cpu.set_register(Register::L, Self::inc_register(l, &mut flags));
-                        cycles = Cycles(4);
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let reg = Register::try_from(reg).unwrap();
+
+                        let value = cpu.register(reg);
+                        cpu.set_register(reg, Self::inc_register(value, &mut flags));
+                        cycles = Cycles(4)
                     }
                     InstrRegister::IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         cpu.write_byte(addr, Self::inc_register(cpu.read_byte(addr), &mut flags));
-                        cycles = Cycles(12);
-                    }
-                    InstrRegister::A => {
-                        let a = cpu.register(Register::A);
-                        cpu.set_register(Register::A, Self::inc_register(a, &mut flags));
-                        cycles = Cycles(4);
+                        cycles = Cycles(12)
                     }
                     InstrRegister::IndirectC => unreachable!(),
                 }
@@ -314,23 +248,10 @@ impl Instruction {
                 cycles
             }
             Instruction::DEC(Registers::Word(pair)) => {
-                // DEC rp[p] | Decrement Register Pair
                 match pair {
-                    RegisterPair::BC => {
-                        let bc = cpu.register_pair(RegisterPair::BC);
-                        cpu.set_register_pair(RegisterPair::BC, bc - 1);
-                    }
-                    RegisterPair::DE => {
-                        let de = cpu.register_pair(RegisterPair::DE);
-                        cpu.set_register_pair(RegisterPair::DE, de - 1);
-                    }
-                    RegisterPair::HL => {
-                        let hl = cpu.register_pair(RegisterPair::HL);
-                        cpu.set_register_pair(RegisterPair::HL, hl - 1);
-                    }
-                    RegisterPair::SP => {
-                        let sp = cpu.register_pair(RegisterPair::SP);
-                        cpu.set_register_pair(RegisterPair::SP, sp - 1);
+                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::SP => {
+                        let value = cpu.register_pair(pair);
+                        cpu.set_register_pair(pair, value - 1);
                     }
                     _ => unreachable!(),
                 }
@@ -342,45 +263,23 @@ impl Instruction {
                 let cycles: Cycles;
 
                 match reg {
-                    InstrRegister::B => {
-                        let b = cpu.register(Register::B);
-                        cpu.set_register(Register::B, Self::dec_register(b, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::C => {
-                        let c = cpu.register(Register::C);
-                        cpu.set_register(Register::C, Self::dec_register(c, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::D => {
-                        let d = cpu.register(Register::D);
-                        cpu.set_register(Register::D, Self::dec_register(d, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::E => {
-                        let e = cpu.register(Register::E);
-                        cpu.set_register(Register::E, Self::dec_register(e, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::H => {
-                        let h = cpu.register(Register::H);
-                        cpu.set_register(Register::H, Self::dec_register(h, &mut flags));
-                        cycles = Cycles(4);
-                    }
-                    InstrRegister::L => {
-                        let l = cpu.register(Register::L);
-                        cpu.set_register(Register::L, Self::dec_register(l, &mut flags));
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let reg = Register::try_from(reg).unwrap();
+
+                        let value = cpu.register(reg);
+                        cpu.set_register(reg, Self::dec_register(value, &mut flags));
                         cycles = Cycles(4);
                     }
                     InstrRegister::IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         cpu.write_byte(addr, Self::dec_register(cpu.read_byte(addr), &mut flags));
                         cycles = Cycles(12);
-                    }
-                    InstrRegister::A => {
-                        let a = cpu.register(Register::A);
-                        cpu.set_register(Register::A, Self::dec_register(a, &mut flags));
-                        cycles = Cycles(4);
                     }
                     InstrRegister::IndirectC => unreachable!(),
                 }
@@ -732,16 +631,20 @@ impl Instruction {
         unimplemented!()
     }
 }
+
+#[derive(Debug, Copy, Clone)]
 pub enum JPTarget {
     RegisterPair(RegisterPair),
     ImmediateWord(u16),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Registers {
     Byte(InstrRegister),
     Word(RegisterPair),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum MATHTarget {
     HL,
     SP,
@@ -750,6 +653,7 @@ pub enum MATHTarget {
     ImmediateByte(u8),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum LDTarget {
     Register(InstrRegister),
     IndirectRegister(InstrRegisterPair),
@@ -759,6 +663,7 @@ pub enum LDTarget {
     RegisterPair(RegisterPair),
 }
 
+#[derive(Debug, Copy, Clone)]
 enum InstrRegisterPair {
     AF,
     BC,
@@ -770,6 +675,41 @@ enum InstrRegisterPair {
     DecrementHL,
 }
 
+impl From<RegisterPair> for InstrRegisterPair {
+    fn from(pair: RegisterPair) -> Self {
+        match pair {
+            RegisterPair::AF => Self::AF,
+            RegisterPair::BC => Self::BC,
+            RegisterPair::DE => Self::DE,
+            RegisterPair::HL => Self::HL,
+            RegisterPair::SP => Self::SP,
+            RegisterPair::PC => Self::PC,
+        }
+    }
+}
+
+impl TryFrom<InstrRegisterPair> for RegisterPair {
+    type Error = String; // FIXME: Proper error type goes here.
+
+    fn try_from(pair: InstrRegisterPair) -> Result<Self, Self::Error> {
+        match pair {
+            InstrRegisterPair::AF => Ok(Self::AF),
+            InstrRegisterPair::BC => Ok(Self::BC),
+            InstrRegisterPair::DE => Ok(Self::DE),
+            InstrRegisterPair::HL => Ok(Self::HL),
+            InstrRegisterPair::SP => Ok(Self::SP),
+            InstrRegisterPair::PC => Ok(Self::PC),
+            InstrRegisterPair::IncrementHL => {
+                Err("Can not convert InstrRegisterPair::IncrementHL to RegisterPair".to_string())
+            }
+            InstrRegisterPair::DecrementHL => {
+                Err("Can not convert InstrRegisterPair::DecrementHL to RegisterPair".to_string())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 enum InstrRegister {
     A,
     B,
@@ -782,6 +722,46 @@ enum InstrRegister {
     IndirectC,  // (0xFF00 + C)
 }
 
+impl TryFrom<Register> for InstrRegister {
+    type Error = String; // FIXME: Proper error type goes here
+
+    fn try_from(register: Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::A => Ok(Self::A),
+            Register::B => Ok(Self::B),
+            Register::C => Ok(Self::C),
+            Register::D => Ok(Self::D),
+            Register::E => Ok(Self::E),
+            Register::H => Ok(Self::H),
+            Register::L => Ok(Self::L),
+            Register::Flag => Err("Can not convert Register::Flag to InstrRegister".to_string()),
+        }
+    }
+}
+
+impl TryFrom<InstrRegister> for Register {
+    type Error = String; // FIXME: Proper error type goes here.
+
+    fn try_from(register: InstrRegister) -> Result<Self, Self::Error> {
+        match register {
+            InstrRegister::A => Ok(Self::A),
+            InstrRegister::B => Ok(Self::B),
+            InstrRegister::C => Ok(Self::C),
+            InstrRegister::D => Ok(Self::D),
+            InstrRegister::E => Ok(Self::E),
+            InstrRegister::H => Ok(Self::H),
+            InstrRegister::L => Ok(Self::L),
+            InstrRegister::IndirectHL => {
+                Err("Can not convert InstrRegister::IndirectHL to Register".to_string())
+            }
+            InstrRegister::IndirectC => {
+                Err("Can not convert InstrRegister::IndirectC to Register".to_string())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum JumpCondition {
     NotZero,
     Zero,
@@ -790,6 +770,7 @@ pub enum JumpCondition {
     Always,
 }
 
+#[derive(Debug, Copy, Clone)]
 struct Table;
 
 impl Table {
