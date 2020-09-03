@@ -137,7 +137,14 @@ impl Instruction {
                         InstrRegister::IndirectC => unreachable!(),
                     }
                 }
-                (LDTarget::Register(lhs), LDTarget::Register(rhs)) => unimplemented!(),
+                (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
+                    // LD r[y], r[z] | Store value of RHS Register in LHS Register
+
+                    // FIXME: panicking is the right thing to do, but maybe .unwrap is too unclear?
+                    let rhs_value = cpu.register(Register::try_from(rhs).unwrap());
+                    cpu.set_register(Register::try_from(lhs).unwrap(), rhs_value);
+                    Cycles(4)
+                }
                 _ => unimplemented!(),
             },
             Instruction::STOP => Cycles(4),
@@ -204,6 +211,35 @@ impl Instruction {
                     }
                     cpu.set_register(Register::Flag, flags.into());
                     Cycles(8)
+                }
+                (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let sum;
+                    let cycles: Cycles;
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            sum = Self::add_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            sum = Self::add_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectC => unimplemented!(),
+                    }
+
+                    cpu.set_register(Register::A, sum);
+                    cpu.set_register(Register::Flag, flags.into());
+                    cycles
                 }
                 _ => unimplemented!(),
             },
@@ -382,33 +418,315 @@ impl Instruction {
                 cpu.set_register(Register::Flag, flags.into());
                 Cycles(4)
             }
+            Instruction::HALT => unimplemented!(),
+            Instruction::ADC(lhs, rhs) => match (lhs, rhs) {
+                (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let sum;
 
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value =
+                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c as u8);
+                            sum = Self::add_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            sum = Self::add_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, sum);
+                    cycles
+                }
+                _ => unimplemented!(),
+            },
+            Instruction::SUB(target) => match target {
+                MATHTarget::Register(reg) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let diff;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            diff = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            diff = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, diff);
+                    cycles
+                }
+                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                _ => unreachable!(),
+            },
+            Instruction::SBC(lhs, rhs) => match (lhs, rhs) {
+                // TODO: Does SBC actually have anything other than the A register on the LHS?
+                (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let diff;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value =
+                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c as u8);
+                            diff = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            diff = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    cpu.set_register(Register::A, diff);
+                    cpu.set_register(Register::Flag, flags.into());
+                    cycles
+                }
+                _ => unimplemented!(),
+            },
+            Instruction::AND(target) => match target {
+                MATHTarget::Register(reg) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let result;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            result = a_value & value;
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            result = a_value & value;
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = true;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    cycles
+                }
+                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                _ => unreachable!(),
+            },
+            Instruction::XOR(target) => match target {
+                MATHTarget::Register(reg) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let result;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            result = a_value ^ value;
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            result = a_value ^ value;
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = false;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    cycles
+                }
+                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                _ => unreachable!(),
+            },
+            Instruction::OR(target) => match target {
+                MATHTarget::Register(reg) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+                    let result;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            result = a_value | value;
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            result = a_value | value;
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = false;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    cycles
+                }
+                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                _ => unreachable!(),
+            },
+            Instruction::CP(target) => match target {
+                MATHTarget::Register(reg) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let a_value = cpu.register(Register::A);
+                    let cycles: Cycles;
+
+                    match reg {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let _ = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(4);
+                        }
+                        InstrRegister::IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            let _ = Self::sub_u8s(a_value, value, &mut flags);
+                            cycles = Cycles(8);
+                        }
+                        InstrRegister::IndirectC => unreachable!(),
+                    }
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cycles
+                }
+                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                _ => unreachable!(),
+            },
             _ => unimplemented!(),
         }
     }
 
     fn dec_register(reg: u8, flags: &mut Flags) -> u8 {
-        let res = reg - 1;
-
-        flags.z = res == 0;
-        flags.n = true;
-        flags.h = !Self::u8_half_carry(res, 1); // FIXME: Is this right?
-
-        res
+        Self::sub_u8s_no_carry(reg, 1, flags)
     }
 
     fn inc_register(reg: u8, flags: &mut Flags) -> u8 {
-        let res = reg + 1;
+        Self::add_u8s_no_carry(reg, 1, flags)
+    }
 
-        flags.z = res == 0;
+    fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
+        let diff = left.wrapping_sub(right);
+
+        flags.z = diff == 0;
+        flags.n = true;
+        flags.h = Self::u8_half_carry(left, right);
+
+        diff
+    }
+
+    fn sub_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
+        let (diff, did_overflow) = left.overflowing_sub(right);
+
+        flags.z = diff == 0;
+        flags.n = true;
+        flags.h = Self::u8_half_carry(left, right);
+        flags.c = did_overflow;
+
+        diff
+    }
+
+    fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
+        let sum = left.wrapping_add(right);
+
+        flags.z = sum == 0;
         flags.n = false;
-        flags.h = Self::u8_half_carry(reg, 1);
+        flags.h = Self::u8_half_carry(left, right);
 
-        res
+        sum
+    }
+
+    fn add_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
+        let (sum, did_overflow) = left.overflowing_add(right);
+
+        flags.z = sum == 0;
+        flags.n = false;
+        flags.h = Self::u8_half_carry(left, right);
+        flags.c = did_overflow;
+
+        sum
     }
 
     fn add_u16s(left: u16, right: u16, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right);
+
         flags.n = false;
         flags.h = Self::u16_half_carry(left, right);
         flags.c = did_overflow;
