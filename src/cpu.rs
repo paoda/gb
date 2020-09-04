@@ -11,6 +11,16 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    pub fn ime(&self) -> bool {
+        self.ime
+    }
+
+    pub fn set_ime(&mut self, enabled: bool) {
+        self.ime = enabled;
+    }
+}
+
+impl Cpu {
     fn fetch(&self) -> u8 {
         self.bus.read_byte(self.reg.pc)
         // TODO: Figure out where to increment the program counter.

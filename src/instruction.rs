@@ -145,6 +145,24 @@ impl Instruction {
                     cpu.set_register(Register::try_from(lhs).unwrap(), rhs_value);
                     Cycles(4)
                 }
+                (LDTarget::ByteAtAddressWithOffset(n), LDTarget::Register(InstrRegister::A)) => {
+                    // LD (0xFF00 + n), A | Store register A at address (0xFF00 + n)
+                    cpu.write_byte(0xFF00 + (n as u16), cpu.register(Register::A));
+                    Cycles(12)
+                }
+                (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddressWithOffset(n)) => {
+                    // LD A, (0xFF00 + n) | Store value at address (0xFF00 + n) in register A
+                    cpu.set_register(Register::A, cpu.read_byte(0xFF00 + (n as u16)));
+                    Cycles(12)
+                }
+                (
+                    LDTarget::RegisterPair(RegisterPair::SP),
+                    LDTarget::RegisterPair(RegisterPair::HL),
+                ) => {
+                    // LD SP, HL | Load Register HL into Register SP
+                    cpu.set_register_pair(RegisterPair::SP, cpu.register_pair(RegisterPair::HL));
+                    Cycles(8)
+                }
                 _ => unimplemented!(),
             },
             Instruction::STOP => Cycles(4),
@@ -153,7 +171,7 @@ impl Instruction {
                 // JR d | Add d to current address and jump
                 let prev = cpu.register_pair(RegisterPair::PC);
                 let flags: Flags = cpu.register(Register::Flag).into();
-                let new_address = (prev as i16 + offset as i16) as u16;
+                let new_address = Self::add_u16_i8_no_flags(prev, offset);
 
                 match cond {
                     JumpCondition::Always => {
@@ -213,6 +231,7 @@ impl Instruction {
                     Cycles(8)
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    // ADD A, r[z] | Add (A + r[z]) to register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let sum;
@@ -234,12 +253,20 @@ impl Instruction {
                             sum = Self::add_u8s(a_value, value, &mut flags);
                             cycles = Cycles(4);
                         }
-                        InstrRegister::IndirectC => unimplemented!(),
+                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     cpu.set_register(Register::A, sum);
                     cpu.set_register(Register::Flag, flags.into());
                     cycles
+                }
+                (MATHTarget::RegisterPair(RegisterPair::SP), MATHTarget::ImmediateByte(d)) => {
+                    // ADD SP, d | Add d (is signed) to register pair SP.
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let d = d as i8;
+                    let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
+                    cpu.set_register_pair(RegisterPair::SP, sum);
+                    Cycles(16)
                 }
                 _ => unimplemented!(),
             },
@@ -284,6 +311,7 @@ impl Instruction {
                 cycles
             }
             Instruction::DEC(Registers::Word(pair)) => {
+                // DEC rp[p] | Decrement Register Pair
                 match pair {
                     RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::SP => {
                         let value = cpu.register_pair(pair);
@@ -323,6 +351,7 @@ impl Instruction {
                 cycles
             }
             Instruction::RLCA => {
+                // Rotate Register A left
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
@@ -339,6 +368,7 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::RRCA => {
+                // Rotate Register A right
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
@@ -355,6 +385,7 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::RLA => {
+                // Rotate register A left through carry
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
@@ -371,6 +402,7 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::RRA => {
+                // Rotate register A right through carry
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
@@ -388,6 +420,7 @@ impl Instruction {
             }
             Instruction::DAA => unimplemented!(),
             Instruction::CPL => {
+                // Compliment A register (inverse)
                 let mut flags: Flags = cpu.register(Register::Flag).into();
                 let a = cpu.register(Register::A);
 
@@ -399,6 +432,7 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::SCF => {
+                // Set Carry Flag
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 flags.n = false;
@@ -409,6 +443,7 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::CCF => {
+                // Compliment Carry Flag (inverse)
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 flags.n = false;
@@ -421,6 +456,8 @@ impl Instruction {
             Instruction::HALT => unimplemented!(),
             Instruction::ADC(lhs, rhs) => match (lhs, rhs) {
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    // ADC A, r[z] | Add register r[z] plus the Carry flag to A
+                    // FIXME: Do I Add register A as well?
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -454,6 +491,7 @@ impl Instruction {
             },
             Instruction::SUB(target) => match target {
                 MATHTarget::Register(reg) => {
+                    // SUB r[z] | Subtract the value in register r[z] from register A, then store in A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -489,6 +527,8 @@ impl Instruction {
             Instruction::SBC(lhs, rhs) => match (lhs, rhs) {
                 // TODO: Does SBC actually have anything other than the A register on the LHS?
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+                    // SBC A, r[z] | Subtract the value from register r[z] from A, add the Carry flag and then store in A
+                    // FIXME: See ADC, is this a correct understanding of this Instruction
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -523,6 +563,7 @@ impl Instruction {
             },
             Instruction::AND(target) => match target {
                 MATHTarget::Register(reg) => {
+                    // AND r[z] | Bitwise AND register r[z] and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -562,6 +603,7 @@ impl Instruction {
             },
             Instruction::XOR(target) => match target {
                 MATHTarget::Register(reg) => {
+                    // XOR r[z] | Bitwise XOR register r[z] and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -601,6 +643,7 @@ impl Instruction {
             },
             Instruction::OR(target) => match target {
                 MATHTarget::Register(reg) => {
+                    // OR r[z] | Bitwise OR register r[z] and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -640,6 +683,7 @@ impl Instruction {
             },
             Instruction::CP(target) => match target {
                 MATHTarget::Register(reg) => {
+                    // CP r[z] | Same behaviour as SUB, except the result is not stored.
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
@@ -670,8 +714,111 @@ impl Instruction {
                 MATHTarget::ImmediateByte(byte) => unimplemented!(),
                 _ => unreachable!(),
             },
+            Instruction::RET(cond) => {
+                // RET cc[y] | Essentially a POP PC, Return from Subroutine
+                // RET       | Essentially a POP PC, Return from Subroutine
+                let flags: Flags = cpu.register(Register::Flag).into();
+                let sp_value = cpu.register_pair(RegisterPair::SP);
+
+                match cond {
+                    JumpCondition::NotZero => {
+                        if !flags.z {
+                            let (new_sp, addr) = Self::ret(cpu, sp_value);
+                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            return Cycles(20);
+                        }
+                        Cycles(8)
+                    }
+                    JumpCondition::Zero => {
+                        if flags.z {
+                            let (new_sp, addr) = Self::ret(cpu, sp_value);
+                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            return Cycles(20);
+                        }
+                        Cycles(8)
+                    }
+                    JumpCondition::NotCarry => {
+                        if !flags.c {
+                            let (new_sp, addr) = Self::ret(cpu, sp_value);
+                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            return Cycles(20);
+                        }
+                        Cycles(8)
+                    }
+                    JumpCondition::Carry => {
+                        if flags.c {
+                            let (new_sp, addr) = Self::ret(cpu, sp_value);
+                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            return Cycles(20);
+                        }
+                        Cycles(8)
+                    }
+                    JumpCondition::Always => {
+                        let (new_sp, addr) = Self::ret(cpu, sp_value);
+                        cpu.set_register_pair(RegisterPair::SP, new_sp);
+                        cpu.set_register_pair(RegisterPair::PC, addr);
+                        Cycles(16)
+                    }
+                }
+            }
+            Instruction::LDHL(d) => {
+                // LDHL SP + d   | Add SP + d to register HL
+                // LD HL, SP + d | Add SP + d to register HL
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
+                cpu.set_register_pair(RegisterPair::HL, sum);
+                Cycles(12)
+            }
+            Instruction::POP(pair) => {
+                // POP rp2[p] | Pop from stack into register pair rp[2]
+                // Flags are set when we call cpu.set_register_pair(RegisterPair::AF, value);
+                let mut sp_value = cpu.register_pair(RegisterPair::SP);
+
+                match pair {
+                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
+                        let low = cpu.read_byte(sp_value);
+                        sp_value += 1;
+                        let high = cpu.read_byte(sp_value);
+                        sp_value += 1;
+
+                        cpu.set_register_pair(pair, (high as u16) << 8 | low as u16);
+                    }
+                    _ => unreachable!(),
+                }
+                cpu.set_register_pair(RegisterPair::SP, sp_value);
+                Cycles(12)
+            }
+            Instruction::RETI => {
+                // Same as RET, after which interrupts are enabled.
+                let (new_sp, addr) = Self::ret(cpu, cpu.register_pair(RegisterPair::SP));
+                cpu.set_register_pair(RegisterPair::SP, new_sp);
+                cpu.set_register_pair(RegisterPair::PC, addr);
+                cpu.set_ime(true);
+                Cycles(16)
+            }
+            Instruction::JP(cond, target) => match target {
+                JPTarget::RegisterPair(RegisterPair::HL) => {
+                    cpu.set_register_pair(RegisterPair::PC, cpu.register_pair(RegisterPair::HL));
+                    Cycles(4)
+                }
+                JPTarget::ImmediateWord(nn) => unimplemented!(),
+                _ => unreachable!(),
+            },
             _ => unimplemented!(),
         }
+    }
+
+    /// POPs two bytes from the stack and concatenates them to form a u16 address
+    ///
+    /// Returns a Tuple containing the new stack pointer and the address from the stack
+    /// * e.g. `(new_stack_pointer, address)`
+    fn ret(cpu: &Cpu, sp: u16) -> (u16, u16) {
+        let addr = (cpu.read_byte(sp + 1) as u16) << 8 | cpu.read_byte(sp) as u16;
+        (sp + 2, addr)
     }
 
     fn dec_register(reg: u8, flags: &mut Flags) -> u8 {
@@ -701,6 +848,21 @@ impl Instruction {
         flags.c = did_overflow;
 
         diff
+    }
+
+    fn add_u16_i8_no_flags(left: u16, right: i8) -> u16 {
+        (left as i16 + right as i16) as u16
+    }
+
+    fn add_u16_i8(left: u16, right: i8, flags: &mut Flags) -> u16 {
+        let (sum, did_overflow) = left.overflowing_add(right as u16);
+
+        flags.z = false;
+        flags.n = false;
+        flags.h = Self::u16_half_carry(left, right as u16);
+        flags.c = did_overflow;
+
+        sum
     }
 
     fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
@@ -862,7 +1024,7 @@ impl Instruction {
             (3, 0, _, 0..=3, _) => Instruction::RET(Table::cc(y)), // RET cc[y]
             (3, 0, _, 4, _) => Instruction::LD(
                 // LD (0xFF00 + n), A
-                LDTarget::ByteAtAddress(0xFF00 + (n as u16)), // TODO: Do we want to do any calculations here?
+                LDTarget::ByteAtAddressWithOffset(n),
                 LDTarget::Register(InstrRegister::A),
             ),
             (3, 0, _, 5, _) => Instruction::ADD(
@@ -873,7 +1035,7 @@ impl Instruction {
             (3, 0, _, 6, _) => Instruction::LD(
                 // LD A, (0xFF00 + n)
                 LDTarget::Register(InstrRegister::A),
-                LDTarget::ByteAtAddress(0xFF00 + (n as u16)), // TODO: DO we want to do any calculations here?
+                LDTarget::ByteAtAddressWithOffset(n),
             ),
             (3, 0, _, 7, _) => Instruction::LDHL(n as i8), // LD HL, SP + d
             (3, 1, 0, _, _) => Instruction::POP(Table::rp2(p)), // POP rp2[p]
@@ -921,26 +1083,21 @@ impl Instruction {
             ),
             (3, 3, _, 1, _) => unreachable!("This is the 0xCB Prefix"),
             // (3, 3, _, 2, _) => unreachable!(), (removed in documentation)
-            // (3, 3, _, 3, _) => unimplemented!(), (removed in documentation)
-            // (3, 3, _, 4, _) => unimplemented!(), (removed in documentation)
-            // (3, 3, _, 5, _) => unimplemented!(), (removed in documentation)
+            // (3, 3, _, 3, _) => unreachable!(), (removed in documentation)
+            // (3, 3, _, 4, _) => unreachable!(), (removed in documentation)
+            // (3, 3, _, 5, _) => unreachable!(), (removed in documentation)
             (3, 3, _, 6, _) => Instruction::DI,
             (3, 3, _, 7, _) => Instruction::EI,
             (3, 4, _, 0..=3, _) => Instruction::CALL(Table::cc(y), nn), // CALL cc[y], nn
-            // (3, 4, _, 4..=7, _) => unimplemented!(), (removed in documentation)
+            // (3, 4, _, 4..=7, _) => unreachable!(), (removed in documentation)
             (3, 5, 0, _, _) => Instruction::PUSH(Table::rp2(p)), // PUSH rp2[p]
             (3, 5, 1, _, 0) => Instruction::CALL(JumpCondition::Always, nn), // CALL nn
-            // (3, 5, 1, _, 1..=3) => unimplemented!(), (removed in documentation)
+            // (3, 5, 1, _, 1..=3) => unreachable!(), (removed in documentation)
             (3, 6, _, _, _) => Table::x3_alu(y, n),
             (3, 7, _, _, _) => Instruction::RST(y * 8), // RST y * 8
-            _ => unimplemented!(
-                "Unknown Opcode: {:#?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
-                opcode,
-                x,
-                z,
-                q,
-                y,
-                p
+            _ => panic!(
+                "Unknown Opcode: {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
+                opcode, x, z, q, y, p
             ),
         }
     }
@@ -979,6 +1136,7 @@ pub enum LDTarget {
     ImmediateWord(u16),
     ImmediateByte(u8),
     RegisterPair(RegisterPair),
+    ByteAtAddressWithOffset(u8),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -1162,7 +1320,29 @@ impl Table {
         }
     }
 
-    pub fn x3_alu(fn_index: u8, byte: u8) -> Instruction {
-        unimplemented!()
+    pub fn x3_alu(fn_index: u8, n: u8) -> Instruction {
+        match fn_index {
+            0 => Instruction::ADD(
+                // ADD A, n
+                MATHTarget::Register(InstrRegister::A),
+                MATHTarget::ImmediateByte(n),
+            ),
+            1 => Instruction::ADC(
+                // ADC A, n
+                MATHTarget::Register(InstrRegister::A),
+                MATHTarget::ImmediateByte(n),
+            ),
+            2 => Instruction::SUB(MATHTarget::ImmediateByte(n)), // SUB n
+            3 => Instruction::SBC(
+                // SBC A, n
+                MATHTarget::Register(InstrRegister::A),
+                MATHTarget::ImmediateByte(n),
+            ),
+            4 => Instruction::AND(MATHTarget::ImmediateByte(n)), // AND n
+            5 => Instruction::XOR(MATHTarget::ImmediateByte(n)), // XOR n
+            6 => Instruction::OR(MATHTarget::ImmediateByte(n)),  // OR n
+            7 => Instruction::CP(MATHTarget::ImmediateByte(n)),  // CP n
+            _ => unreachable!("Index {} is out of bounds in alu[]"),
+        }
     }
 }
