@@ -1165,7 +1165,7 @@ impl From<RegisterPair> for InstrRegisterPair {
 }
 
 impl TryFrom<InstrRegisterPair> for RegisterPair {
-    type Error = String; // FIXME: Proper error type goes here.
+    type Error = &'static str; // FIXME: Proper error type goes here.
 
     fn try_from(pair: InstrRegisterPair) -> Result<Self, Self::Error> {
         match pair {
@@ -1176,10 +1176,10 @@ impl TryFrom<InstrRegisterPair> for RegisterPair {
             InstrRegisterPair::SP => Ok(Self::SP),
             InstrRegisterPair::PC => Ok(Self::PC),
             InstrRegisterPair::IncrementHL => {
-                Err("Can not convert InstrRegisterPair::IncrementHL to RegisterPair".to_string())
+                Err("Can not convert InstrRegisterPair::IncrementHL to RegisterPair")
             }
             InstrRegisterPair::DecrementHL => {
-                Err("Can not convert InstrRegisterPair::DecrementHL to RegisterPair".to_string())
+                Err("Can not convert InstrRegisterPair::DecrementHL to RegisterPair")
             }
         }
     }
@@ -1199,7 +1199,7 @@ enum InstrRegister {
 }
 
 impl TryFrom<Register> for InstrRegister {
-    type Error = String; // FIXME: Proper error type goes here
+    type Error = &'static str; // FIXME: Proper error type goes here
 
     fn try_from(register: Register) -> Result<Self, Self::Error> {
         match register {
@@ -1210,7 +1210,7 @@ impl TryFrom<Register> for InstrRegister {
             Register::E => Ok(Self::E),
             Register::H => Ok(Self::H),
             Register::L => Ok(Self::L),
-            Register::Flag => Err("Can not convert Register::Flag to InstrRegister".to_string()),
+            Register::Flag => Err("Can not convert Register::Flag to InstrRegister"),
         }
     }
 }
