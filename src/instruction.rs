@@ -837,13 +837,11 @@ impl Instruction {
                 // RET cc[y] | Essentially a POP PC, Return from Subroutine
                 // RET       | Essentially a POP PC, Return from Subroutine
                 let flags: Flags = cpu.register(Register::Flag).into();
-                let sp_value = cpu.register_pair(RegisterPair::SP);
 
                 match cond {
                     JumpCondition::NotZero => {
                         if !flags.z {
-                            let (new_sp, addr) = Self::ret(cpu, sp_value);
-                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles(20);
                         }
@@ -851,8 +849,7 @@ impl Instruction {
                     }
                     JumpCondition::Zero => {
                         if flags.z {
-                            let (new_sp, addr) = Self::ret(cpu, sp_value);
-                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles(20);
                         }
@@ -860,8 +857,7 @@ impl Instruction {
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c {
-                            let (new_sp, addr) = Self::ret(cpu, sp_value);
-                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles(20);
                         }
@@ -869,16 +865,14 @@ impl Instruction {
                     }
                     JumpCondition::Carry => {
                         if flags.c {
-                            let (new_sp, addr) = Self::ret(cpu, sp_value);
-                            cpu.set_register_pair(RegisterPair::SP, new_sp);
+                            let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles(20);
                         }
                         Cycles(8)
                     }
                     JumpCondition::Always => {
-                        let (new_sp, addr) = Self::ret(cpu, sp_value);
-                        cpu.set_register_pair(RegisterPair::SP, new_sp);
+                        let addr = Self::pop(cpu);
                         cpu.set_register_pair(RegisterPair::PC, addr);
                         Cycles(16)
                     }
@@ -895,26 +889,18 @@ impl Instruction {
             Instruction::POP(pair) => {
                 // POP rp2[p] | Pop from stack into register pair rp[2]
                 // Flags are set when we call cpu.set_register_pair(RegisterPair::AF, value);
-                let mut sp_value = cpu.register_pair(RegisterPair::SP);
-
                 match pair {
                     RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
-                        let low = cpu.read_byte(sp_value);
-                        sp_value += 1;
-                        let high = cpu.read_byte(sp_value);
-                        sp_value += 1;
-
-                        cpu.set_register_pair(pair, (high as u16) << 8 | low as u16);
+                        let value = Self::pop(cpu);
+                        cpu.set_register_pair(pair, value);
                     }
                     _ => unreachable!(),
                 }
-                cpu.set_register_pair(RegisterPair::SP, sp_value);
                 Cycles(12)
             }
             Instruction::RETI => {
                 // Same as RET, after which interrupts are enabled.
-                let (new_sp, addr) = Self::ret(cpu, cpu.register_pair(RegisterPair::SP));
-                cpu.set_register_pair(RegisterPair::SP, new_sp);
+                let addr = Self::pop(cpu);
                 cpu.set_register_pair(RegisterPair::PC, addr);
                 cpu.set_ime(true);
                 Cycles(16)
@@ -982,18 +968,11 @@ impl Instruction {
                 // CALL cc[y], nn | Store nn on the stack, then store nn in the program coutner if cond is met
                 // CALL nn        | Store nn on the stack, then store nn in the program counter
                 let flags: Flags = cpu.register(Register::Flag).into();
-                let mut sp_value = cpu.register_pair(RegisterPair::SP);
 
-                // TODO: I repeat myself a lot here.
                 match cond {
                     JumpCondition::NotZero => {
                         if !flags.z {
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, (nn >> 8) as u8);
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, nn as u8);
-
-                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            Self::push(cpu, nn);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
@@ -1001,12 +980,7 @@ impl Instruction {
                     }
                     JumpCondition::Zero => {
                         if flags.z {
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, (nn >> 8) as u8);
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, nn as u8);
-
-                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            Self::push(cpu, nn);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
@@ -1014,12 +988,7 @@ impl Instruction {
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c {
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, (nn >> 8) as u8);
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, nn as u8);
-
-                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            Self::push(cpu, nn);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
@@ -1027,24 +996,14 @@ impl Instruction {
                     }
                     JumpCondition::Carry => {
                         if flags.c {
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, (nn >> 8) as u8);
-                            sp_value -= 1;
-                            cpu.write_byte(sp_value, nn as u8);
-
-                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            Self::push(cpu, nn);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
                         Cycles(12)
                     }
                     JumpCondition::Always => {
-                        sp_value -= 1;
-                        cpu.write_byte(sp_value, (nn >> 8) as u8);
-                        sp_value -= 1;
-                        cpu.write_byte(sp_value, nn as u8);
-
-                        cpu.set_register_pair(RegisterPair::SP, sp_value);
+                        Self::push(cpu, nn);
                         cpu.set_register_pair(RegisterPair::PC, nn);
                         Cycles(24)
                     }
@@ -1052,21 +1011,20 @@ impl Instruction {
             }
             Instruction::PUSH(pair) => {
                 // PUSH rp2[p] | Push register pair onto the stack
-                // Note: Flags are mutated in this instruction if the pair is RegisterPair::AF
-                let mut sp_value = cpu.register_pair(RegisterPair::SP);
-
                 match pair {
                     RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
                         let value = cpu.register_pair(pair);
-
-                        sp_value -= 1;
-                        cpu.write_byte(sp_value, (value >> 8) as u8);
-                        sp_value -= 1;
-                        cpu.write_byte(sp_value, value as u8);
+                        Self::push(cpu, value);
                     }
                     _ => unreachable!(),
                 }
-                cpu.set_register_pair(RegisterPair::SP, sp_value);
+                Cycles(16)
+            }
+            Instruction::RST(n) => {
+                // RST n | Push current address onto the stack, jump to 0x0000 + n
+                let addr = cpu.register_pair(RegisterPair::PC);
+                Self::push(cpu, addr);
+                cpu.set_register_pair(RegisterPair::PC, 0x0000 + (n as u16));
                 Cycles(16)
             }
 
@@ -1074,13 +1032,33 @@ impl Instruction {
         }
     }
 
-    /// POPs two bytes from the stack and concatenates them to form a u16 address
+    /// PUSHs a u16 onto the stack
     ///
-    /// Returns a Tuple containing the new stack pointer and the address from the stack
-    /// * e.g. `(new_stack_pointer, address)`
-    fn ret(cpu: &Cpu, sp: u16) -> (u16, u16) {
-        let addr = (cpu.read_byte(sp + 1) as u16) << 8 | cpu.read_byte(sp) as u16;
-        (sp + 2, addr)
+    /// Mutates the stack pointer and the stack
+    fn push(cpu: &mut Cpu, value: u16) {
+        let mut sp = cpu.register_pair(RegisterPair::SP);
+
+        sp -= 1;
+        cpu.write_byte(sp, (value >> 8) as u8);
+        sp -= 1;
+        cpu.write_byte(sp, value as u8);
+
+        cpu.set_register_pair(RegisterPair::SP, sp);
+    }
+
+    /// POPs a u16 from the stack
+    ///
+    /// Mutates the stack pointer and returns the u16 which was popped from the stack
+    fn pop(cpu: &mut Cpu) -> u16 {
+        let mut sp = cpu.register_pair(RegisterPair::SP);
+
+        let low = cpu.read_byte(sp);
+        sp += 1;
+        let high = cpu.read_byte(sp);
+        sp += 1;
+
+        cpu.set_register_pair(RegisterPair::SP, sp);
+        (high as u16) << 8 | low as u16
     }
 
     fn dec_register(reg: u8, flags: &mut Flags) -> u8 {
