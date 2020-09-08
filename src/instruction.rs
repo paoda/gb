@@ -199,7 +199,7 @@ impl Instruction {
                     cpu.set_register(Register::A, cpu.read_byte(nn));
                     Cycles(16)
                 }
-                _ => unimplemented!(),
+                _ => unreachable!(),
             },
             Instruction::STOP => Cycles(4),
             Instruction::JR(cond, offset) => {
@@ -1334,7 +1334,7 @@ impl Instruction {
             (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, nn), // CALL nn
             // (3, 5, 1, _, 1..=3) => unreachable!(), (removed in documentation)
             (3, 6, _, _, _) => Table::x3_alu(y, n),
-            (3, 7, _, _, _) => Self::RST(y * 8), // RST y * 8
+            (3, 7, _, _, _) => Self::RST(y * 8), // RST n
             _ => panic!(
                 "Unknown Opcode: {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
                 opcode, x, z, q, y, p
