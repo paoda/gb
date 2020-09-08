@@ -18,13 +18,13 @@ pub enum Instruction {
     SCF,
     CCF,
     HALT,
-    ADC(MATHTarget, MATHTarget),
-    SUB(MATHTarget), // SUB A, MATHTarget always
-    SBC(MATHTarget, MATHTarget),
-    AND(MATHTarget), // AND A, MATHTarget always
-    XOR(MATHTarget), // XOR A, MATHTarget always
-    OR(MATHTarget),  // OR A, MATHTarget always
-    CP(MATHTarget),  // CP A, MATHTarget always
+    ADC(MATHTarget), // ADC A, MATHTarget
+    SUB(MATHTarget), // SUB A, MATHTarget
+    SBC(MATHTarget),
+    AND(MATHTarget), // AND A, MATHTarget
+    XOR(MATHTarget), // XOR A, MATHTarget
+    OR(MATHTarget),  // OR A, MATHTarget
+    CP(MATHTarget),  // CP A, MATHTarget
     RET(JumpCondition),
     LDHL(i8), // LD HL, SP + d
     POP(RegisterPair),
@@ -479,8 +479,8 @@ impl Instruction {
                 Cycles(4)
             }
             Instruction::HALT => unimplemented!(),
-            Instruction::ADC(lhs, rhs) => match (lhs, rhs) {
-                (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+            Instruction::ADC(target) => match target {
+                MATHTarget::Register(reg) => {
                     // ADC A, r[z] | Add register r[z] plus the Carry flag to A
                     // FIXME: Do I Add register A as well?
                     let mut flags: Flags = cpu.register(Register::Flag).into();
@@ -549,9 +549,8 @@ impl Instruction {
                 MATHTarget::ImmediateByte(byte) => unimplemented!(),
                 _ => unreachable!(),
             },
-            Instruction::SBC(lhs, rhs) => match (lhs, rhs) {
-                // TODO: Does SBC actually have anything other than the A register on the LHS?
-                (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
+            Instruction::SBC(target) => match target {
+                MATHTarget::Register(reg) => {
                     // SBC A, r[z] | Subtract the value from register r[z] from A, add the Carry flag and then store in A
                     // FIXME: See ADC, is this a correct understanding of this Instruction
                     let mut flags: Flags = cpu.register(Register::Flag).into();
@@ -1468,17 +1467,9 @@ impl Table {
                 MATHTarget::Register(InstrRegister::A),
                 MATHTarget::Register(Self::r(r_index)),
             ),
-            1 => Instruction::ADC(
-                // ADC A, r[z]
-                MATHTarget::Register(InstrRegister::A),
-                MATHTarget::Register(Self::r(r_index)),
-            ),
+            1 => Instruction::ADC(MATHTarget::Register(Self::r(r_index))), // ADC A, r[z]
             2 => Instruction::SUB(MATHTarget::Register(Self::r(r_index))), // SUB r[z]
-            3 => Instruction::SBC(
-                // SBC A, r[z]
-                MATHTarget::Register(InstrRegister::A),
-                MATHTarget::Register(Self::r(r_index)),
-            ),
+            3 => Instruction::SBC(MATHTarget::Register(Self::r(r_index))), // SBC A, r[z]
             4 => Instruction::AND(MATHTarget::Register(Self::r(r_index))), // AND r[z]
             5 => Instruction::XOR(MATHTarget::Register(Self::r(r_index))), // XOR r[z]
             6 => Instruction::OR(MATHTarget::Register(Self::r(r_index))),  // OR r[z]
@@ -1494,17 +1485,9 @@ impl Table {
                 MATHTarget::Register(InstrRegister::A),
                 MATHTarget::ImmediateByte(n),
             ),
-            1 => Instruction::ADC(
-                // ADC A, n
-                MATHTarget::Register(InstrRegister::A),
-                MATHTarget::ImmediateByte(n),
-            ),
+            1 => Instruction::ADC(MATHTarget::ImmediateByte(n)), // ADC A, n
             2 => Instruction::SUB(MATHTarget::ImmediateByte(n)), // SUB n
-            3 => Instruction::SBC(
-                // SBC A, n
-                MATHTarget::Register(InstrRegister::A),
-                MATHTarget::ImmediateByte(n),
-            ),
+            3 => Instruction::SBC(MATHTarget::ImmediateByte(n)), // SBC A, n
             4 => Instruction::AND(MATHTarget::ImmediateByte(n)), // AND n
             5 => Instruction::XOR(MATHTarget::ImmediateByte(n)), // XOR n
             6 => Instruction::OR(MATHTarget::ImmediateByte(n)),  // OR n
