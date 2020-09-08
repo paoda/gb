@@ -137,6 +137,23 @@ impl Instruction {
                         InstrRegister::IndirectC => unreachable!(),
                     }
                 }
+                (
+                    LDTarget::Register(InstrRegister::IndirectC),
+                    LDTarget::Register(InstrRegister::A),
+                ) => {
+                    // LD (0xFF00 + C), A | Store value of register A at address 0xFF00 + C
+                    let addr = 0xFF00 + cpu.register(Register::C) as u16;
+                    cpu.write_byte(addr, cpu.register(Register::A));
+                    Cycles(8)
+                }
+                (
+                    LDTarget::Register(InstrRegister::A),
+                    LDTarget::Register(InstrRegister::IndirectC),
+                ) => {
+                    let addr = 0xFF00 + cpu.register(Register::C) as u16;
+                    cpu.set_register(Register::A, cpu.read_byte(addr));
+                    Cycles(8)
+                }
                 (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
                     // LD r[y], r[z] | Store value of RHS Register in LHS Register
 
@@ -162,6 +179,14 @@ impl Instruction {
                     // LD SP, HL | Load Register HL into Register SP
                     cpu.set_register_pair(RegisterPair::SP, cpu.register_pair(RegisterPair::HL));
                     Cycles(8)
+                }
+                (LDTarget::ByteAtAddress(nn), LDTarget::Register(InstrRegister::A)) => {
+                    cpu.write_byte(nn, cpu.register(Register::A));
+                    Cycles(16)
+                }
+                (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddress(nn)) => {
+                    cpu.set_register(Register::A, cpu.read_byte(nn));
+                    Cycles(16)
                 }
                 _ => unimplemented!(),
             },
@@ -802,12 +827,154 @@ impl Instruction {
             }
             Instruction::JP(cond, target) => match target {
                 JPTarget::RegisterPair(RegisterPair::HL) => {
+                    // JP HL | Load register pair HL into program counter
                     cpu.set_register_pair(RegisterPair::PC, cpu.register_pair(RegisterPair::HL));
                     Cycles(4)
                 }
-                JPTarget::ImmediateWord(nn) => unimplemented!(),
+                JPTarget::ImmediateWord(nn) => {
+                    // JP cc[y], nn | Store Immediate Word in the Program Counter if cond is met
+                    // JP nn        | Store Immediate Word in the Program Counter
+                    let flags: Flags = cpu.register(Register::Flag).into();
+
+                    match cond {
+                        JumpCondition::NotZero => {
+                            if !flags.z {
+                                cpu.set_register_pair(RegisterPair::PC, nn);
+                                return Cycles(16);
+                            }
+                            Cycles(12)
+                        }
+                        JumpCondition::Zero => {
+                            if flags.z {
+                                cpu.set_register_pair(RegisterPair::PC, nn);
+                                return Cycles(16);
+                            }
+                            Cycles(12)
+                        }
+                        JumpCondition::NotCarry => {
+                            if !flags.c {
+                                cpu.set_register_pair(RegisterPair::PC, nn);
+                                return Cycles(16);
+                            }
+                            Cycles(12)
+                        }
+                        JumpCondition::Carry => {
+                            if flags.c {
+                                cpu.set_register_pair(RegisterPair::PC, nn);
+                                return Cycles(16);
+                            }
+                            Cycles(12)
+                        }
+                        JumpCondition::Always => {
+                            cpu.set_register_pair(RegisterPair::PC, nn);
+                            Cycles(16)
+                        }
+                    }
+                }
                 _ => unreachable!(),
             },
+            Instruction::DI => {
+                // Disable IME
+                cpu.set_ime(false);
+                Cycles(4)
+            }
+            Instruction::EI => {
+                // Enable IME (After the next instruction)
+                // FIXME: IME is set after the next instruction, this currently is not represented in this emulator.
+                cpu.set_ime(true);
+                Cycles(4)
+            }
+            Instruction::CALL(cond, nn) => {
+                // CALL cc[y], nn | Store nn on the stack, then store nn in the program coutner if cond is met
+                // CALL nn        | Store nn on the stack, then store nn in the program counter
+                let flags: Flags = cpu.register(Register::Flag).into();
+                let mut sp_value = cpu.register_pair(RegisterPair::SP);
+
+                // TODO: I repeat myself a lot here.
+                match cond {
+                    JumpCondition::NotZero => {
+                        if !flags.z {
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, (nn >> 8) as u8);
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, nn as u8);
+
+                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
+                            return Cycles(24);
+                        }
+                        Cycles(12)
+                    }
+                    JumpCondition::Zero => {
+                        if flags.z {
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, (nn >> 8) as u8);
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, nn as u8);
+
+                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
+                            return Cycles(24);
+                        }
+                        Cycles(12)
+                    }
+                    JumpCondition::NotCarry => {
+                        if !flags.c {
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, (nn >> 8) as u8);
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, nn as u8);
+
+                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
+                            return Cycles(24);
+                        }
+                        Cycles(12)
+                    }
+                    JumpCondition::Carry => {
+                        if flags.c {
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, (nn >> 8) as u8);
+                            sp_value -= 1;
+                            cpu.write_byte(sp_value, nn as u8);
+
+                            cpu.set_register_pair(RegisterPair::SP, sp_value);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
+                            return Cycles(24);
+                        }
+                        Cycles(12)
+                    }
+                    JumpCondition::Always => {
+                        sp_value -= 1;
+                        cpu.write_byte(sp_value, (nn >> 8) as u8);
+                        sp_value -= 1;
+                        cpu.write_byte(sp_value, nn as u8);
+
+                        cpu.set_register_pair(RegisterPair::SP, sp_value);
+                        cpu.set_register_pair(RegisterPair::PC, nn);
+                        Cycles(24)
+                    }
+                }
+            }
+            Instruction::PUSH(pair) => {
+                // PUSH rp2[p] | Push register pair onto the stack
+                // Note: Flags are mutated in this instruction if the pair is RegisterPair::AF
+                let mut sp_value = cpu.register_pair(RegisterPair::SP);
+
+                match pair {
+                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
+                        let value = cpu.register_pair(pair);
+
+                        sp_value -= 1;
+                        cpu.write_byte(sp_value, (value >> 8) as u8);
+                        sp_value -= 1;
+                        cpu.write_byte(sp_value, value as u8);
+                    }
+                    _ => unreachable!(),
+                }
+                cpu.set_register_pair(RegisterPair::SP, sp_value);
+                Cycles(16)
+            }
             _ => unimplemented!(),
         }
     }
