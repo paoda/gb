@@ -400,13 +400,13 @@ impl Instruction {
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let cache = a >> 7; // get the 7th bit (this will be the carry bit + the one that is wrapped around)
-                let rot_a = (a << 1) | (cache << 0); // (rotate a left), then set the first bit (which will be a 0 by default)
+                let msb = a >> 7;
+                let rot_a = a.rotate_left(1);
 
                 flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = cache == 0x01;
+                flags.c = msb == 0x01;
 
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
@@ -417,13 +417,13 @@ impl Instruction {
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let cache = a & 0x01; // RLCA but the other way around
-                let rot_a = (a >> 1) | (cache << 7);
+                let lsb = a & 0x01;
+                let rot_a = a.rotate_right(1);
 
                 flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = cache == 0x01;
+                flags.c = lsb == 0x01;
 
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
@@ -434,13 +434,13 @@ impl Instruction {
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let cache = a >> 7;
+                let msb = a >> 7;
                 let rot_a = (a << 1) | ((flags.c as u8) << 0);
 
                 flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = cache == 0x01;
+                flags.c = msb == 0x01;
 
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
@@ -451,13 +451,13 @@ impl Instruction {
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let cache = a & 0x01;
+                let lsb = a & 0x01;
                 let rot_a = (a >> 1) | ((flags.c as u8) << 7);
 
                 flags.z = false;
                 flags.n = false;
                 flags.h = false;
-                flags.c = cache == 0x01;
+                flags.c = lsb == 0x01;
 
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
@@ -1027,7 +1027,94 @@ impl Instruction {
                 cpu.set_register_pair(RegisterPair::PC, 0x0000 + (n as u16));
                 Cycles(16)
             }
+            Instruction::RLC(reg) => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let carry_flag;
+                let result;
+                let cycles: Cycles;
 
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+
+                        let value = cpu.register(register);
+                        carry_flag = value >> 7 == 0x01;
+                        result = value.rotate_left(1);
+
+                        cpu.set_register(register, result);
+                        cycles = Cycles(8);
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+
+                        let value = cpu.read_byte(addr);
+                        carry_flag = value >> 7 == 0x01;
+                        result = value.rotate_left(1);
+
+                        cpu.write_byte(addr, result);
+                        cycles = Cycles(16);
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+
+                flags.z = result == 0;
+                flags.n = false;
+                flags.h = false;
+                flags.c = carry_flag;
+
+                cpu.set_register(Register::Flag, flags.into());
+                cycles
+            }
+            Instruction::RRC(reg) => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let carry_flag;
+                let result;
+                let cycles: Cycles;
+
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+
+                        let value = cpu.register(register);
+                        carry_flag = value & 0x01 == 0x01;
+                        result = value.rotate_right(1);
+
+                        cpu.set_register(register, result);
+                        cycles = Cycles(8);
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+
+                        let value = cpu.read_byte(addr);
+                        carry_flag = value & 0x01 == 0x01;
+                        result = value.rotate_right(1);
+
+                        cpu.write_byte(addr, result);
+                        cycles = Cycles(16);
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+
+                flags.z = result == 0;
+                flags.n = false;
+                flags.h = false;
+                flags.c = carry_flag;
+
+                cpu.set_register(Register::Flag, flags.into());
+                cycles
+            }
             _ => unimplemented!(),
         }
     }
