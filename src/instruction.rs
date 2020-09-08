@@ -35,6 +35,17 @@ pub enum Instruction {
     CALL(JumpCondition, u16),
     PUSH(RegisterPair),
     RST(u8),
+    RLC(InstrRegister),
+    RRC(InstrRegister),
+    RL(InstrRegister),
+    RR(InstrRegister),
+    SLA(InstrRegister),
+    SRA(InstrRegister),
+    SWAP(InstrRegister),
+    SRL(InstrRegister),
+    BIT(u8, InstrRegister),
+    RES(u8, InstrRegister),
+    SET(u8, InstrRegister),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -1159,13 +1170,13 @@ impl Instruction {
 impl Instruction {
     pub fn from_byte(cpu: &Cpu, byte: u8) -> Self {
         if byte == 0xCB {
-            Self::from_prefixed_byte(cpu, byte)
+            Self::from_prefixed_byte(cpu)
         } else {
             Self::from_unprefixed_byte(cpu, byte)
         }
     }
 
-    fn from_prefixed_byte(cpu: &Cpu, opcode: u8) -> Self {
+    fn from_unprefixed_byte(cpu: &Cpu, opcode: u8) -> Self {
         // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
         let x = (opcode >> 6) & 0b00000011;
         let y = (opcode >> 3) & 0b00000111;
@@ -1177,157 +1188,157 @@ impl Instruction {
         let nn = cpu.read_word(cpu.register_pair(RegisterPair::PC) + 1);
 
         match (x, z, q, y, p) {
-            (0, 0, _, 0, _) => Instruction::NOP, // NOP
-            (0, 0, _, 1, _) => Instruction::LD(
+            (0, 0, _, 0, _) => Self::NOP, // NOP
+            (0, 0, _, 1, _) => Self::LD(
                 // LD (nn), SP
                 LDTarget::ByteAtAddress(nn),
                 LDTarget::RegisterPair(RegisterPair::SP),
             ),
-            (0, 0, _, 2, _) => Instruction::STOP, // STOP
-            (0, 0, _, 3, _) => Instruction::JR(JumpCondition::Always, n as i8), // JR d
-            (0, 0, _, 4..=7, _) => Instruction::JR(Table::cc(y - 4), n as i8), // JR cc[y - 4], d
-            (0, 1, 0, _, _) => Instruction::LD(
+            (0, 0, _, 2, _) => Self::STOP, // STOP
+            (0, 0, _, 3, _) => Self::JR(JumpCondition::Always, n as i8), // JR d
+            (0, 0, _, 4..=7, _) => Self::JR(Table::cc(y - 4), n as i8), // JR cc[y - 4], d
+            (0, 1, 0, _, _) => Self::LD(
                 // LD rp[p], nn
                 LDTarget::RegisterPair(Table::rp(p)),
                 LDTarget::ImmediateWord(nn),
             ),
-            (0, 1, 1, _, _) => Instruction::ADD(
+            (0, 1, 1, _, _) => Self::ADD(
                 // ADD HL, rp[p]
                 MATHTarget::HL,
                 MATHTarget::RegisterPair(Table::rp(p)),
             ),
-            (0, 2, 0, _, 0) => Instruction::LD(
+            (0, 2, 0, _, 0) => Self::LD(
                 // LD (BC), A
                 LDTarget::IndirectRegister(InstrRegisterPair::BC),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (0, 2, 0, _, 1) => Instruction::LD(
+            (0, 2, 0, _, 1) => Self::LD(
                 // LD (DE), A
                 LDTarget::IndirectRegister(InstrRegisterPair::DE),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (0, 2, 1, _, 0) => Instruction::LD(
+            (0, 2, 1, _, 0) => Self::LD(
                 // LD A, (BC)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::IndirectRegister(InstrRegisterPair::BC),
             ),
-            (0, 2, 1, _, 1) => Instruction::LD(
+            (0, 2, 1, _, 1) => Self::LD(
                 // LD A, (DE)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::IndirectRegister(InstrRegisterPair::DE),
             ),
-            (0, 2, 0, _, 2) => Instruction::LD(
+            (0, 2, 0, _, 2) => Self::LD(
                 // LD (HL+), A
                 LDTarget::IndirectRegister(InstrRegisterPair::IncrementHL),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (0, 2, 0, _, 3) => Instruction::LD(
+            (0, 2, 0, _, 3) => Self::LD(
                 // LD (HL-), A
                 LDTarget::IndirectRegister(InstrRegisterPair::DecrementHL),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (0, 2, 1, _, 2) => Instruction::LD(
+            (0, 2, 1, _, 2) => Self::LD(
                 // LD A, (HL+)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::IndirectRegister(InstrRegisterPair::IncrementHL),
             ),
-            (0, 2, 1, _, 3) => Instruction::LD(
+            (0, 2, 1, _, 3) => Self::LD(
                 // LD A, (HL-)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::IndirectRegister(InstrRegisterPair::DecrementHL),
             ),
-            (0, 3, 0, _, _) => Instruction::INC(
+            (0, 3, 0, _, _) => Self::INC(
                 // INC rp[p]
                 Registers::Word(Table::rp(p)),
             ),
-            (0, 3, 1, _, _) => Instruction::DEC(
+            (0, 3, 1, _, _) => Self::DEC(
                 // DEC rp[p]
                 Registers::Word(Table::rp(p)),
             ),
-            (0, 4, _, _, _) => Instruction::INC(
+            (0, 4, _, _, _) => Self::INC(
                 // INC r[y]
                 Registers::Byte(Table::r(y)),
             ),
-            (0, 5, _, _, _) => Instruction::DEC(
+            (0, 5, _, _, _) => Self::DEC(
                 // DEC r[y]
                 Registers::Byte(Table::r(y)),
             ),
-            (0, 6, _, _, _) => Instruction::LD(
+            (0, 6, _, _, _) => Self::LD(
                 // LD r[y], n
                 LDTarget::Register(Table::r(y)),
                 LDTarget::ImmediateByte(n),
             ),
-            (0, 7, _, 0, _) => Instruction::RLCA,
-            (0, 7, _, 1, _) => Instruction::RRCA,
-            (0, 7, _, 2, _) => Instruction::RLA,
-            (0, 7, _, 3, _) => Instruction::RRA,
-            (0, 7, _, 4, _) => Instruction::DAA,
-            (0, 7, _, 5, _) => Instruction::CPL,
-            (0, 7, _, 6, _) => Instruction::SCF,
-            (0, 7, _, 7, _) => Instruction::CCF,
-            (1, 6, _, 6, _) => Instruction::HALT,
-            (1, _, _, _, _) => Instruction::LD(
+            (0, 7, _, 0, _) => Self::RLCA,
+            (0, 7, _, 1, _) => Self::RRCA,
+            (0, 7, _, 2, _) => Self::RLA,
+            (0, 7, _, 3, _) => Self::RRA,
+            (0, 7, _, 4, _) => Self::DAA,
+            (0, 7, _, 5, _) => Self::CPL,
+            (0, 7, _, 6, _) => Self::SCF,
+            (0, 7, _, 7, _) => Self::CCF,
+            (1, 6, _, 6, _) => Self::HALT,
+            (1, _, _, _, _) => Self::LD(
                 // LD r[y], r[z]
                 LDTarget::Register(Table::r(y)),
                 LDTarget::Register(Table::r(z)),
             ),
             (2, _, _, _, _) => Table::x2_alu(y, z), // alu[y] r[z]
-            (3, 0, _, 0..=3, _) => Instruction::RET(Table::cc(y)), // RET cc[y]
-            (3, 0, _, 4, _) => Instruction::LD(
+            (3, 0, _, 0..=3, _) => Self::RET(Table::cc(y)), // RET cc[y]
+            (3, 0, _, 4, _) => Self::LD(
                 // LD (0xFF00 + n), A
                 LDTarget::ByteAtAddressWithOffset(n),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (3, 0, _, 5, _) => Instruction::ADD(
+            (3, 0, _, 5, _) => Self::ADD(
                 // ADD SP, d
                 MATHTarget::RegisterPair(RegisterPair::SP),
                 MATHTarget::ImmediateByte(n),
             ),
-            (3, 0, _, 6, _) => Instruction::LD(
+            (3, 0, _, 6, _) => Self::LD(
                 // LD A, (0xFF00 + n)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::ByteAtAddressWithOffset(n),
             ),
-            (3, 0, _, 7, _) => Instruction::LDHL(n as i8), // LD HL, SP + d
-            (3, 1, 0, _, _) => Instruction::POP(Table::rp2(p)), // POP rp2[p]
-            (3, 1, 1, _, 0) => Instruction::RET(JumpCondition::Always), // RET
-            (3, 1, 1, _, 1) => Instruction::RETI,
-            (3, 1, 1, _, 2) => Instruction::JP(
+            (3, 0, _, 7, _) => Self::LDHL(n as i8), // LD HL, SP + d
+            (3, 1, 0, _, _) => Self::POP(Table::rp2(p)), // POP rp2[p]
+            (3, 1, 1, _, 0) => Self::RET(JumpCondition::Always), // RET
+            (3, 1, 1, _, 1) => Self::RETI,
+            (3, 1, 1, _, 2) => Self::JP(
                 // JP HL
                 JumpCondition::Always,
                 JPTarget::RegisterPair(RegisterPair::HL),
             ),
-            (3, 1, 1, _, 3) => Instruction::LD(
+            (3, 1, 1, _, 3) => Self::LD(
                 // LD SP, HL
                 LDTarget::RegisterPair(RegisterPair::SP),
                 LDTarget::RegisterPair(RegisterPair::HL),
             ),
-            (3, 2, _, 0..=3, _) => Instruction::JP(
+            (3, 2, _, 0..=3, _) => Self::JP(
                 // JP cc[y], nn
                 Table::cc(y),
                 JPTarget::ImmediateWord(nn),
             ),
-            (3, 2, _, 4, _) => Instruction::LD(
+            (3, 2, _, 4, _) => Self::LD(
                 // LD (0xFF00 + C) ,A
                 LDTarget::Register(InstrRegister::IndirectC),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (3, 2, _, 5, _) => Instruction::LD(
+            (3, 2, _, 5, _) => Self::LD(
                 // LD (nn), A
                 LDTarget::ByteAtAddress(nn),
                 LDTarget::Register(InstrRegister::A),
             ),
-            (3, 2, _, 6, _) => Instruction::LD(
+            (3, 2, _, 6, _) => Self::LD(
                 // LD A, (0xFF00 + C)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::Register(InstrRegister::IndirectC),
             ),
-            (3, 2, _, 7, _) => Instruction::LD(
+            (3, 2, _, 7, _) => Self::LD(
                 // LD A, (nn)
                 LDTarget::Register(InstrRegister::A),
                 LDTarget::ByteAtAddress(nn),
             ),
-            (3, 3, _, 0, _) => Instruction::JP(
+            (3, 3, _, 0, _) => Self::JP(
                 // JP nn
                 JumpCondition::Always,
                 JPTarget::ImmediateWord(nn),
@@ -1337,15 +1348,15 @@ impl Instruction {
             // (3, 3, _, 3, _) => unreachable!(), (removed in documentation)
             // (3, 3, _, 4, _) => unreachable!(), (removed in documentation)
             // (3, 3, _, 5, _) => unreachable!(), (removed in documentation)
-            (3, 3, _, 6, _) => Instruction::DI,
-            (3, 3, _, 7, _) => Instruction::EI,
-            (3, 4, _, 0..=3, _) => Instruction::CALL(Table::cc(y), nn), // CALL cc[y], nn
+            (3, 3, _, 6, _) => Self::DI,
+            (3, 3, _, 7, _) => Self::EI,
+            (3, 4, _, 0..=3, _) => Self::CALL(Table::cc(y), nn), // CALL cc[y], nn
             // (3, 4, _, 4..=7, _) => unreachable!(), (removed in documentation)
-            (3, 5, 0, _, _) => Instruction::PUSH(Table::rp2(p)), // PUSH rp2[p]
-            (3, 5, 1, _, 0) => Instruction::CALL(JumpCondition::Always, nn), // CALL nn
+            (3, 5, 0, _, _) => Self::PUSH(Table::rp2(p)), // PUSH rp2[p]
+            (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, nn), // CALL nn
             // (3, 5, 1, _, 1..=3) => unreachable!(), (removed in documentation)
             (3, 6, _, _, _) => Table::x3_alu(y, n),
-            (3, 7, _, _, _) => Instruction::RST(y * 8), // RST y * 8
+            (3, 7, _, _, _) => Self::RST(y * 8), // RST y * 8
             _ => panic!(
                 "Unknown Opcode: {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
                 opcode, x, z, q, y, p
@@ -1353,8 +1364,26 @@ impl Instruction {
         }
     }
 
-    fn from_unprefixed_byte(cpu: &Cpu, byte: u8) -> Self {
-        unimplemented!()
+    fn from_prefixed_byte(cpu: &Cpu) -> Self {
+        let opcode = cpu.read_byte(cpu.register_pair(RegisterPair::PC) + 1);
+
+        // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+        let x = (opcode >> 6) & 0b00000011;
+        let y = (opcode >> 3) & 0b00000111;
+        let z = opcode & 0b00000111;
+        let p = y >> 1;
+        let q = y & 0b00000001;
+
+        match x {
+            0 => Table::rot(y, z),
+            1 => Self::BIT(y, Table::r(z)),
+            2 => Self::BIT(y, Table::r(z)),
+            3 => Self::BIT(y, Table::r(z)),
+            _ => panic!(
+                "Unknown Prefixed Opcode: 0xCB {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
+                opcode, x, z, q, y, p
+            ),
+        }
     }
 }
 
@@ -1545,8 +1574,8 @@ impl Table {
         }
     }
 
-    pub fn x2_alu(fn_index: u8, r_index: u8) -> Instruction {
-        match fn_index {
+    pub fn x2_alu(index: u8, r_index: u8) -> Instruction {
+        match index {
             0 => Instruction::ADD(
                 // ADD A, r[z]
                 MATHTarget::Register(InstrRegister::A),
@@ -1563,8 +1592,8 @@ impl Table {
         }
     }
 
-    pub fn x3_alu(fn_index: u8, n: u8) -> Instruction {
-        match fn_index {
+    pub fn x3_alu(index: u8, n: u8) -> Instruction {
+        match index {
             0 => Instruction::ADD(
                 // ADD A, n
                 MATHTarget::Register(InstrRegister::A),
@@ -1578,6 +1607,20 @@ impl Table {
             6 => Instruction::OR(MATHTarget::ImmediateByte(n)),  // OR n
             7 => Instruction::CP(MATHTarget::ImmediateByte(n)),  // CP n
             _ => unreachable!("Index {} is out of bounds in alu[]"),
+        }
+    }
+
+    pub fn rot(index: u8, r_index: u8) -> Instruction {
+        match index {
+            0 => Instruction::RLC(Self::r(r_index)),
+            1 => Instruction::RRC(Self::r(r_index)),
+            2 => Instruction::RL(Self::r(r_index)),
+            3 => Instruction::RR(Self::r(r_index)),
+            4 => Instruction::SLA(Self::r(r_index)),
+            5 => Instruction::SRA(Self::r(r_index)),
+            6 => Instruction::SWAP(Self::r(r_index)),
+            7 => Instruction::SRL(Self::r(r_index)),
+            _ => unreachable!("Index {} is out of bounds in rot[]"),
         }
     }
 }
