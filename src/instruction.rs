@@ -293,7 +293,16 @@ impl Instruction {
                     cpu.set_register_pair(RegisterPair::SP, sum);
                     Cycles(16)
                 }
-                _ => unimplemented!(),
+                (MATHTarget::Register(InstrRegister::A), MATHTarget::ImmediateByte(n)) => {
+                    // ADD A, n | Add n to register A
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let sum = Self::add_u8s(cpu.register(Register::A), n, &mut flags);
+
+                    cpu.set_register(Register::A, sum);
+                    cpu.set_register(Register::Flag, flags.into());
+                    Cycles(8)
+                }
+                _ => unreachable!(),
             },
             Instruction::INC(Registers::Word(pair)) => {
                 // INC rp[p] | Increment Register Pair
@@ -512,7 +521,16 @@ impl Instruction {
                     cpu.set_register(Register::A, sum);
                     cycles
                 }
-                _ => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let value = n + (flags.c as u8);
+                    let sum = Self::add_u8s(cpu.register(Register::A), value, &mut flags);
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, sum);
+                    Cycles(8)
+                }
+                _ => unreachable!(),
             },
             Instruction::SUB(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -546,7 +564,14 @@ impl Instruction {
                     cpu.set_register(Register::A, diff);
                     cycles
                 }
-                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let diff = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, diff);
+                    Cycles(8)
+                }
                 _ => unreachable!(),
             },
             Instruction::SBC(target) => match target {
@@ -583,7 +608,16 @@ impl Instruction {
                     cpu.set_register(Register::Flag, flags.into());
                     cycles
                 }
-                _ => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let value = n + (flags.c as u8);
+                    let diff = Self::sub_u8s(cpu.register(Register::A), value, &mut flags);
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, diff);
+                    Cycles(8)
+                }
+                _ => unreachable!(),
             },
             Instruction::AND(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -622,7 +656,19 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     cycles
                 }
-                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let result = cpu.register(Register::A) & n;
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = true;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    Cycles(8)
+                }
                 _ => unreachable!(),
             },
             Instruction::XOR(target) => match target {
@@ -662,7 +708,19 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     cycles
                 }
-                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let result = cpu.register(Register::A) ^ n;
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = false;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    Cycles(8)
+                }
                 _ => unreachable!(),
             },
             Instruction::OR(target) => match target {
@@ -702,7 +760,19 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     cycles
                 }
-                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let result = cpu.register(Register::A) | n;
+
+                    flags.z = result == 0;
+                    flags.n = false;
+                    flags.h = false;
+                    flags.c = false;
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_register(Register::A, result);
+                    Cycles(8)
+                }
                 _ => unreachable!(),
             },
             Instruction::CP(target) => match target {
@@ -735,7 +805,13 @@ impl Instruction {
                     cpu.set_register(Register::Flag, flags.into());
                     cycles
                 }
-                MATHTarget::ImmediateByte(byte) => unimplemented!(),
+                MATHTarget::ImmediateByte(n) => {
+                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let _ = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
+
+                    cpu.set_register(Register::Flag, flags.into());
+                    Cycles(8)
+                }
                 _ => unreachable!(),
             },
             Instruction::RET(cond) => {
