@@ -522,6 +522,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // ADC A, n | Add immediate byte plus the carry flag to A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let value = n + (flags.c as u8);
                     let sum = Self::add_u8s(cpu.register(Register::A), value, &mut flags);
@@ -565,6 +566,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // SUB n | Subtract the immediate byte from register A, then store in A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let diff = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
 
@@ -609,6 +611,8 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // SBC A, n | Subtract the value from immediate byte from A, add the carry flag and then store in A
+                    // FIXME: The Fixme aboe applies to this variant as well
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let value = n + (flags.c as u8);
                     let diff = Self::sub_u8s(cpu.register(Register::A), value, &mut flags);
@@ -657,6 +661,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // AND n | Bitwise AND immediate byte and register A, sotre in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) & n;
 
@@ -709,6 +714,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // XOR n | Bitwise XOR immediate byte and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) ^ n;
 
@@ -761,6 +767,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // OR n | Bitwise OR on immediate byte n and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) | n;
 
@@ -806,6 +813,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
+                    // CP n | Same behaviour as SUB, except the result is not stored,
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let _ = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
 
@@ -1050,6 +1058,7 @@ impl Instruction {
                 cpu.set_register_pair(RegisterPair::SP, sp_value);
                 Cycles(16)
             }
+
             _ => unimplemented!(),
         }
     }
