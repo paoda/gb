@@ -1376,9 +1376,9 @@ impl Instruction {
 
         match x {
             0 => Table::rot(y, z),
-            1 => Self::BIT(y, Table::r(z)),
-            2 => Self::BIT(y, Table::r(z)),
-            3 => Self::BIT(y, Table::r(z)),
+            1 => Self::BIT(y, Table::r(z)), // BIT y, r[z]
+            2 => Self::RES(y, Table::r(z)), // RES y, r[z]
+            3 => Self::SET(y, Table::r(z)), // SET y, r[z]
             _ => panic!(
                 "Unknown Prefixed Opcode: 0xCB {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
                 opcode, x, z, q, y, p
@@ -1612,14 +1612,14 @@ impl Table {
 
     pub fn rot(index: u8, r_index: u8) -> Instruction {
         match index {
-            0 => Instruction::RLC(Self::r(r_index)),
-            1 => Instruction::RRC(Self::r(r_index)),
-            2 => Instruction::RL(Self::r(r_index)),
-            3 => Instruction::RR(Self::r(r_index)),
-            4 => Instruction::SLA(Self::r(r_index)),
-            5 => Instruction::SRA(Self::r(r_index)),
-            6 => Instruction::SWAP(Self::r(r_index)),
-            7 => Instruction::SRL(Self::r(r_index)),
+            0 => Instruction::RLC(Self::r(r_index)),  // RLC r[z]
+            1 => Instruction::RRC(Self::r(r_index)),  // RRC r[z]
+            2 => Instruction::RL(Self::r(r_index)),   // RL r[z]
+            3 => Instruction::RR(Self::r(r_index)),   // RR r[z]
+            4 => Instruction::SLA(Self::r(r_index)),  // SLA r[z]
+            5 => Instruction::SRA(Self::r(r_index)),  // SRA r[z]
+            6 => Instruction::SWAP(Self::r(r_index)), // SWAP r[z]
+            7 => Instruction::SRL(Self::r(r_index)),  // SRL r[z]
             _ => unreachable!("Index {} is out of bounds in rot[]"),
         }
     }
