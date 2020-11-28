@@ -1224,7 +1224,8 @@ impl Instruction {
     }
 
     fn u16_half_carry(left: u16, right: u16) -> bool {
-        Self::u8_half_carry((left >> 8) as u8, (right >> 8) as u8)
+        // Self::u8_half_carry((left >> 8) as u8, (right >> 8) as u8) 
+        ((left & 0xFFFF) + (right & 0xFFFF)) > 0xFFF // Thanks @Nectar Boy#1003
     }
 
     fn u8_half_carry(left: u8, right: u8) -> bool {
@@ -1409,17 +1410,17 @@ impl Instruction {
                 JPTarget::ImmediateWord(nn),
             ),
             (3, 3, _, 1, _) => unreachable!("This is the 0xCB Prefix"),
-            // (3, 3, _, 2, _) => unreachable!(), (removed in documentation)
-            // (3, 3, _, 3, _) => unreachable!(), (removed in documentation)
-            // (3, 3, _, 4, _) => unreachable!(), (removed in documentation)
-            // (3, 3, _, 5, _) => unreachable!(), (removed in documentation)
+            // (3, 3, _, 2, _) => unreachable!(), ("removed" in documentation)
+            // (3, 3, _, 3, _) => unreachable!(), ("removed" in documentation)
+            // (3, 3, _, 4, _) => unreachable!(), ("removed" in documentation)
+            // (3, 3, _, 5, _) => unreachable!(), ("removed" in documentation)
             (3, 3, _, 6, _) => Self::DI,
             (3, 3, _, 7, _) => Self::EI,
             (3, 4, _, 0..=3, _) => Self::CALL(Table::cc(y), nn), // CALL cc[y], nn
-            // (3, 4, _, 4..=7, _) => unreachable!(), (removed in documentation)
+            // (3, 4, _, 4..=7, _) => unreachable!(), ("removed" in documentation)
             (3, 5, 0, _, _) => Self::PUSH(Table::rp2(p)), // PUSH rp2[p]
             (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, nn), // CALL nn
-            // (3, 5, 1, _, 1..=3) => unreachable!(), (removed in documentation)
+            // (3, 5, 1, _, 1..=3) => unreachable!(), ("removed" in documentation)
             (3, 6, _, _, _) => Table::x3_alu(y, n),
             (3, 7, _, _, _) => Self::RST(y * 8), // RST n
             _ => panic!(
