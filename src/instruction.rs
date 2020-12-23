@@ -95,7 +95,7 @@ enum InstrRegisterPair {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum InstrRegister {
+pub enum InstrRegister {
     A,
     B,
     C,
