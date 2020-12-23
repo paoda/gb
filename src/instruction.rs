@@ -1,5 +1,6 @@
 use super::cpu::{Cpu, Flags, Register, RegisterPair};
 use std::convert::TryFrom;
+
 #[derive(Debug, Copy, Clone)]
 pub enum Instruction {
     NOP,
@@ -47,6 +48,75 @@ pub enum Instruction {
     RES(u8, InstrRegister),
     SET(u8, InstrRegister),
 }
+
+#[derive(Debug, Copy, Clone)]
+pub enum JPTarget {
+    RegisterPair(RegisterPair),
+    ImmediateWord(u16),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Registers {
+    Byte(InstrRegister),
+    Word(RegisterPair),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum MATHTarget {
+    HL,
+    SP,
+    Register(InstrRegister),
+    RegisterPair(RegisterPair),
+    ImmediateByte(u8),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum LDTarget {
+    Register(InstrRegister),
+    IndirectRegister(InstrRegisterPair),
+    ByteAtAddress(u16),
+    ImmediateWord(u16),
+    ImmediateByte(u8),
+    RegisterPair(RegisterPair),
+    ByteAtAddressWithOffset(u8),
+}
+
+#[derive(Debug, Copy, Clone)]
+enum InstrRegisterPair {
+    AF,
+    BC,
+    DE,
+    HL,
+    SP,
+    PC,
+    IncrementHL,
+    DecrementHL,
+}
+
+#[derive(Debug, Copy, Clone)]
+enum InstrRegister {
+    A,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    IndirectHL, // (HL)
+    IndirectC,  // (0xFF00 + C)
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum JumpCondition {
+    NotZero,
+    Zero,
+    NotCarry,
+    Carry,
+    Always,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Table;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Cycles(u8);
@@ -1783,50 +1853,6 @@ impl Instruction {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum JPTarget {
-    RegisterPair(RegisterPair),
-    ImmediateWord(u16),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Registers {
-    Byte(InstrRegister),
-    Word(RegisterPair),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum MATHTarget {
-    HL,
-    SP,
-    Register(InstrRegister),
-    RegisterPair(RegisterPair),
-    ImmediateByte(u8),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum LDTarget {
-    Register(InstrRegister),
-    IndirectRegister(InstrRegisterPair),
-    ByteAtAddress(u16),
-    ImmediateWord(u16),
-    ImmediateByte(u8),
-    RegisterPair(RegisterPair),
-    ByteAtAddressWithOffset(u8),
-}
-
-#[derive(Debug, Copy, Clone)]
-enum InstrRegisterPair {
-    AF,
-    BC,
-    DE,
-    HL,
-    SP,
-    PC,
-    IncrementHL,
-    DecrementHL,
-}
-
 impl From<RegisterPair> for InstrRegisterPair {
     fn from(pair: RegisterPair) -> Self {
         match pair {
@@ -1859,19 +1885,6 @@ impl TryFrom<InstrRegisterPair> for RegisterPair {
             }
         }
     }
-}
-
-#[derive(Debug, Copy, Clone)]
-enum InstrRegister {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    IndirectHL, // (HL)
-    IndirectC,  // (0xFF00 + C)
 }
 
 impl TryFrom<Register> for InstrRegister {
@@ -1912,18 +1925,6 @@ impl TryFrom<InstrRegister> for Register {
         }
     }
 }
-
-#[derive(Debug, Copy, Clone)]
-pub enum JumpCondition {
-    NotZero,
-    Zero,
-    NotCarry,
-    Carry,
-    Always,
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Table;
 
 impl Table {
     pub fn r(index: u8) -> InstrRegister {
