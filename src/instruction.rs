@@ -315,45 +315,55 @@ impl Instruction {
                 }
                 _ => unreachable!(),
             },
-            Instruction::INC(Registers::Word(pair)) => {
-                // INC rp[p] | Increment Register Pair
-                match pair {
-                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::SP => {
-                        let value = cpu.register_pair(pair);
-                        cpu.set_register_pair(pair, value + 1);
-                    }
-                    _ => unreachable!(),
-                }
-                Cycles(8)
-            }
-            Instruction::INC(Registers::Byte(reg)) => {
-                // INC r[y] | Increment Register
-                let mut flags: Flags = cpu.register(Register::Flag).into();
-                let cycles: Cycles;
+            Instruction::INC(registers) => {
+                match registers {
+                    Registers::Byte(reg) => {
+                        // INC r[y] | Increment Register
+                        let mut flags: Flags = cpu.register(Register::Flag).into();
+                        let cycles: Cycles;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
-                        let reg = Register::try_from(reg).unwrap();
+                        match reg {
+                            InstrRegister::B
+                            | InstrRegister::C
+                            | InstrRegister::D
+                            | InstrRegister::E
+                            | InstrRegister::H
+                            | InstrRegister::L
+                            | InstrRegister::A => {
+                                let reg = Register::try_from(reg).unwrap();
 
-                        let value = cpu.register(reg);
-                        cpu.set_register(reg, Self::inc_register(value, &mut flags));
-                        cycles = Cycles(4)
+                                let value = cpu.register(reg);
+                                cpu.set_register(reg, Self::inc_register(value, &mut flags));
+                                cycles = Cycles(4)
+                            }
+                            InstrRegister::IndirectHL => {
+                                let addr = cpu.register_pair(RegisterPair::HL);
+                                cpu.write_byte(
+                                    addr,
+                                    Self::inc_register(cpu.read_byte(addr), &mut flags),
+                                );
+                                cycles = Cycles(12)
+                            }
+                            InstrRegister::IndirectC => unreachable!(),
+                        }
+                        cpu.set_register(Register::Flag, flags.into());
+                        cycles
                     }
-                    InstrRegister::IndirectHL => {
-                        let addr = cpu.register_pair(RegisterPair::HL);
-                        cpu.write_byte(addr, Self::inc_register(cpu.read_byte(addr), &mut flags));
-                        cycles = Cycles(12)
+                    Registers::Word(pair) => {
+                        // INC rp[p] | Increment Register Pair
+                        match pair {
+                            RegisterPair::BC
+                            | RegisterPair::DE
+                            | RegisterPair::HL
+                            | RegisterPair::SP => {
+                                let value = cpu.register_pair(pair);
+                                cpu.set_register_pair(pair, value + 1);
+                            }
+                            _ => unreachable!(),
+                        }
+                        Cycles(8)
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
-                cpu.set_register(Register::Flag, flags.into());
-                cycles
             }
             Instruction::DEC(Registers::Word(pair)) => {
                 // DEC rp[p] | Decrement Register Pair
