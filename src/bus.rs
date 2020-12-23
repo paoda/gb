@@ -1,34 +1,48 @@
-const ROM: &[u8; 256] = include_bytes!("../bin/DMG_ROM.bin");
+#[derive(Debug, Copy, Clone)]
+pub struct Bus {
+    boot: [u8; 256],
+}
 
-#[derive(Debug, Copy, Clone, Default)]
-pub struct Bus {}
+impl Default for Bus {
+    fn default() -> Self {
+        Self {
+            boot: include_bytes!("../bin/DMG_ROM.bin").to_owned(),
+        }
+    }
+}
 
 impl Bus {
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x00FF => {
                 // Restart and Interrupt Vectors
-                ROM[addr as usize]
+                self.boot[addr as usize]
             }
-            _ => unimplemented!(),
+            _ => unimplemented!("Can't read byte from {:#06x}", addr),
         }
     }
 
-    pub fn write_byte(&mut self, _addr: u16, _byte: u8) {
-        unimplemented!()
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        match addr {
+            0x000..=0x0FF => {
+                // Restart and Itterupt Vectors
+                self.boot[addr as usize] = byte;
+            }
+            _ => unimplemented!("Can't write {:#04x} to {:#06x}", byte, addr),
+        }
     }
 
     pub fn read_word(&self, addr: u16) -> u16 {
         match addr {
             0x0000..=0x00FF => {
                 // Restart and Interrupt Vectors
-                (ROM[(addr + 1) as usize] as u16) << 8 | ROM[addr as usize] as u16
+                (self.boot[(addr + 1) as usize] as u16) << 8 | self.boot[addr as usize] as u16
             }
-            _ => unimplemented!(),
+            _ => unimplemented!("Can't read word from {:#06x}", addr),
         }
     }
 
-    pub fn write_word(&mut self, _addr: u16, _word: u16) {
-        unimplemented!()
+    pub fn write_word(&mut self, addr: u16, word: u16) {
+        unimplemented!("Can't write {:#06x} to {:#06x}", word, addr)
     }
 }
