@@ -72,6 +72,7 @@ pub enum MATHTarget {
 
 #[derive(Debug, Copy, Clone)]
 pub enum LDTarget {
+    IndirectC,
     Register(InstrRegister),
     IndirectRegister(InstrRegisterPair),
     ByteAtAddress(u16),
@@ -95,6 +96,18 @@ enum InstrRegisterPair {
 
 #[derive(Debug, Copy, Clone)]
 enum InstrRegister {
+    A,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    IndirectHL, // (HL)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InstrRegisterWithC {
     A,
     B,
     C,
@@ -215,22 +228,15 @@ impl Instruction {
                             cpu.set_register(Register::try_from(reg).unwrap(), n);
                             Cycles(8)
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
                 }
-                (
-                    LDTarget::Register(InstrRegister::IndirectC),
-                    LDTarget::Register(InstrRegister::A),
-                ) => {
+                (LDTarget::IndirectC, LDTarget::Register(InstrRegister::A)) => {
                     // LD (0xFF00 + C), A | Store value of register A at address 0xFF00 + C
                     let addr = 0xFF00 + cpu.register(Register::C) as u16;
                     cpu.write_byte(addr, cpu.register(Register::A));
                     Cycles(8)
                 }
-                (
-                    LDTarget::Register(InstrRegister::A),
-                    LDTarget::Register(InstrRegister::IndirectC),
-                ) => {
+                (LDTarget::Register(InstrRegister::A), LDTarget::IndirectC) => {
                     let addr = 0xFF00 + cpu.register(Register::C) as u16;
                     cpu.set_register(Register::A, cpu.read_byte(addr));
                     Cycles(8)
@@ -359,7 +365,6 @@ impl Instruction {
                             sum = Self::add_u8s(a_value, value, &mut flags);
                             cycles = Cycles(4);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     cpu.set_register(Register::A, sum);
@@ -414,7 +419,6 @@ impl Instruction {
                                 );
                                 cycles = Cycles(12)
                             }
-                            InstrRegister::IndirectC => unreachable!(),
                         }
                         cpu.set_register(Register::Flag, flags.into());
                         cycles
@@ -470,7 +474,6 @@ impl Instruction {
                         cpu.write_byte(addr, Self::dec_register(cpu.read_byte(addr), &mut flags));
                         cycles = Cycles(12);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
                 cpu.set_register(Register::Flag, flags.into());
                 cycles
@@ -588,7 +591,6 @@ impl Instruction {
                             sum = Self::add_u8s(a_value, value, &mut flags);
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, sum);
@@ -631,7 +633,6 @@ impl Instruction {
                             diff = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     cpu.set_register(Register::Flag, flags.into());
@@ -676,7 +677,6 @@ impl Instruction {
                             diff = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     cpu.set_register(Register::A, diff);
@@ -721,7 +721,6 @@ impl Instruction {
                             result = a_value & value;
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     flags.update(result == 0, false, true, false);
@@ -766,7 +765,6 @@ impl Instruction {
                             result = a_value ^ value;
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     flags.update(result == 0, false, false, false);
@@ -811,7 +809,6 @@ impl Instruction {
                             result = a_value | value;
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     flags.update(result == 0, false, false, false);
@@ -855,7 +852,6 @@ impl Instruction {
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles(8);
                         }
-                        InstrRegister::IndirectC => unreachable!(),
                     }
 
                     cpu.set_register(Register::Flag, flags.into());
@@ -1099,7 +1095,6 @@ impl Instruction {
                         cpu.write_byte(addr, rot_reg);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(rot_reg == 0, false, false, msb == 0x01);
@@ -1140,7 +1135,6 @@ impl Instruction {
                         cpu.write_byte(addr, rot_reg);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(rot_reg == 0, false, false, lsb == 0x01);
@@ -1183,7 +1177,6 @@ impl Instruction {
                         cpu.write_byte(addr, rot_reg);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(rot_reg == 0, false, false, carry);
@@ -1227,7 +1220,6 @@ impl Instruction {
                         cpu.write_byte(addr, rot_reg);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(rot_reg == 0, false, false, carry);
@@ -1269,7 +1261,6 @@ impl Instruction {
                         cpu.write_byte(addr, value);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unimplemented!(),
                 }
 
                 flags.update(shift_reg == 0, false, false, msb == 0x01);
@@ -1313,7 +1304,6 @@ impl Instruction {
                         cpu.write_byte(addr, value);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unimplemented!(),
                 }
 
                 flags.update(shift_reg == 0, false, false, lsb == 0x01);
@@ -1353,7 +1343,6 @@ impl Instruction {
                         cpu.write_byte(addr, swap_reg);
                         cycles = Cycles(16)
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(swap_reg == 0, false, false, false);
@@ -1395,7 +1384,6 @@ impl Instruction {
                         cpu.write_byte(addr, shift_reg);
                         cycles = Cycles(16);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(shift_reg == 0, false, false, lsb == 0x01);
@@ -1429,7 +1417,6 @@ impl Instruction {
                         is_bit_set = ((value >> y) & 0x01) == 0x01;
                         cycles = Cycles(12);
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
 
                 flags.update(!is_bit_set, false, true, flags.c);
@@ -1464,7 +1451,6 @@ impl Instruction {
                         cpu.write_byte(addr, value & !(1u8 << y));
                         Cycles(16)
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
             }
             Instruction::SET(y, reg) => {
@@ -1493,7 +1479,6 @@ impl Instruction {
                         cpu.write_byte(addr, value | (1u8 << y));
                         Cycles(16)
                     }
-                    InstrRegister::IndirectC => unreachable!(),
                 }
             }
         }
@@ -1786,7 +1771,7 @@ impl Instruction {
             ),
             (3, 2, _, 4, _) => Self::LD(
                 // LD (0xFF00 + C) ,A
-                LDTarget::Register(InstrRegister::IndirectC),
+                LDTarget::IndirectC,
                 LDTarget::Register(InstrRegister::A),
             ),
             (3, 2, _, 5, _) => Self::LD(
@@ -1797,7 +1782,7 @@ impl Instruction {
             (3, 2, _, 6, _) => Self::LD(
                 // LD A, (0xFF00 + C)
                 LDTarget::Register(InstrRegister::A),
-                LDTarget::Register(InstrRegister::IndirectC),
+                LDTarget::IndirectC,
             ),
             (3, 2, _, 7, _) => Self::LD(
                 // LD A, (nn)
@@ -1918,9 +1903,6 @@ impl TryFrom<InstrRegister> for Register {
             InstrRegister::L => Ok(Self::L),
             InstrRegister::IndirectHL => {
                 Err("Can not convert InstrRegister::IndirectHL to Register".to_string())
-            }
-            InstrRegister::IndirectC => {
-                Err("Can not convert InstrRegister::IndirectC to Register".to_string())
             }
         }
     }
