@@ -83,7 +83,7 @@ pub enum LDTarget {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum InstrRegisterPair {
+pub enum InstrRegisterPair {
     AF,
     BC,
     DE,
