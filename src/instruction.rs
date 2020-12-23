@@ -426,7 +426,7 @@ impl Instruction {
                 let mut flags: Flags = cpu.register(Register::Flag).into();
 
                 let a = cpu.register(Register::A);
-                let (rot_a, carry) = Self::rl_tru_carry(a, flags.c);
+                let (rot_a, carry) = Self::rl_thru_carry(a, flags.c);
 
                 flags.update(false, false, false, carry);
                 cpu.set_register(Register::Flag, flags.into());
@@ -1085,7 +1085,7 @@ impl Instruction {
                         let register = Register::try_from(reg).unwrap();
                         let value = cpu.register(register);
 
-                        let (new_reg, new_carry) = Self::rl_tru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c);
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1096,7 +1096,7 @@ impl Instruction {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        let (new_reg, new_carry) = Self::rl_tru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c);
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1323,7 +1323,99 @@ impl Instruction {
 
                 cycles
             }
-            _ => unimplemented!(),
+            Instruction::BIT(y, reg) => {
+                // BIT y, r[z] | Test y is in register r[z]
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let is_bit_set;
+                let cycles: Cycles;
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+                        let value = cpu.register(register);
+
+                        is_bit_set = ((value >> y) & 0x01) == 0x01;
+                        cycles = Cycles(8);
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+                        let value = cpu.read_byte(addr);
+
+                        is_bit_set = ((value >> y) & 0x01) == 0x01;
+                        cycles = Cycles(12);
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+
+                flags.update(!is_bit_set, false, true, flags.c);
+                cpu.set_register(Register::Flag, flags.into());
+
+                cycles
+            }
+            Instruction::RES(y, reg) => {
+                // RES y, r[z] | Reset bit y to zero
+                //
+                // 00000001 << 3 = 00001000
+                // ~00001000 = 11110111
+                // value & 11110111 means that only a specific bit will be reset
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+                        let value = cpu.register(register);
+
+                        cpu.set_register(register, value & !(1u8 << y));
+                        Cycles(8)
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+                        let value = cpu.read_byte(addr);
+
+                        cpu.write_byte(addr, value & !(1u8 << y));
+                        Cycles(16)
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+            }
+            Instruction::SET(y, reg) => {
+                // BIT y, r[z] | Set bit y to one
+                //
+                // 00000001 << 3 = 00001000
+                // value | 00001000 means that only a specific bit will be set
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+                        let value = cpu.register(register);
+
+                        cpu.set_register(register, value | (1u8 << y));
+                        Cycles(8)
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+                        let value = cpu.read_byte(addr);
+
+                        cpu.write_byte(addr, value | (1u8 << y));
+                        Cycles(16)
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+            }
         }
     }
 
@@ -1439,7 +1531,7 @@ impl Instruction {
         ((left & 0xF) + (right & 0xF)) & 0x10 == 0x10
     }
 
-    fn rl_tru_carry(byte: u8, carry: bool) -> (u8, bool) {
+    fn rl_thru_carry(byte: u8, carry: bool) -> (u8, bool) {
         let carry_flag = (byte >> 7) & 0x01; // get the MSB of the u8 (which will rotate into the carry bit)
         let new_byte = (byte << 1) | carry as u8; // shift the bit left, and then OR the carry bit in.
 
