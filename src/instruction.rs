@@ -207,16 +207,16 @@ impl Instruction {
                 // JR d | Add d to current address and jump
                 let prev = cpu.register_pair(RegisterPair::PC);
                 let flags: Flags = cpu.register(Register::Flag).into();
-                let new_address = Self::add_u16_i8_no_flags(prev, offset);
+                let new_addr = Self::add_u16_i8_no_flags(prev, offset);
 
                 match cond {
                     JumpCondition::Always => {
-                        cpu.set_register_pair(RegisterPair::PC, new_address);
+                        cpu.set_register_pair(RegisterPair::PC, new_addr);
                         Cycles(12)
                     }
                     JumpCondition::NotZero => {
                         if !flags.z {
-                            cpu.set_register_pair(RegisterPair::PC, new_address);
+                            cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles(12);
                         }
 
@@ -224,21 +224,21 @@ impl Instruction {
                     }
                     JumpCondition::Zero => {
                         if flags.z {
-                            cpu.set_register_pair(RegisterPair::PC, new_address);
+                            cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles(12);
                         }
                         Cycles(8)
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c {
-                            cpu.set_register_pair(RegisterPair::PC, new_address);
+                            cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles(12);
                         }
                         Cycles(8)
                     }
                     JumpCondition::Carry => {
                         if flags.c {
-                            cpu.set_register_pair(RegisterPair::PC, new_address);
+                            cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles(12);
                         }
                         Cycles(8)
@@ -403,11 +403,7 @@ impl Instruction {
                 let msb = a >> 7;
                 let rot_a = a.rotate_left(1);
 
-                flags.z = false;
-                flags.n = false;
-                flags.h = false;
-                flags.c = msb == 0x01;
-
+                flags.update(false, false, false, msb == 0x01);
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
                 Cycles(4)
@@ -420,11 +416,7 @@ impl Instruction {
                 let lsb = a & 0x01;
                 let rot_a = a.rotate_right(1);
 
-                flags.z = false;
-                flags.n = false;
-                flags.h = false;
-                flags.c = lsb == 0x01;
-
+                flags.update(false, false, false, lsb == 0x01);
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
                 Cycles(4)
@@ -437,11 +429,7 @@ impl Instruction {
                 let msb = a >> 7;
                 let rot_a = (a << 1) | ((flags.c as u8) << 0);
 
-                flags.z = false;
-                flags.n = false;
-                flags.h = false;
-                flags.c = msb == 0x01;
-
+                flags.update(false, false, false, msb == 0x01);
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
                 Cycles(4)
@@ -454,11 +442,7 @@ impl Instruction {
                 let lsb = a & 0x01;
                 let rot_a = (a >> 1) | ((flags.c as u8) << 7);
 
-                flags.z = false;
-                flags.n = false;
-                flags.h = false;
-                flags.c = lsb == 0x01;
-
+                flags.update(false, false, false, lsb == 0x01);
                 cpu.set_register(Register::Flag, flags.into());
                 cpu.set_register(Register::A, rot_a);
                 Cycles(4)
@@ -662,11 +646,7 @@ impl Instruction {
                         InstrRegister::IndirectC => unreachable!(),
                     }
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = true;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, true, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     cycles
@@ -676,11 +656,7 @@ impl Instruction {
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) & n;
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = true;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, true, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     Cycles(8)
@@ -715,11 +691,7 @@ impl Instruction {
                         InstrRegister::IndirectC => unreachable!(),
                     }
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = false;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, false, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     cycles
@@ -729,11 +701,7 @@ impl Instruction {
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) ^ n;
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = false;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, false, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     Cycles(8)
@@ -768,11 +736,7 @@ impl Instruction {
                         InstrRegister::IndirectC => unreachable!(),
                     }
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = false;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, false, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     cycles
@@ -782,11 +746,7 @@ impl Instruction {
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) | n;
 
-                    flags.z = result == 0;
-                    flags.n = false;
-                    flags.h = false;
-                    flags.c = false;
-
+                    flags.update(result == 0, false, false, false);
                     cpu.set_register(Register::Flag, flags.into());
                     cpu.set_register(Register::A, result);
                     Cycles(8)
@@ -1028,6 +988,7 @@ impl Instruction {
                 Cycles(16)
             }
             Instruction::RLC(reg) => {
+                // RLC r[z] | Rotate register r[z] left
                 let mut flags: Flags = cpu.register(Register::Flag).into();
                 let carry_flag;
                 let result;
@@ -1063,15 +1024,12 @@ impl Instruction {
                     InstrRegister::IndirectC => unreachable!(),
                 }
 
-                flags.z = result == 0;
-                flags.n = false;
-                flags.h = false;
-                flags.c = carry_flag;
-
+                flags.update(result == 0, false, false, carry_flag);
                 cpu.set_register(Register::Flag, flags.into());
                 cycles
             }
             Instruction::RRC(reg) => {
+                // RRC r[z] | Rotate Register r[z] right
                 let mut flags: Flags = cpu.register(Register::Flag).into();
                 let carry_flag;
                 let result;
@@ -1107,12 +1065,61 @@ impl Instruction {
                     InstrRegister::IndirectC => unreachable!(),
                 }
 
-                flags.z = result == 0;
-                flags.n = false;
-                flags.h = false;
-                flags.c = carry_flag;
-
+                flags.update(result == 0, false, false, carry_flag);
                 cpu.set_register(Register::Flag, flags.into());
+                cycles
+            }
+            Instruction::RL(reg) => {
+                // RL r[z] | Rotate register r[z] left through carry
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let carry_flag;
+                let result;
+                let cycles: Cycles;
+
+                match reg {
+                    InstrRegister::B
+                    | InstrRegister::C
+                    | InstrRegister::D
+                    | InstrRegister::E
+                    | InstrRegister::H
+                    | InstrRegister::L
+                    | InstrRegister::A => {
+                        let register = Register::try_from(reg).unwrap();
+                        let value = cpu.register(register);
+                        carry_flag = value >> 7 == 0x01;
+
+                        result = value << 1 | flags.c as u8;
+                        cpu.set_register(register, result);
+
+                        cycles = Cycles(8);
+                    }
+                    InstrRegister::IndirectHL => {
+                        let addr = cpu.register_pair(RegisterPair::HL);
+                        let value = cpu.read_byte(addr);
+                        carry_flag = value >> 7 == 0x01;
+
+                        result = value << 1 | flags.c as u8;
+                        cpu.write_byte(addr, result);
+
+                        cycles = Cycles(16);
+                    }
+                    InstrRegister::IndirectC => unreachable!(),
+                }
+
+                flags.update(result == 0, false, false, carry_flag);
+                cpu.set_register(Register::Flag, flags.into());
+
+                cycles
+            }
+            Instruction::RR(reg) => {
+                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let carry_flag;
+                let result;
+                let cycles: Cycles;
+
+                flags.update(false, false, false, false);
+                cpu.set_register(Register::Flag, flags.into());
+
                 cycles
             }
             _ => unimplemented!(),
@@ -1159,21 +1166,19 @@ impl Instruction {
     fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let diff = left.wrapping_sub(right);
 
-        flags.z = diff == 0;
-        flags.n = true;
-        flags.h = Self::u8_half_carry(left, right);
-
+        flags.update(diff == 0, true, Self::u8_half_carry(left, right), flags.c);
         diff
     }
 
     fn sub_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let (diff, did_overflow) = left.overflowing_sub(right);
 
-        flags.z = diff == 0;
-        flags.n = true;
-        flags.h = Self::u8_half_carry(left, right);
-        flags.c = did_overflow;
-
+        flags.update(
+            diff == 0,
+            true,
+            Self::u8_half_carry(left, right),
+            did_overflow,
+        );
         diff
     }
 
@@ -1184,42 +1189,43 @@ impl Instruction {
     fn add_u16_i8(left: u16, right: i8, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right as u16);
 
-        flags.z = false;
-        flags.n = false;
-        flags.h = Self::u16_half_carry(left, right as u16);
-        flags.c = did_overflow;
-
+        flags.update(
+            false,
+            false,
+            Self::u16_half_carry(left, right as u16),
+            did_overflow,
+        );
         sum
     }
 
     fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let sum = left.wrapping_add(right);
 
-        flags.z = sum == 0;
-        flags.n = false;
-        flags.h = Self::u8_half_carry(left, right);
-
+        flags.update(sum == 0, false, Self::u8_half_carry(left, right), flags.c);
         sum
     }
 
     fn add_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let (sum, did_overflow) = left.overflowing_add(right);
 
-        flags.z = sum == 0;
-        flags.n = false;
-        flags.h = Self::u8_half_carry(left, right);
-        flags.c = did_overflow;
-
+        flags.update(
+            sum == 0,
+            false,
+            Self::u8_half_carry(left, right),
+            did_overflow,
+        );
         sum
     }
 
     fn add_u16s(left: u16, right: u16, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right);
 
-        flags.n = false;
-        flags.h = Self::u16_half_carry(left, right);
-        flags.c = did_overflow;
-
+        flags.update(
+            false,
+            Self::u16_half_carry(left, right),
+            flags.h,
+            did_overflow,
+        );
         sum
     }
 

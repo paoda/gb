@@ -36,20 +36,20 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn read_byte(&self, address: u16) -> u8 {
-        self.bus.read_byte(address)
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        self.bus.read_byte(addr)
     }
 
-    pub fn write_byte(&mut self, address: u16, byte: u8) {
-        self.bus.write_byte(address, byte)
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.bus.write_byte(addr, byte)
     }
 
-    pub fn read_word(&self, address: u16) -> u16 {
-        self.bus.read_word(address)
+    pub fn read_word(&self, addr: u16) -> u16 {
+        self.bus.read_word(addr)
     }
 
-    pub fn write_word(&mut self, address: u16, word: u16) {
-        self.bus.write_word(address, word)
+    pub fn write_word(&mut self, addr: u16, word: u16) {
+        self.bus.write_word(addr, word)
     }
 }
 
@@ -166,6 +166,15 @@ pub struct Flags {
     pub n: bool, // Negative Flag
     pub h: bool, // Half-Carry Flag
     pub c: bool, // Carry Flag
+}
+
+impl Flags {
+    pub fn update(&mut self, z: bool, n: bool, h: bool, c: bool) {
+        self.z = z;
+        self.n = n;
+        self.h = h;
+        self.c = c;
+    }
 }
 
 impl From<u8> for Flags {
