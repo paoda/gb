@@ -1,7 +1,7 @@
 use super::bus::Bus;
 use super::instruction::Instruction;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Cpu {
     bus: Bus,
     reg: Registers,
@@ -11,6 +11,10 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     pub fn ime(&self) -> bool {
         self.ime
     }
@@ -18,34 +22,47 @@ impl Cpu {
     pub fn set_ime(&mut self, enabled: bool) {
         self.ime = enabled;
     }
+
+    pub fn inc_pc(&mut self) {
+        self.reg.pc += 1;
+    }
 }
 
 impl Cpu {
-    fn fetch(&self) -> u8 {
-        self.bus.read_byte(self.reg.pc)
-        // TODO: Figure out where to increment the program counter.
+    pub fn fetch(&mut self) -> u8 {
+        let opcode = self.bus.read_byte(self.reg.pc);
+        self.inc_pc();
+
+        opcode
     }
 
-    fn decode(&self, opcode: u8) -> Instruction {
+    pub fn decode(&mut self, opcode: u8) -> Instruction {
         Instruction::from_byte(self, opcode)
     }
 
-    fn execute(&mut self, instruction: Instruction) {
+    pub fn execute(&mut self, instruction: Instruction) {
         Instruction::execute(self, instruction);
     }
 }
 
 impl Cpu {
-    pub fn read_byte(&self, addr: u16) -> u8 {
-        self.bus.read_byte(addr)
+    pub fn read_byte(&mut self, addr: u16) -> u8 {
+        let byte = self.bus.read_byte(addr);
+        self.inc_pc();
+
+        byte
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
         self.bus.write_byte(addr, byte)
     }
 
-    pub fn read_word(&self, addr: u16) -> u16 {
-        self.bus.read_word(addr)
+    pub fn read_word(&mut self, addr: u16) -> u16 {
+        let word = self.bus.read_word(addr);
+        self.inc_pc();
+        self.inc_pc();
+
+        word
     }
 
     pub fn write_word(&mut self, addr: u16, word: u16) {
@@ -56,8 +73,14 @@ impl Cpu {
 #[derive(Debug, Copy, Clone)]
 enum State {
     Execute,
-    Halt,
-    Stop,
+    // Halt,
+    // Stop,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::Execute
+    }
 }
 
 impl Cpu {
@@ -70,7 +93,7 @@ impl Cpu {
             Register::E => self.reg.e = value,
             Register::H => self.reg.h = value,
             Register::L => self.reg.l = value,
-            Register::Flag => self.reg.a = value.into(),
+            Register::Flag => self.reg.a = value,
         }
     }
 
@@ -147,7 +170,7 @@ pub enum RegisterPair {
     PC,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 struct Registers {
     a: u8,
     b: u8,
@@ -160,7 +183,7 @@ struct Registers {
     pc: u16,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Flags {
     pub z: bool, // Zero Flag
     pub n: bool, // Negative Flag

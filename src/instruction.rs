@@ -106,19 +106,6 @@ pub enum InstrRegister {
     IndirectHL, // (HL)
 }
 
-#[derive(Debug, Clone, Copy)]
-enum InstrRegisterWithC {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    IndirectHL, // (HL)
-    IndirectC,  // (0xFF00 + C)
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum JumpCondition {
     NotZero,
@@ -150,9 +137,7 @@ impl Instruction {
                         RegisterPair::BC
                         | RegisterPair::DE
                         | RegisterPair::HL
-                        | RegisterPair::SP => {
-                            cpu.set_register_pair(RegisterPair::try_from(pair).unwrap(), nn)
-                        }
+                        | RegisterPair::SP => cpu.set_register_pair(pair, nn),
                         _ => unreachable!(),
                     }
                     Cycles(12)
@@ -190,19 +175,22 @@ impl Instruction {
                             // LD A, (BC) | Put value at address BC into A
                             // LD A, (DE) | Put value at address DE into A
                             let addr = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
-                            cpu.set_register(Register::A, cpu.read_byte(addr));
+                            let byte = cpu.read_byte(addr);
+                            cpu.set_register(Register::A, byte);
                         }
                         InstrRegisterPair::IncrementHL => {
                             // LD A, (HL+) | Put value at address HL into A, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
-                            cpu.set_register(Register::A, cpu.read_byte(addr));
+                            let byte = cpu.read_byte(addr);
+                            cpu.set_register(Register::A, byte);
 
                             cpu.set_register_pair(RegisterPair::HL, addr + 1);
                         }
                         InstrRegisterPair::DecrementHL => {
                             // LD A, (HL-) | Put value at address HL into A, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
-                            cpu.set_register(Register::A, cpu.read_byte(addr));
+                            let byte = cpu.read_byte(addr);
+                            cpu.set_register(Register::A, byte);
 
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
@@ -238,7 +226,8 @@ impl Instruction {
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::IndirectC) => {
                     let addr = 0xFF00 + cpu.register(Register::C) as u16;
-                    cpu.set_register(Register::A, cpu.read_byte(addr));
+                    let byte = cpu.read_byte(addr);
+                    cpu.set_register(Register::A, byte);
                     Cycles(8)
                 }
                 (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
@@ -256,7 +245,8 @@ impl Instruction {
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddressWithOffset(n)) => {
                     // LD A, (0xFF00 + n) | Store value at address (0xFF00 + n) in register A
-                    cpu.set_register(Register::A, cpu.read_byte(0xFF00 + (n as u16)));
+                    let byte = cpu.read_byte(0xFF00 + (n as u16));
+                    cpu.set_register(Register::A, byte);
                     Cycles(12)
                 }
                 (
@@ -272,7 +262,8 @@ impl Instruction {
                     Cycles(16)
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddress(nn)) => {
-                    cpu.set_register(Register::A, cpu.read_byte(nn));
+                    let byte = cpu.read_byte(nn);
+                    cpu.set_register(Register::A, byte);
                     Cycles(16)
                 }
                 _ => unreachable!(),
@@ -332,7 +323,7 @@ impl Instruction {
                         | RegisterPair::HL
                         | RegisterPair::SP => {
                             let hl_value = cpu.register_pair(RegisterPair::HL);
-                            let value = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
+                            let value = cpu.register_pair(pair);
                             let sum = Self::add_u16s(hl_value, value, &mut flags);
 
                             cpu.set_register_pair(RegisterPair::HL, sum);
@@ -413,10 +404,8 @@ impl Instruction {
                             }
                             InstrRegister::IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
-                                cpu.write_byte(
-                                    addr,
-                                    Self::inc_register(cpu.read_byte(addr), &mut flags),
-                                );
+                                let byte = Self::inc_register(cpu.read_byte(addr), &mut flags);
+                                cpu.write_byte(addr, byte);
                                 cycles = Cycles(12)
                             }
                         }
@@ -471,7 +460,8 @@ impl Instruction {
                     }
                     InstrRegister::IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
-                        cpu.write_byte(addr, Self::dec_register(cpu.read_byte(addr), &mut flags));
+                        let byte = cpu.read_byte(addr);
+                        cpu.write_byte(addr, Self::dec_register(byte, &mut flags));
                         cycles = Cycles(12);
                     }
                 }
@@ -1058,7 +1048,7 @@ impl Instruction {
                 // RST n | Push current address onto the stack, jump to 0x0000 + n
                 let addr = cpu.register_pair(RegisterPair::PC);
                 Self::push(cpu, addr);
-                cpu.set_register_pair(RegisterPair::PC, 0x0000 + (n as u16));
+                cpu.set_register_pair(RegisterPair::PC, n as u16);
                 Cycles(16)
             }
             Instruction::RLC(reg) => {
@@ -1589,7 +1579,7 @@ impl Instruction {
 
     fn u16_half_carry(left: u16, right: u16) -> bool {
         // Self::u8_half_carry((left >> 8) as u8, (right >> 8) as u8)
-        ((left & 0xFFFF) + (right & 0xFFFF)) > 0xFFF // Thanks @Nectar Boy#1003
+        left + right > 0xFFF // Thanks @Nectar Boy#1003
     }
 
     fn u8_half_carry(left: u8, right: u8) -> bool {
@@ -1619,7 +1609,7 @@ impl Instruction {
 }
 
 impl Instruction {
-    pub fn from_byte(cpu: &Cpu, byte: u8) -> Self {
+    pub fn from_byte(cpu: &mut Cpu, byte: u8) -> Self {
         if byte == 0xCB {
             Self::from_prefixed_byte(cpu)
         } else {
@@ -1627,7 +1617,7 @@ impl Instruction {
         }
     }
 
-    fn from_unprefixed_byte(cpu: &Cpu, opcode: u8) -> Self {
+    fn from_unprefixed_byte(cpu: &mut Cpu, opcode: u8) -> Self {
         // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
         let x = (opcode >> 6) & 0b00000011;
         let y = (opcode >> 3) & 0b00000111;
@@ -1635,23 +1625,22 @@ impl Instruction {
         let p = y >> 1;
         let q = y & 0b00000001;
 
-        let n = cpu.read_byte(cpu.register_pair(RegisterPair::PC) + 1);
-        let nn = cpu.read_word(cpu.register_pair(RegisterPair::PC) + 1);
+        let pc = cpu.register_pair(RegisterPair::PC);
 
         match (x, z, q, y, p) {
             (0, 0, _, 0, _) => Self::NOP, // NOP
             (0, 0, _, 1, _) => Self::LD(
                 // LD (nn), SP
-                LDTarget::ByteAtAddress(nn),
+                LDTarget::ByteAtAddress(cpu.read_word(pc)),
                 LDTarget::RegisterPair(RegisterPair::SP),
             ),
             (0, 0, _, 2, _) => Self::STOP, // STOP
-            (0, 0, _, 3, _) => Self::JR(JumpCondition::Always, n as i8), // JR d
-            (0, 0, _, 4..=7, _) => Self::JR(Table::cc(y - 4), n as i8), // JR cc[y - 4], d
+            (0, 0, _, 3, _) => Self::JR(JumpCondition::Always, cpu.read_byte(pc) as i8), // JR d
+            (0, 0, _, 4..=7, _) => Self::JR(Table::cc(y - 4), cpu.read_byte(pc) as i8), // JR cc[y - 4], d
             (0, 1, 0, _, _) => Self::LD(
                 // LD rp[p], nn
                 LDTarget::RegisterPair(Table::rp(p)),
-                LDTarget::ImmediateWord(nn),
+                LDTarget::ImmediateWord(cpu.read_word(pc)),
             ),
             (0, 1, 1, _, _) => Self::ADD(
                 // ADD HL, rp[p]
@@ -1717,7 +1706,7 @@ impl Instruction {
             (0, 6, _, _, _) => Self::LD(
                 // LD r[y], n
                 LDTarget::Register(Table::r(y)),
-                LDTarget::ImmediateByte(n),
+                LDTarget::ImmediateByte(cpu.read_byte(pc)),
             ),
             (0, 7, _, 0, _) => Self::RLCA,
             (0, 7, _, 1, _) => Self::RRCA,
@@ -1737,22 +1726,22 @@ impl Instruction {
             (3, 0, _, 0..=3, _) => Self::RET(Table::cc(y)), // RET cc[y]
             (3, 0, _, 4, _) => Self::LD(
                 // LD (0xFF00 + n), A
-                LDTarget::ByteAtAddressWithOffset(n),
+                LDTarget::ByteAtAddressWithOffset(cpu.read_byte(pc)),
                 LDTarget::Register(InstrRegister::A),
             ),
             (3, 0, _, 5, _) => Self::ADD(
                 // ADD SP, d
                 MATHTarget::RegisterPair(RegisterPair::SP),
-                MATHTarget::ImmediateByte(n),
+                MATHTarget::ImmediateByte(cpu.read_byte(pc)),
             ),
             (3, 0, _, 6, _) => Self::LD(
                 // LD A, (0xFF00 + n)
                 LDTarget::Register(InstrRegister::A),
-                LDTarget::ByteAtAddressWithOffset(n),
+                LDTarget::ByteAtAddressWithOffset(cpu.read_byte(pc)),
             ),
-            (3, 0, _, 7, _) => Self::LDHL(n as i8), // LD HL, SP + d
-            (3, 1, 0, _, _) => Self::POP(Table::rp2(p)), // POP rp2[p]
-            (3, 1, 1, _, 0) => Self::RET(JumpCondition::Always), // RET
+            (3, 0, _, 7, _) => Self::LDHL(cpu.read_byte(pc) as i8), // LD HL, SP + d
+            (3, 1, 0, _, _) => Self::POP(Table::rp2(p)),            // POP rp2[p]
+            (3, 1, 1, _, 0) => Self::RET(JumpCondition::Always),    // RET
             (3, 1, 1, _, 1) => Self::RETI,
             (3, 1, 1, _, 2) => Self::JP(
                 // JP HL
@@ -1767,7 +1756,7 @@ impl Instruction {
             (3, 2, _, 0..=3, _) => Self::JP(
                 // JP cc[y], nn
                 Table::cc(y),
-                JPTarget::ImmediateWord(nn),
+                JPTarget::ImmediateWord(cpu.read_word(pc)),
             ),
             (3, 2, _, 4, _) => Self::LD(
                 // LD (0xFF00 + C) ,A
@@ -1776,7 +1765,7 @@ impl Instruction {
             ),
             (3, 2, _, 5, _) => Self::LD(
                 // LD (nn), A
-                LDTarget::ByteAtAddress(nn),
+                LDTarget::ByteAtAddress(cpu.read_word(pc)),
                 LDTarget::Register(InstrRegister::A),
             ),
             (3, 2, _, 6, _) => Self::LD(
@@ -1787,12 +1776,12 @@ impl Instruction {
             (3, 2, _, 7, _) => Self::LD(
                 // LD A, (nn)
                 LDTarget::Register(InstrRegister::A),
-                LDTarget::ByteAtAddress(nn),
+                LDTarget::ByteAtAddress(cpu.read_word(pc)),
             ),
             (3, 3, _, 0, _) => Self::JP(
                 // JP nn
                 JumpCondition::Always,
-                JPTarget::ImmediateWord(nn),
+                JPTarget::ImmediateWord(cpu.read_word(pc)),
             ),
             (3, 3, _, 1, _) => unreachable!("This is the 0xCB Prefix"),
             // (3, 3, _, 2, _) => unreachable!(), ("removed" in documentation)
@@ -1801,12 +1790,12 @@ impl Instruction {
             // (3, 3, _, 5, _) => unreachable!(), ("removed" in documentation)
             (3, 3, _, 6, _) => Self::DI,
             (3, 3, _, 7, _) => Self::EI,
-            (3, 4, _, 0..=3, _) => Self::CALL(Table::cc(y), nn), // CALL cc[y], nn
+            (3, 4, _, 0..=3, _) => Self::CALL(Table::cc(y), cpu.read_word(pc)), // CALL cc[y], nn
             // (3, 4, _, 4..=7, _) => unreachable!(), ("removed" in documentation)
             (3, 5, 0, _, _) => Self::PUSH(Table::rp2(p)), // PUSH rp2[p]
-            (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, nn), // CALL nn
+            (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, cpu.read_word(pc)), // CALL nn
             // (3, 5, 1, _, 1..=3) => unreachable!(), ("removed" in documentation)
-            (3, 6, _, _, _) => Table::x3_alu(y, n),
+            (3, 6, _, _, _) => Table::x3_alu(y, cpu.read_byte(pc)),
             (3, 7, _, _, _) => Self::RST(y * 8), // RST n
             _ => panic!(
                 "Unknown Opcode: {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
@@ -1815,8 +1804,9 @@ impl Instruction {
         }
     }
 
-    fn from_prefixed_byte(cpu: &Cpu) -> Self {
-        let opcode = cpu.read_byte(cpu.register_pair(RegisterPair::PC) + 1);
+    fn from_prefixed_byte(cpu: &mut Cpu) -> Self {
+        let pc = cpu.register_pair(RegisterPair::PC);
+        let opcode = cpu.read_byte(pc); // FIXME: Should the PC be incremented here?
 
         // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
         let x = (opcode >> 6) & 0b00000011;
