@@ -77,7 +77,7 @@ impl Cpu {
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.bus.write_byte(addr, byte)
+        self.bus.write_byte(addr, byte);
     }
 
     pub fn read_word(&mut self, addr: u16) -> u16 {
@@ -116,7 +116,7 @@ impl Cpu {
             Register::E => self.reg.e = value,
             Register::H => self.reg.h = value,
             Register::L => self.reg.l = value,
-            Register::Flag => self.reg.a = value,
+            Register::Flag => self.flags = value.into(),
         }
     }
 
