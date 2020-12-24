@@ -49,7 +49,7 @@ pub enum Instruction {
     SET(u8, InstrRegister),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum JPTarget {
     RegisterPair(RegisterPair),
     ImmediateWord(u16),
@@ -70,7 +70,7 @@ pub enum MATHTarget {
     ImmediateByte(u8),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum LDTarget {
     IndirectC,
     Register(InstrRegister),
@@ -1990,6 +1990,30 @@ impl Table {
             6 => Instruction::SWAP(Self::r(r_index)), // SWAP r[z]
             7 => Instruction::SRL(Self::r(r_index)),  // SRL r[z]
             _ => unreachable!("Index {} is out of bounds in rot[]"),
+        }
+    }
+}
+
+impl std::fmt::Debug for JPTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            JPTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
+            JPTarget::ImmediateWord(word) => write!(f, "{:#06X}", word),
+        }
+    }
+}
+
+impl std::fmt::Debug for LDTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            LDTarget::IndirectC => f.write_str("IndirectC"),
+            LDTarget::Register(reg) => write!(f, "{:?}", reg),
+            LDTarget::IndirectRegister(pair) => write!(f, "{:?}", pair),
+            LDTarget::ByteAtAddress(addr) => write!(f, "{:#06X}", addr),
+            LDTarget::ImmediateWord(word) => write!(f, "{:#06X}", word),
+            LDTarget::ImmediateByte(byte) => write!(f, "{:04X}", byte),
+            LDTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
+            LDTarget::ByteAtAddressWithOffset(byte) => write!(f, "{:#04X}", byte),
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::bus::Bus;
 use super::instruction::Instruction;
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Cpu {
     bus: Bus,
     reg: Registers,
@@ -15,6 +15,25 @@ impl Cpu {
         Default::default()
     }
 
+    pub fn new_without_boot() -> Self {
+        Self {
+            bus: Bus::without_boot(),
+            reg: Registers {
+                a: 0x01,
+                b: 0x00,
+                c: 0x13,
+                d: 0x00,
+                e: 0xD8,
+                h: 0x01,
+                l: 0x4D,
+                sp: 0xFFFE,
+                pc: 0x0100,
+            },
+            flags: 0xb0.into(),
+            ..Default::default()
+        }
+    }
+
     pub fn ime(&self) -> bool {
         self.ime
     }
@@ -25,6 +44,10 @@ impl Cpu {
 
     pub fn inc_pc(&mut self) {
         self.reg.pc += 1;
+    }
+
+    pub fn load_cartridge(&mut self, path: &str) {
+        self.bus.load_cartridge(path);
     }
 }
 
