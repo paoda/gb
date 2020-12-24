@@ -1,10 +1,12 @@
-use super::cartridge::Cartridge;
+use crate::ppu;
 
+use super::cartridge::Cartridge;
+use super::ppu::PPU;
 #[derive(Debug, Clone)]
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
-    vram: [u8; 8192], // 8KB of VRAM
+    ppu: PPU
 }
 
 impl Default for Bus {
@@ -12,7 +14,7 @@ impl Default for Bus {
         Self {
             boot: Some(include_bytes!("../bin/DMG_ROM.bin").to_owned()),
             cartridge: None,
-            vram: [0; 8192],
+            ppu: Default::default(),
         }
     }
 }
@@ -56,7 +58,7 @@ impl Bus {
             },
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.vram[(addr - 0x8000) as usize]
+                self.ppu.vram[(addr - 0x8000) as usize]
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -106,7 +108,7 @@ impl Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.vram[(addr - 0x8000) as usize] = byte;
+                self.ppu.vram[(addr - 0x8000) as usize] = byte;
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -168,8 +170,8 @@ impl Bus {
             },
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                (self.vram[((addr + 1) - 0x8000) as usize] as u16) << 8
-                    | self.vram[(addr - 0x8000) as usize] as u16
+                (self.ppu.vram[((addr + 1) - 0x8000) as usize] as u16) << 8
+                    | self.ppu.vram[(addr - 0x8000) as usize] as u16
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM

@@ -1,7 +1,19 @@
-struct PPU {
+#[derive(Debug, Clone)]
+pub struct PPU {
     lcdc: LCDControl,
+    pub vram: [u8; 8192],
 }
 
+impl Default for PPU {
+    fn default() -> Self {
+        Self {
+            lcdc: Default::default(),
+            vram: [0; 8192],
+        }
+    }
+}
+
+#[derive(Debug,Default, Clone, Copy)]
 struct LCDControl {
     lcd_enable: bool, // Bit 7
     window_tile_map_select: bool,
