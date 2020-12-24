@@ -13,7 +13,7 @@ impl Default for PPU {
     }
 }
 
-#[derive(Debug,Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 struct LCDControl {
     lcd_enable: bool, // Bit 7
     window_tile_map_select: bool,

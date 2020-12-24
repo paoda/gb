@@ -6,7 +6,7 @@ use super::ppu::PPU;
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
-    ppu: PPU
+    ppu: PPU,
 }
 
 impl Default for Bus {
