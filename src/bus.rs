@@ -1,5 +1,3 @@
-use crate::ppu;
-
 use super::cartridge::Cartridge;
 use super::ppu::PPU;
 #[derive(Debug, Clone)]

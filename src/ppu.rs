@@ -1,14 +1,14 @@
 #[derive(Debug, Clone)]
 pub struct PPU {
     lcdc: LCDControl,
-    pub vram: [u8; 8192],
+    pub vram: Box<[u8]>,
 }
 
 impl Default for PPU {
     fn default() -> Self {
         Self {
             lcdc: Default::default(),
-            vram: [0; 8192],
+            vram: vec![0; 8192].into_boxed_slice(),
         }
     }
 }
