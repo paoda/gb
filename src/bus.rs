@@ -1,7 +1,9 @@
 use super::cartridge::Cartridge;
+use super::interrupt::Interrupt;
 use super::ppu::PPU;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRAM, WorkRAM};
+
 #[derive(Debug, Clone)]
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
@@ -10,6 +12,7 @@ pub struct Bus {
     wram: WorkRAM,
     vwram: VariableWorkRAM,
     timer: Timer,
+    interrupt: Interrupt,
 }
 
 impl Default for Bus {
@@ -21,6 +24,7 @@ impl Default for Bus {
             wram: Default::default(),
             vwram: Default::default(),
             timer: Default::default(),
+            interrupt: Default::default(),
         }
     }
 }
@@ -91,6 +95,7 @@ impl Bus {
                 // IO Registers
                 match addr {
                     0xFF07 => self.timer.control.into(),
+                    0xFF0F => self.interrupt.flag.into(),
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -100,7 +105,7 @@ impl Bus {
             }
             0xFFFF => {
                 // Interupts Enable Register
-                unimplemented!("Unable to read IE Register {:#06X} ", addr);
+                self.interrupt.enable.into()
             }
         }
     }
@@ -147,6 +152,7 @@ impl Bus {
                 // IO Registers
                 match addr {
                     0xFF07 => self.timer.control = byte.into(),
+                    0xFF0F => self.interrupt.flag = byte.into(),
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
@@ -156,7 +162,7 @@ impl Bus {
             }
             0xFFFF => {
                 // Interupts Enable Register
-                unimplemented!("Unable to write to IE Register {:#06X} ", addr);
+                self.interrupt.enable = byte.into();
             }
         }
     }
