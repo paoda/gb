@@ -1,5 +1,6 @@
 use super::cartridge::Cartridge;
 use super::ppu::PPU;
+use super::timer::Timer;
 use super::work_ram::{VariableWorkRAM, WorkRAM};
 #[derive(Debug, Clone)]
 pub struct Bus {
@@ -8,6 +9,7 @@ pub struct Bus {
     ppu: PPU,
     wram: WorkRAM,
     vwram: VariableWorkRAM,
+    timer: Timer,
 }
 
 impl Default for Bus {
@@ -18,6 +20,7 @@ impl Default for Bus {
             ppu: Default::default(),
             wram: Default::default(),
             vwram: Default::default(),
+            timer: Default::default(),
         }
     }
 }
@@ -86,7 +89,10 @@ impl Bus {
             0xFEA0..=0xFEFF => unimplemented!("{:#06X} is not allowed to be used", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
-                unimplemented!("Unable to read {:#06X} in I/O Registers", addr);
+                match addr {
+                    0xFF07 => self.timer.control.into(),
+                    _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
+                }
             }
             0xFF80..=0xFFFE => {
                 // High RAM
@@ -139,7 +145,10 @@ impl Bus {
             0xFEA0..=0xFEFF => unimplemented!("{:#06X} is not allowed to be used", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
-                unimplemented!("Unable to write to {:#06X} in I/O Registers", addr);
+                match addr {
+                    0xFF07 => self.timer.control = byte.into(),
+                    _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
+                };
             }
             0xFF80..=0xFFFE => {
                 // High RAM
