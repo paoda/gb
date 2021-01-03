@@ -1,10 +1,13 @@
 use super::cartridge::Cartridge;
 use super::ppu::PPU;
+use super::work_ram::{VariableWorkRAM, WorkRAM};
 #[derive(Debug, Clone)]
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
     ppu: PPU,
+    wram: WorkRAM,
+    vwram: VariableWorkRAM,
 }
 
 impl Default for Bus {
@@ -13,6 +16,8 @@ impl Default for Bus {
             boot: Some(include_bytes!("../bin/DMG_ROM.bin").to_owned()),
             cartridge: None,
             ppu: Default::default(),
+            wram: Default::default(),
+            vwram: Default::default(),
         }
     }
 }
@@ -64,11 +69,11 @@ impl Bus {
             }
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                unimplemented!("Unable to read {:#06X} in Work RAM Bank 0", addr);
+                self.wram.read_byte((addr - 0xC000) as usize)
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                unimplemented!("Unable to read {:#06X} in Work RAM Bank N", addr);
+                self.vwram.read_byte((addr - 0xD000) as usize)
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
@@ -114,11 +119,11 @@ impl Bus {
             }
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                unimplemented!("Unable to write to {:#06X} in Work RAM Bank 0", addr);
+                self.wram.write_byte((addr - 0xC000) as usize, byte);
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                unimplemented!("Unable to write to {:#06X} in Work RAM Bank N", addr);
+                self.vwram.write_byte((addr - 0xD000) as usize, byte);
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF

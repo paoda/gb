@@ -2011,9 +2011,11 @@ impl std::fmt::Debug for LDTarget {
             LDTarget::IndirectRegister(pair) => write!(f, "{:?}", pair),
             LDTarget::ByteAtAddress(addr) => write!(f, "{:#06X}", addr),
             LDTarget::ImmediateWord(word) => write!(f, "{:#06X}", word),
-            LDTarget::ImmediateByte(byte) => write!(f, "{:04X}", byte),
+            LDTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
             LDTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
-            LDTarget::ByteAtAddressWithOffset(byte) => write!(f, "{:#04X}", byte),
+            LDTarget::ByteAtAddressWithOffset(byte) => {
+                write!(f, "{:#04X}", 0xFF00 + byte as u16)
+            }
         }
     }
 }

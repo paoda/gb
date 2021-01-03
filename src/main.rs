@@ -1,7 +1,7 @@
 use gb::cpu::Cpu as LR35902;
 
 fn main() {
-    let mut game_boy = LR35902::new();
+    let mut game_boy = LR35902::new_without_boot();
 
     game_boy.load_cartridge("bin/cpu_instrs.gb");
 
