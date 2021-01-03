@@ -1,6 +1,7 @@
 use super::cartridge::Cartridge;
 use super::interrupt::Interrupt;
 use super::ppu::PPU;
+use super::sound::Sound;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRAM, WorkRAM};
 
@@ -13,6 +14,7 @@ pub struct Bus {
     vwram: VariableWorkRAM,
     timer: Timer,
     interrupt: Interrupt,
+    sound: Sound,
 }
 
 impl Default for Bus {
@@ -25,6 +27,7 @@ impl Default for Bus {
             vwram: Default::default(),
             timer: Default::default(),
             interrupt: Default::default(),
+            sound: Default::default(),
         }
     }
 }
@@ -96,6 +99,7 @@ impl Bus {
                 match addr {
                     0xFF07 => self.timer.control.into(),
                     0xFF0F => self.interrupt.flag.into(),
+                    0xFF26 => self.sound.status.into(),
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -153,6 +157,7 @@ impl Bus {
                 match addr {
                     0xFF07 => self.timer.control = byte.into(),
                     0xFF0F => self.interrupt.flag = byte.into(),
+                    0xFF26 => self.sound.status = byte.into(), // FIXME: Should we control which bytes are written to here?
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
