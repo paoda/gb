@@ -233,10 +233,39 @@ impl Instruction {
                 (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
                     // LD r[y], r[z] | Store value of RHS Register in LHS Register
 
-                    // FIXME: panicking is the right thing to do, but maybe .unwrap is too unclear?
-                    let rhs_value = cpu.register(Register::try_from(rhs).unwrap());
-                    cpu.set_register(Register::try_from(lhs).unwrap(), rhs_value);
-                    Cycles(4)
+                    let rhs_value = {
+                        match rhs {
+                            InstrRegister::B
+                            | InstrRegister::C
+                            | InstrRegister::D
+                            | InstrRegister::E
+                            | InstrRegister::H
+                            | InstrRegister::L
+                            | InstrRegister::A => cpu.register(Register::try_from(rhs).unwrap()),
+                            InstrRegister::IndirectHL => {
+                                let addr = cpu.register_pair(RegisterPair::HL);
+                                cpu.read_byte(addr)
+                            }
+                        }
+                    };
+
+                    match lhs {
+                        InstrRegister::B
+                        | InstrRegister::C
+                        | InstrRegister::D
+                        | InstrRegister::E
+                        | InstrRegister::H
+                        | InstrRegister::L
+                        | InstrRegister::A => {
+                            cpu.set_register(Register::try_from(lhs).unwrap(), rhs_value);
+                            Cycles(4)
+                        }
+                        InstrRegister::IndirectHL => {
+                            let addr = cpu.register_pair(RegisterPair::HL);
+                            cpu.write_byte(addr, rhs_value);
+                            Cycles(8)
+                        }
+                    }
                 }
                 (LDTarget::ByteAtAddressWithOffset(n), LDTarget::Register(InstrRegister::A)) => {
                     // LD (0xFF00 + n), A | Store register A at address (0xFF00 + n)
