@@ -99,6 +99,9 @@ impl Bus {
                 match addr {
                     0xFF07 => self.timer.control.into(),
                     0xFF0F => self.interrupt.flag.into(),
+                    0xFF11 => self.sound.ch1.sound_duty.into(),
+                    0xFF12 => self.sound.ch1.vol_envelope.into(),
+                    0xFF25 => self.sound.select.into(),
                     0xFF26 => self.sound.status.into(),
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
@@ -157,6 +160,9 @@ impl Bus {
                 match addr {
                     0xFF07 => self.timer.control = byte.into(),
                     0xFF0F => self.interrupt.flag = byte.into(),
+                    0xFF11 => self.sound.ch1.sound_duty = byte.into(),
+                    0xFF12 => self.sound.ch1.vol_envelope = byte.into(),
+                    0xFF25 => self.sound.select = byte.into(),
                     0xFF26 => self.sound.status = byte.into(), // FIXME: Should we control which bytes are written to here?
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
