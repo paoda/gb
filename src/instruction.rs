@@ -1509,10 +1509,12 @@ impl Instruction {
     fn push(cpu: &mut Cpu, value: u16) {
         let mut sp = cpu.register_pair(RegisterPair::SP);
 
+        // FIXME: Are these debug functions really necessary?
+
         sp -= 1;
-        cpu.write_byte(sp, (value >> 8) as u8);
+        cpu.dbg_write_byte(sp, (value >> 8) as u8);
         sp -= 1;
-        cpu.write_byte(sp, value as u8);
+        cpu.dbg_write_byte(sp, value as u8);
 
         cpu.set_register_pair(RegisterPair::SP, sp);
     }
@@ -1523,9 +1525,11 @@ impl Instruction {
     fn pop(cpu: &mut Cpu) -> u16 {
         let mut sp = cpu.register_pair(RegisterPair::SP);
 
-        let low = cpu.read_byte(sp);
+        // FIXME: Are these debug functions really necessary?
+
+        let low = cpu.dbg_read_byte(sp);
         sp += 1;
-        let high = cpu.read_byte(sp);
+        let high = cpu.dbg_read_byte(sp);
         sp += 1;
 
         cpu.set_register_pair(RegisterPair::SP, sp);

@@ -1,4 +1,5 @@
 use super::cartridge::Cartridge;
+use super::high_ram::HighRAM;
 use super::interrupt::Interrupt;
 use super::ppu::PPU;
 use super::sound::Sound;
@@ -15,6 +16,7 @@ pub struct Bus {
     timer: Timer,
     interrupt: Interrupt,
     sound: Sound,
+    hram: HighRAM,
 }
 
 impl Default for Bus {
@@ -28,6 +30,7 @@ impl Default for Bus {
             timer: Default::default(),
             interrupt: Default::default(),
             sound: Default::default(),
+            hram: Default::default(),
         }
     }
 }
@@ -111,7 +114,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                unimplemented!("Unable to read {:#06X} in High RAM", addr);
+                self.hram.read_byte((addr - 0xFF80) as usize)
             }
             0xFFFF => {
                 // Interupts Enable Register
@@ -175,7 +178,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                unimplemented!("Unable to write to {:#06X} in High RAM", addr);
+                self.hram.write_byte((addr - 0xFF80) as usize, byte);
             }
             0xFFFF => {
                 // Interupts Enable Register

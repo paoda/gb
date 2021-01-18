@@ -1,6 +1,7 @@
 mod bus;
 mod cartridge;
 pub mod cpu;
+mod high_ram;
 mod instruction;
 mod interrupt;
 mod ppu;
