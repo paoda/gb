@@ -1,5 +1,5 @@
 use super::cpu::{Cpu, Flags, Register, RegisterPair};
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Debug};
 
 #[derive(Debug, Copy, Clone)]
 pub enum Instruction {
@@ -55,7 +55,7 @@ pub enum JPTarget {
     ImmediateWord(u16),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum Registers {
     Byte(InstrRegister),
     Word(RegisterPair),
@@ -2073,6 +2073,15 @@ impl std::fmt::Debug for InstrRegisterPair {
             InstrRegisterPair::PC => f.write_str("PC"),
             InstrRegisterPair::IncrementHL => f.write_str("HL+"),
             InstrRegisterPair::DecrementHL => f.write_str("HL-"),
+        }
+    }
+}
+
+impl std::fmt::Debug for Registers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Registers::Byte(reg) => write!(f, "{:?}", reg),
+            Registers::Word(pair) => write!(f, "{:?}", pair),
         }
     }
 }
