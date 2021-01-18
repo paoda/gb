@@ -11,7 +11,7 @@ fn main() {
         let instruction = game_boy.decode(opcode);
 
         println!(
-            "\nAddr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
+            "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
             pc, opcode, instruction
         );
 

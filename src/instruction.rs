@@ -61,7 +61,7 @@ pub enum Registers {
     Word(RegisterPair),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum MATHTarget {
     HL,
     SP,
@@ -1026,39 +1026,39 @@ impl Instruction {
                 match cond {
                     JumpCondition::NotZero => {
                         if !flags.z {
-                            Self::push(cpu, nn);
-                            cpu.set_register_pair(RegisterPair::PC, pc + 1);
+                            Self::push(cpu, pc);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
                         Cycles(12)
                     }
                     JumpCondition::Zero => {
                         if flags.z {
-                            Self::push(cpu, nn);
-                            cpu.set_register_pair(RegisterPair::PC, pc + 1);
+                            Self::push(cpu, pc);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
                         Cycles(12)
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c {
-                            Self::push(cpu, nn);
-                            cpu.set_register_pair(RegisterPair::PC, pc + 1);
+                            Self::push(cpu, pc);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
                         Cycles(12)
                     }
                     JumpCondition::Carry => {
                         if flags.c {
-                            Self::push(cpu, nn);
-                            cpu.set_register_pair(RegisterPair::PC, pc + 1);
+                            Self::push(cpu, pc);
+                            cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles(24);
                         }
                         Cycles(12)
                     }
                     JumpCondition::Always => {
-                        Self::push(cpu, nn);
-                        cpu.set_register_pair(RegisterPair::PC, pc + 1);
+                        Self::push(cpu, pc);
+                        cpu.set_register_pair(RegisterPair::PC, nn);
                         Cycles(24)
                     }
                 }
@@ -2038,14 +2038,26 @@ impl std::fmt::Debug for LDTarget {
         match *self {
             LDTarget::IndirectC => f.write_str("IndirectC"),
             LDTarget::Register(reg) => write!(f, "{:?}", reg),
-            LDTarget::IndirectRegister(pair) => write!(f, "{:?}", pair),
-            LDTarget::ByteAtAddress(addr) => write!(f, "{:#06X}", addr),
+            LDTarget::IndirectRegister(pair) => write!(f, "[{:?}]", pair),
+            LDTarget::ByteAtAddress(addr) => write!(f, "[{:#06X}]", addr),
             LDTarget::ImmediateWord(word) => write!(f, "{:#06X}", word),
             LDTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
             LDTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
             LDTarget::ByteAtAddressWithOffset(byte) => {
-                write!(f, "{:#04X}", 0xFF00 + byte as u16)
+                write!(f, "[0xFF00 + {:#04X}, {:#06X}]", byte, 0xFF00 + byte as u16)
             }
+        }
+    }
+}
+
+impl std::fmt::Debug for MATHTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            MATHTarget::HL => f.write_str("HL"),
+            MATHTarget::SP => f.write_str("SP"),
+            MATHTarget::Register(reg) => write!(f, "{:?}", reg),
+            MATHTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
+            MATHTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
         }
     }
 }

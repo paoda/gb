@@ -2,7 +2,9 @@
 pub struct PPU {
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
+    pub pos: ScreenPosition,
     pub vram: Box<[u8]>,
+    pub stat: LCDStatus,
 }
 
 impl Default for PPU {
@@ -10,9 +12,52 @@ impl Default for PPU {
         Self {
             lcd_control: Default::default(),
             monochrome: Default::default(),
+            pos: Default::default(),
+            stat: Default::default(),
             vram: vec![0; 8192].into_boxed_slice(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LCDStatus {
+    lyc_eq_ly: bool,
+    mode2_stat: bool,
+    mode1_stat: bool,
+    mode0_stat: bool,
+    coincidence: bool,
+    ppu_mode: u8,
+}
+
+impl From<u8> for LCDStatus {
+    fn from(byte: u8) -> Self {
+        Self {
+            lyc_eq_ly: (byte >> 6) & 0x01 == 0x01,
+            mode2_stat: (byte >> 5) & 0x01 == 0x01,
+            mode1_stat: (byte >> 4) & 0x01 == 0x01,
+            mode0_stat: (byte >> 3) & 0x01 == 0x01,
+            coincidence: (byte >> 2) & 0x01 == 0x01,
+            ppu_mode: byte & 0x03,
+        }
+    }
+}
+
+impl From<LCDStatus> for u8 {
+    fn from(status: LCDStatus) -> Self {
+        0x80 | (status.lyc_eq_ly as u8) << 6
+            | (status.mode2_stat as u8) << 5
+            | (status.mode1_stat as u8) << 4
+            | (status.mode0_stat as u8) << 3
+            | (status.coincidence as u8) << 2
+            | (status.ppu_mode & 0x03)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ScreenPosition {
+    pub scroll_y: u8,
+    pub scroll_x: u8,
+    pub line_y: u8,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

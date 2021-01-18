@@ -70,10 +70,10 @@ impl Cpu {
         let hl = self.register_pair(RegisterPair::HL);
         let sp = self.register_pair(RegisterPair::SP);
 
-        println!(
-            "A: {:#04X} | BC: {:#06X} | DE: {:#06X} | HL: {:#06X} | SP: {:#06X} | {}",
-            a, bc, de, hl, sp, flag
-        );
+        // println!(
+        //     "A: {:#04X} | BC: {:#06X} | DE: {:#06X} | HL: {:#06X} | SP: {:#06X} | {}",
+        //     a, bc, de, hl, sp, flag
+        // );
 
         // Get info from serial port
         // if self.bus.read_byte(0xFF02) == 0x81 {
