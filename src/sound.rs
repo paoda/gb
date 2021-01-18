@@ -1,8 +1,14 @@
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Sound {
-    pub status: SoundStatus,
+    pub control: SoundControl,
     pub ch1: Channel1,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SoundControl {
+    pub channel: ChannelControl,
     pub select: SoundOutputSelect,
+    pub status: SoundStatus,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -200,5 +206,33 @@ impl From<u8> for SoundOutputSelect {
             snd2_term1: (byte >> 1) & 0x01 == 0x01,
             snd1_term1: byte & 0x01 == 0x01,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ChannelControl {
+    vin_to_term2: bool,
+    term2_level: u8,
+    vin_to_term1: bool,
+    term1_level: u8,
+}
+
+impl From<u8> for ChannelControl {
+    fn from(byte: u8) -> Self {
+        Self {
+            vin_to_term2: byte >> 7 == 0x01, // Get 7th bit
+            term2_level: (byte & 0x7F) >> 4, // Clear 7th then get 6 -> 4th bit
+            vin_to_term1: (byte >> 3) & 0x01 == 0x01,
+            term1_level: byte & 0x07, // Bits 2 -> 0
+        }
+    }
+}
+
+impl From<ChannelControl> for u8 {
+    fn from(control: ChannelControl) -> Self {
+        (control.vin_to_term1 as u8) << 7
+            | (control.term2_level as u8) << 4
+            | (control.vin_to_term1 as u8) << 3
+            | control.term1_level as u8
     }
 }
