@@ -104,6 +104,8 @@ impl Bus {
                     0xFF24 => self.sound.control.channel.into(),
                     0xFF25 => self.sound.control.select.into(),
                     0xFF26 => self.sound.control.status.into(),
+                    0xFF40 => self.ppu.lcd_control.into(),
+                    0xFF47 => self.ppu.monochrome.bg_palette.into(),
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -166,6 +168,8 @@ impl Bus {
                     0xFF24 => self.sound.control.channel = byte.into(),
                     0xFF25 => self.sound.control.select = byte.into(),
                     0xFF26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
+                    0xFF40 => self.ppu.lcd_control = byte.into(),
+                    0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
