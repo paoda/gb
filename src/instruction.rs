@@ -82,7 +82,7 @@ pub enum LDTarget {
     ByteAtAddressWithOffset(u8),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum InstrRegisterPair {
     AF,
     BC,
@@ -2044,7 +2044,7 @@ impl std::fmt::Debug for LDTarget {
             LDTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
             LDTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
             LDTarget::ByteAtAddressWithOffset(byte) => {
-                write!(f, "[0xFF00 + {:#04X}, {:#06X}]", byte, 0xFF00 + byte as u16)
+                write!(f, "[0xFF00 + {:#04X}]", byte)
             }
         }
     }
@@ -2058,6 +2058,21 @@ impl std::fmt::Debug for MATHTarget {
             MATHTarget::Register(reg) => write!(f, "{:?}", reg),
             MATHTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
             MATHTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
+        }
+    }
+}
+
+impl std::fmt::Debug for InstrRegisterPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            InstrRegisterPair::AF => f.write_str("AF"),
+            InstrRegisterPair::BC => f.write_str("BC"),
+            InstrRegisterPair::DE => f.write_str("DE"),
+            InstrRegisterPair::HL => f.write_str("HL"),
+            InstrRegisterPair::SP => f.write_str("SP"),
+            InstrRegisterPair::PC => f.write_str("PC"),
+            InstrRegisterPair::IncrementHL => f.write_str("HL+"),
+            InstrRegisterPair::DecrementHL => f.write_str("HL-"),
         }
     }
 }
