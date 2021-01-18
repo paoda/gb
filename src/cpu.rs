@@ -91,29 +91,19 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn dbg_read_byte(&self, addr: u16) -> u8 {
+    pub fn read_imm_byte(&mut self, addr: u16) -> u8 {
+        self.inc_pc();
         self.bus.read_byte(addr)
     }
 
-    pub fn dbg_write_byte(&mut self, addr: u16, byte: u8) {
-        self.bus.write_byte(addr, byte);
-    }
-
-    pub fn dbg_read_word(&self, addr: u16) -> u16 {
+    pub fn read_imm_word(&mut self, addr: u16) -> u16 {
+        self.inc_pc();
+        self.inc_pc();
         self.bus.read_word(addr)
     }
 
-    pub fn dbg_write_word(&mut self, addr: u16, word: u16) {
-        self.bus.write_word(addr, word)
-    }
-}
-
-impl Cpu {
     pub fn read_byte(&mut self, addr: u16) -> u8 {
-        let byte = self.bus.read_byte(addr);
-        self.inc_pc();
-
-        byte
+        self.bus.read_byte(addr)
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
@@ -121,11 +111,7 @@ impl Cpu {
     }
 
     pub fn read_word(&mut self, addr: u16) -> u16 {
-        let word = self.bus.read_word(addr);
-        self.inc_pc();
-        self.inc_pc();
-
-        word
+        self.bus.read_word(addr)
     }
 
     pub fn write_word(&mut self, addr: u16, word: u16) {
