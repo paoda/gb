@@ -5,6 +5,7 @@ mod high_ram;
 mod instruction;
 mod interrupt;
 mod ppu;
+mod serial;
 mod sound;
 mod timer;
 mod work_ram;

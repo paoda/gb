@@ -1,9 +1,9 @@
-use crate::instruction::Cycles;
-
 use super::cartridge::Cartridge;
 use super::high_ram::HighRAM;
+use super::instruction::Cycles;
 use super::interrupt::Interrupt;
 use super::ppu::PPU;
+use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRAM, WorkRAM};
@@ -19,12 +19,13 @@ pub struct Bus {
     interrupt: Interrupt,
     sound: Sound,
     hram: HighRAM,
+    serial: Serial,
 }
 
 impl Default for Bus {
     fn default() -> Self {
         Self {
-            boot: Some(include_bytes!("../bin/DMG_ROM.bin").to_owned()),
+            boot: None,
             cartridge: None,
             ppu: Default::default(),
             wram: Default::default(),
@@ -33,18 +34,15 @@ impl Default for Bus {
             interrupt: Default::default(),
             sound: Default::default(),
             hram: Default::default(),
+            serial: Default::default(),
         }
     }
 }
 
 impl Bus {
     pub fn with_boot() -> Self {
-        Default::default()
-    }
-
-    pub fn without_boot() -> Self {
         Self {
-            boot: None,
+            boot: Some(include_bytes!("../bin/DMG_ROM.bin").to_owned()),
             ..Default::default()
         }
     }
@@ -108,6 +106,7 @@ impl Bus {
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
+                    // 0xFF01 =>
                     0xFF07 => self.timer.control.into(),
                     0xFF0F => self.interrupt.flag.into(),
                     0xFF11 => self.sound.ch1.sound_duty.into(),

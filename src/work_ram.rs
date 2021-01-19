@@ -23,27 +23,13 @@ impl Default for WorkRAM {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BankNumber {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-    Seven,
-}
-
-impl From<BankNumber> for usize {
-    fn from(bank_num: BankNumber) -> Self {
-        match bank_num {
-            BankNumber::One => 1,
-            BankNumber::Two => 2,
-            BankNumber::Three => 3,
-            BankNumber::Four => 4,
-            BankNumber::Five => 5,
-            BankNumber::Six => 6,
-            BankNumber::Seven => 7,
-        }
-    }
+    One = 1,
+    Two = 2,
+    Three = 3,
+    Four = 4,
+    Five = 5,
+    Six = 6,
+    Seven = 7,
 }
 
 #[derive(Debug, Clone)]
@@ -71,12 +57,10 @@ impl VariableWorkRAM {
     }
 
     pub fn write_byte(&mut self, index: usize, byte: u8) {
-        let num: usize = self.current.into();
-        self.bank_n[num][index] = byte;
+        self.bank_n[self.current as usize][index] = byte;
     }
 
     pub fn read_byte(&self, index: usize) -> u8 {
-        let num: usize = self.current.into();
-        self.bank_n[num][index]
+        self.bank_n[self.current as usize][index]
     }
 }

@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let mut input = WinitInputHelper::new();
     let window = create_window(&event_loop)?;
     let mut pixels = create_pixels(&window)?;
-    let mut game_boy = LR35902::new();
+    let mut game_boy = LR35902::boot_new();
     game_boy.load_cartridge("bin/cpu_instrs.gb");
 
     event_loop.run(move |event, _, control_flow| {

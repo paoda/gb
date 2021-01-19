@@ -21,10 +21,10 @@ impl Default for Timer {
 
 #[derive(Debug, Clone, Copy)]
 enum TimerSpeed {
-    Freq4096Hz,
-    Freq262144Hz,
-    Freq65536Hz,
-    Freq16384Hz,
+    Freq4096Hz = 0,
+    Freq262144Hz = 1,
+    Freq65536Hz = 2,
+    Freq16384Hz = 3,
 }
 
 impl From<u8> for TimerSpeed {
@@ -35,17 +35,6 @@ impl From<u8> for TimerSpeed {
             0x10 => Self::Freq65536Hz,
             0x11 => Self::Freq16384Hz,
             _ => unreachable!(),
-        }
-    }
-}
-
-impl From<TimerSpeed> for u8 {
-    fn from(speed: TimerSpeed) -> Self {
-        match speed {
-            TimerSpeed::Freq4096Hz => 0x00,
-            TimerSpeed::Freq262144Hz => 0x01,
-            TimerSpeed::Freq65536Hz => 0x10,
-            TimerSpeed::Freq16384Hz => 0x11,
         }
     }
 }
@@ -69,7 +58,7 @@ impl From<u8> for TimerControl {
 
 impl From<TimerControl> for u8 {
     fn from(control: TimerControl) -> Self {
-        let byte: u8 = control.speed.into(); // Get bit 1 and 0.
+        let byte: u8 = control.speed as u8; // Get bit 1 and 0.
 
         (byte & !(1u8 << 2)) | ((control.enabled as u8) << 2) // specifically manibulate bit 2
     }

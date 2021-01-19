@@ -29,8 +29,8 @@ pub struct Frequency {
 
 #[derive(Debug, Clone, Copy)]
 enum FrequencyType {
-    Counter,
-    Consequtive,
+    Counter = 0,
+    Consequtive = 1,
 }
 
 impl From<u8> for FrequencyType {
@@ -39,15 +39,6 @@ impl From<u8> for FrequencyType {
             0b00 => Self::Counter,
             0b01 => Self::Consequtive,
             _ => unreachable!("{} is not a valid number for FreuquencyType"),
-        }
-    }
-}
-
-impl From<FrequencyType> for u8 {
-    fn from(freq_type: FrequencyType) -> Self {
-        match freq_type {
-            FrequencyType::Counter => 0b00,
-            FrequencyType::Consequtive => 0b01,
         }
     }
 }
@@ -142,7 +133,7 @@ impl From<u8> for VolumeEnvelope {
 
 impl From<VolumeEnvelope> for u8 {
     fn from(envelope: VolumeEnvelope) -> Self {
-        let dir_bit: u8 = envelope.direction.into();
+        let dir_bit: u8 = envelope.direction as u8;
         let mut byte = envelope.init_vol << 4;
         byte |= dir_bit << 3;
         byte |= envelope.sweep_count;
@@ -152,8 +143,8 @@ impl From<VolumeEnvelope> for u8 {
 
 #[derive(Debug, Clone, Copy)]
 enum EnvelopeDirection {
-    Decrease,
-    Increase,
+    Decrease = 0,
+    Increase = 1,
 }
 
 impl From<u8> for EnvelopeDirection {
@@ -161,23 +152,17 @@ impl From<u8> for EnvelopeDirection {
         match byte {
             0b00 => Self::Decrease,
             0b01 => Self::Increase,
-            _ => unreachable!("{:#04X} is not a possible value for EnvelopeDirection"),
-        }
-    }
-}
-
-impl From<EnvelopeDirection> for u8 {
-    fn from(envelope: EnvelopeDirection) -> Self {
-        match envelope {
-            EnvelopeDirection::Decrease => 0b00,
-            EnvelopeDirection::Increase => 0b01,
+            _ => unreachable!(
+                "{:#04X} is not a possible value for EnvelopeDirection",
+                byte
+            ),
         }
     }
 }
 
 impl Default for EnvelopeDirection {
     fn default() -> Self {
-        Self::Decrease // Reasoning: Decrease is 0
+        Self::Decrease
     }
 }
 
@@ -201,7 +186,7 @@ impl From<u8> for SoundDuty {
 
 impl From<SoundDuty> for u8 {
     fn from(duty: SoundDuty) -> Self {
-        let mut byte: u8 = duty.wave_pattern.into();
+        let mut byte: u8 = duty.wave_pattern as u8;
         byte = (byte << 6) | duty.sound_length;
         byte
     }
@@ -209,26 +194,15 @@ impl From<SoundDuty> for u8 {
 
 #[derive(Debug, Clone, Copy)]
 pub enum WaveDuty {
-    OneEighth,     // 12.5% ( _-------_-------_------- )
-    OneQuarter,    // 25%   ( __------__------__------ )
-    OneHalf,       // 50%   ( ____----____----____---- ) (normal)
-    ThreeQuarters, // 75%   ( ______--______--______-- )
+    OneEighth = 0,     // 12.5% ( _-------_-------_------- )
+    OneQuarter = 1,    // 25%   ( __------__------__------ )
+    OneHalf = 2,       // 50%   ( ____----____----____---- ) (normal)
+    ThreeQuarters = 3, // 75%   ( ______--______--______-- )
 }
 
 impl Default for WaveDuty {
     fn default() -> Self {
         Self::OneEighth // Rationale: OneEighth is 0x00
-    }
-}
-
-impl From<WaveDuty> for u8 {
-    fn from(wave: WaveDuty) -> Self {
-        match wave {
-            WaveDuty::OneEighth => 0b00,
-            WaveDuty::OneQuarter => 0b01,
-            WaveDuty::OneHalf => 0b10,
-            WaveDuty::ThreeQuarters => 0b11,
-        }
     }
 }
 

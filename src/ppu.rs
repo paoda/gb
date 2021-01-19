@@ -178,10 +178,10 @@ impl From<LCDControl> for u8 {
 
 #[derive(Debug, Clone, Copy)]
 enum GrayShade {
-    White,
-    LightGray,
-    DarkGray,
-    Black,
+    White = 0,
+    LightGray = 1,
+    DarkGray = 2,
+    Black = 3,
 }
 
 impl Default for GrayShade {
@@ -198,17 +198,6 @@ impl From<u8> for GrayShade {
             0b10 => GrayShade::DarkGray,
             0b11 => GrayShade::Black,
             _ => unreachable!("{:#04X} is not a valid Shade of Gray", byte),
-        }
-    }
-}
-
-impl From<GrayShade> for u8 {
-    fn from(shade: GrayShade) -> Self {
-        match shade {
-            GrayShade::White => 0b00,
-            GrayShade::LightGray => 0b01,
-            GrayShade::DarkGray => 0b10,
-            GrayShade::Black => 0b11,
         }
     }
 }
@@ -234,10 +223,10 @@ impl From<u8> for BackgroundPalette {
 
 impl From<BackgroundPalette> for u8 {
     fn from(palette: BackgroundPalette) -> Self {
-        let color0: u8 = palette.color0.into();
-        let color1: u8 = palette.color1.into();
-        let color2: u8 = palette.color2.into();
-        let color3: u8 = palette.color0.into();
+        let color0: u8 = palette.color0 as u8;
+        let color1: u8 = palette.color1 as u8;
+        let color2: u8 = palette.color2 as u8;
+        let color3: u8 = palette.color0 as u8;
 
         color3 << 6 | color2 << 4 | color1 << 2 | color0
     }

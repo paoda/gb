@@ -14,12 +14,7 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn new_without_boot() -> Self {
         Self {
-            bus: Bus::without_boot(),
             reg: Registers {
                 a: 0x01,
                 b: 0x00,
@@ -32,6 +27,13 @@ impl Cpu {
                 pc: 0x0100,
             },
             flags: 0xb0.into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn boot_new() -> Self {
+        Self {
+            bus: Bus::with_boot(),
             ..Default::default()
         }
     }
@@ -74,10 +76,10 @@ impl Cpu {
         let instr = self.decode(opcode);
         let cycles = self.execute(instr);
 
-        println!(
-            "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
-            self.reg.pc, opcode, instr
-        );
+        // println!(
+        //     "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
+        //     self.reg.pc, opcode, instr
+        // );
 
         self.bus.step(cycles);
 
