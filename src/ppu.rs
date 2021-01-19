@@ -1,14 +1,32 @@
+use crate::instruction::Cycles;
+
 #[derive(Debug, Clone)]
 pub struct PPU {
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
     pub vram: Box<[u8]>,
+    pub oam: Box<[u8]>,
     pub stat: LCDStatus,
+    cycles: Cycles,
+    mode: PPUMode,
 }
 
 impl PPU {
-    pub fn step(&mut self) {}
+    pub fn step(&mut self, cycles: Cycles) {
+        self.cycles += cycles;
+
+        match self.mode {
+            PPUMode::OAMScan => {
+                if self.cycles >= 80.into() {
+                    self.cycles = cycles % 80;
+                }
+            }
+            PPUMode::Draw => {}
+            PPUMode::HBlank => {}
+            PPUMode::VBlank => {}
+        }
+    }
 
     pub fn draw(&self, frame: &mut [u8]) {
         for (_i, pixel) in frame.chunks_exact_mut(4).enumerate() {
@@ -26,8 +44,19 @@ impl Default for PPU {
             pos: Default::default(),
             stat: Default::default(),
             vram: vec![0; 8192].into_boxed_slice(),
+            oam: vec![0; 160].into_boxed_slice(),
+            cycles: 0.into(),
+            mode: PPUMode::OAMScan,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PPUMode {
+    OAMScan,
+    Draw,
+    HBlank,
+    VBlank,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

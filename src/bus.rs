@@ -1,3 +1,5 @@
+use crate::instruction::Cycles;
+
 use super::cartridge::Cartridge;
 use super::high_ram::HighRAM;
 use super::interrupt::Interrupt;
@@ -49,6 +51,12 @@ impl Bus {
 
     pub fn load_cartridge(&mut self, path: &str) {
         self.cartridge = Some(Cartridge::new(path).unwrap());
+    }
+
+    pub fn step(&mut self, cycles: Cycles) {
+        let _ = self.timer.step(cycles);
+        let _ = self.sound.step(cycles);
+        let _ = self.ppu.step(cycles);
     }
 }
 

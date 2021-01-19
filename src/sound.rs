@@ -1,7 +1,15 @@
+use crate::instruction::Cycles;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Sound {
     pub control: SoundControl,
     pub ch1: Channel1,
+}
+
+impl Sound {
+    pub fn step(&mut self, _cycles: Cycles) {
+        //
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]

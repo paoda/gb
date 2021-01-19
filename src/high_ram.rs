@@ -6,7 +6,7 @@ pub struct HighRAM {
 impl Default for HighRAM {
     fn default() -> Self {
         Self {
-            buf: vec![0u8; 127].into_boxed_slice(),
+            buf: vec![0u8; 128].into_boxed_slice(),
         }
     }
 }

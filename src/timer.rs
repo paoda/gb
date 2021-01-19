@@ -1,6 +1,14 @@
+use crate::instruction::Cycles;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Timer {
     pub control: TimerControl,
+}
+
+impl Timer {
+    pub fn step(&mut self, _cycles: Cycles) {
+        //
+    }
 }
 
 impl Default for Timer {

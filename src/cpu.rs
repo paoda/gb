@@ -68,6 +68,21 @@ impl Cpu {
     pub fn execute(&mut self, instruction: Instruction) -> Cycles {
         Instruction::execute(self, instruction)
     }
+
+    pub fn step(&mut self) -> Cycles {
+        let opcode = self.fetch();
+        let instr = self.decode(opcode);
+        let cycles = self.execute(instr);
+
+        println!(
+            "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
+            self.reg.pc, opcode, instr
+        );
+
+        self.bus.step(cycles);
+
+        cycles
+    }
 }
 
 impl Cpu {

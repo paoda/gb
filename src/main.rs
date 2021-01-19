@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use gb::cpu::Cpu as LR35902;
 use pixels::{Pixels, SurfaceTexture};
-use std::io::Write;
 use winit::{
     dpi::LogicalSize,
     event::{Event, VirtualKeyCode},
@@ -20,9 +19,6 @@ fn main() -> Result<()> {
     let mut input = WinitInputHelper::new();
     let window = create_window(&event_loop)?;
     let mut pixels = create_pixels(&window)?;
-
-    let out = Box::leak(Box::new(std::io::stdout()));
-    let mut out_handle = out.lock();
     let mut game_boy = LR35902::new();
     game_boy.load_cartridge("bin/cpu_instrs.gb");
 
@@ -54,19 +50,8 @@ fn main() -> Result<()> {
             }
 
             // Emulation
-            let addr = game_boy.register_pair(gb::cpu::RegisterPair::PC);
-
-            let opcode = game_boy.fetch();
-            let instruction = game_boy.decode(opcode);
-            let _cycles = game_boy.execute(instruction);
-            window.request_redraw();
-
-            write!(
-                out_handle,
-                "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}\n",
-                addr, opcode, instruction
-            )
-            .unwrap();
+            let _cycles = game_boy.step();
+            // window.request_redraw();
         }
     });
 
