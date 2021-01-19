@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Serial {
-    next: u8,
-    control: SerialControl,
+    pub next: u8,
+    pub control: SerialControl,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
