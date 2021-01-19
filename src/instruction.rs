@@ -63,8 +63,6 @@ pub enum Registers {
 
 #[derive(Copy, Clone)]
 pub enum MATHTarget {
-    HL,
-    SP,
     Register(InstrRegister),
     RegisterPair(RegisterPair),
     ImmediateByte(u8),
@@ -1649,11 +1647,11 @@ impl Instruction {
 
     fn from_unprefixed_byte(cpu: &mut Cpu, opcode: u8) -> Self {
         // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
-        let x = (opcode >> 6) & 0b00000011;
-        let y = (opcode >> 3) & 0b00000111;
-        let z = opcode & 0b00000111;
+        let x = (opcode >> 6) & 0x03;
+        let y = (opcode >> 3) & 0x07;
+        let z = opcode & 0x07;
         let p = y >> 1;
-        let q = y & 0b00000001;
+        let q = y & 0x01;
 
         let pc = cpu.register_pair(RegisterPair::PC);
 
@@ -1674,7 +1672,7 @@ impl Instruction {
             ),
             (0, 1, 1, _, _) => Self::ADD(
                 // ADD HL, rp[p]
-                MATHTarget::HL,
+                MATHTarget::RegisterPair(RegisterPair::HL),
                 MATHTarget::RegisterPair(Table::rp(p)),
             ),
             (0, 2, 0, _, 0) => Self::LD(
@@ -2053,8 +2051,6 @@ impl std::fmt::Debug for LDTarget {
 impl std::fmt::Debug for MATHTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            MATHTarget::HL => f.write_str("HL"),
-            MATHTarget::SP => f.write_str("SP"),
             MATHTarget::Register(reg) => write!(f, "{:?}", reg),
             MATHTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
             MATHTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),

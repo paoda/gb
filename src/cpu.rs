@@ -74,12 +74,13 @@ impl Cpu {
     pub fn step(&mut self) -> Cycles {
         let opcode = self.fetch();
         let instr = self.decode(opcode);
-        let cycles = self.execute(instr);
 
-        // println!(
-        //     "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
-        //     self.reg.pc, opcode, instr
-        // );
+        println!(
+            "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
+            self.reg.pc, opcode, instr
+        );
+
+        let cycles = self.execute(instr);
 
         self.bus.step(cycles);
 
