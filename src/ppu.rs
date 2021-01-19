@@ -7,6 +7,17 @@ pub struct PPU {
     pub stat: LCDStatus,
 }
 
+impl PPU {
+    pub fn step(&mut self) {}
+
+    pub fn draw(&self, frame: &mut [u8]) {
+        for (_i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+            let rgba: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
+            pixel.copy_from_slice(&rgba);
+        }
+    }
+}
+
 impl Default for PPU {
     fn default() -> Self {
         Self {

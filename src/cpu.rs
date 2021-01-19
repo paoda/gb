@@ -1,10 +1,11 @@
 use super::bus::Bus;
-use super::instruction::Instruction;
+use super::instruction::{Cycles, Instruction};
+use super::ppu::PPU;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Clone, Default)]
 pub struct Cpu {
-    bus: Bus,
+    pub bus: Bus,
     reg: Registers,
     flags: Flags,
     ime: bool,
@@ -61,32 +62,11 @@ impl Cpu {
     }
 
     pub fn decode(&mut self, opcode: u8) -> Instruction {
-        let tmp = Instruction::from_byte(self, opcode);
-
-        let a = self.register(Register::A);
-        let flag: Flags = self.register(Register::Flag).into();
-        let bc = self.register_pair(RegisterPair::BC);
-        let de = self.register_pair(RegisterPair::DE);
-        let hl = self.register_pair(RegisterPair::HL);
-        let sp = self.register_pair(RegisterPair::SP);
-
-        // println!(
-        //     "A: {:#04X} | BC: {:#06X} | DE: {:#06X} | HL: {:#06X} | SP: {:#06X} | {}",
-        //     a, bc, de, hl, sp, flag
-        // );
-
-        // Get info from serial port
-        // if self.bus.read_byte(0xFF02) == 0x81 {
-        //     let c = self.bus.read_byte(0xFF01) as char;
-        //     self.bus.write_byte(0xFF02, 0x00);
-        //     print!("TEST RESULT!: {}", c);
-        // }
-
-        tmp
+        Instruction::from_byte(self, opcode)
     }
 
-    pub fn execute(&mut self, instruction: Instruction) {
-        Instruction::execute(self, instruction);
+    pub fn execute(&mut self, instruction: Instruction) -> Cycles {
+        Instruction::execute(self, instruction)
     }
 }
 
@@ -116,6 +96,12 @@ impl Cpu {
 
     pub fn write_word(&mut self, addr: u16, word: u16) {
         self.bus.write_word(addr, word)
+    }
+}
+
+impl Cpu {
+    pub fn get_ppu(&mut self) -> &mut PPU {
+        &mut self.bus.ppu
     }
 }
 

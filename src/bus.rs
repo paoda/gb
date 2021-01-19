@@ -10,7 +10,7 @@ use super::work_ram::{VariableWorkRAM, WorkRAM};
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
-    ppu: PPU,
+    pub ppu: PPU,
     wram: WorkRAM,
     vwram: VariableWorkRAM,
     timer: Timer,
