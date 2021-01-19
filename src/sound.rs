@@ -20,6 +20,72 @@ pub struct SoundControl {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+pub struct Frequency {
+    initial: bool,
+    freq_type: FrequencyType,
+    lo: u8, // Bottom 8 bits
+    hi: u8, // Top 3 bits (11 bits total)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrequencyType {
+    Counter,
+    Consequtive,
+}
+
+impl From<u8> for FrequencyType {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::Counter,
+            0b01 => Self::Consequtive,
+            _ => unreachable!("{} is not a valid number for FreuquencyType"),
+        }
+    }
+}
+
+impl From<FrequencyType> for u8 {
+    fn from(freq_type: FrequencyType) -> Self {
+        match freq_type {
+            FrequencyType::Counter => 0b00,
+            FrequencyType::Consequtive => 0b01,
+        }
+    }
+}
+
+impl Default for FrequencyType {
+    fn default() -> Self {
+        Self::Counter
+    }
+}
+
+impl Frequency {
+    fn get_11bit_freq(&self) -> u16 {
+        (self.hi as u16) << 8 | self.lo as u16
+    }
+
+    pub fn set_lo(&mut self, byte: u8) {
+        self.lo = byte;
+    }
+
+    pub fn get_lo(&self) -> u8 {
+        self.lo
+    }
+
+    pub fn set_hi(&mut self, byte: u8) {
+        *self = Self {
+            initial: byte >> 7 == 0x01,
+            freq_type: ((byte >> 6) & 0x01).into(),
+            lo: self.lo,
+            hi: byte & 0x07,
+        };
+    }
+
+    pub fn get_hi(&self) -> u8 {
+        (self.initial as u8) << 7 | (self.freq_type as u8) << 6 | self.hi
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SoundStatus {
     pub all_enabled: bool, // You can actually write to this one.
     sound_4: bool,
@@ -54,6 +120,7 @@ impl From<SoundStatus> for u8 {
 pub struct Channel1 {
     pub sound_duty: SoundDuty,
     pub vol_envelope: VolumeEnvelope,
+    pub freq: Frequency,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

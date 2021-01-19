@@ -112,6 +112,7 @@ impl Bus {
                     0xFF0F => self.interrupt.flag.into(),
                     0xFF11 => self.sound.ch1.sound_duty.into(),
                     0xFF12 => self.sound.ch1.vol_envelope.into(),
+                    0xFF14 => self.sound.ch1.freq.get_hi(),
                     0xFF24 => self.sound.control.channel.into(),
                     0xFF25 => self.sound.control.select.into(),
                     0xFF26 => self.sound.control.status.into(),
@@ -180,6 +181,8 @@ impl Bus {
                     0xFF0F => self.interrupt.flag = byte.into(),
                     0xFF11 => self.sound.ch1.sound_duty = byte.into(),
                     0xFF12 => self.sound.ch1.vol_envelope = byte.into(),
+                    0xFF13 => self.sound.ch1.freq.set_lo(byte),
+                    0xFF14 => self.sound.ch1.freq.set_hi(byte),
                     0xFF24 => self.sound.control.channel = byte.into(),
                     0xFF25 => self.sound.control.select = byte.into(),
                     0xFF26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
@@ -189,6 +192,12 @@ impl Bus {
                     0xFF43 => self.ppu.pos.scroll_x = byte,
                     0xFF44 => self.ppu.pos.line_y = byte,
                     0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),
+                    0xFF50 => {
+                        // Disable Boot ROM
+                        if byte != 0 {
+                            self.boot = None;
+                        }
+                    }
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }

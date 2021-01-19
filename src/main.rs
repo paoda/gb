@@ -54,17 +54,6 @@ fn main() -> Result<()> {
             // window.request_redraw();
         }
     });
-
-    // loop {
-    //     let pc = game_boy.register_pair(gb::cpu::RegisterPair::PC);
-    //     let opcode = game_boy.fetch();
-    //     let instruction = game_boy.decode(opcode);
-
-    //     let _cycles = game_boy.execute(instruction);
-
-    //     let ppu = game_boy.get_ppu();
-    //     ppu.step();
-    // }
 }
 
 pub fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {

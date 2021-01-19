@@ -1,5 +1,7 @@
 use crate::instruction::Cycles;
 
+const GB_WIDTH: usize = 160;
+const GB_HEIGHT: usize = 144;
 #[derive(Debug, Clone)]
 pub struct PPU {
     pub lcd_control: LCDControl,
@@ -7,32 +9,60 @@ pub struct PPU {
     pub pos: ScreenPosition,
     pub vram: Box<[u8]>,
     pub oam: Box<[u8]>,
+    frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     pub stat: LCDStatus,
     cycles: Cycles,
-    mode: PPUMode,
+    mode: Mode,
 }
 
 impl PPU {
     pub fn step(&mut self, cycles: Cycles) {
         self.cycles += cycles;
 
+        // let smth: u32 = self.cycles.into();
+        // println!("Mode: {:?} | Cycles: {}", self.mode, smth);
+
         match self.mode {
-            PPUMode::OAMScan => {
+            Mode::OAMScan => {
                 if self.cycles >= 80.into() {
-                    self.cycles = cycles % 80;
+                    self.cycles %= 80;
+                    self.mode = Mode::Draw;
                 }
             }
-            PPUMode::Draw => {}
-            PPUMode::HBlank => {}
-            PPUMode::VBlank => {}
+            Mode::Draw => {
+                if self.cycles >= 172.into() {
+                    // 172 -> 129 Cycles
+                    // self.cycles %= 172;
+                    self.mode = Mode::HBlank;
+                }
+            }
+            Mode::HBlank => {
+                // The 80 comes from the 80 cycles we made disappear in OAMScan above.
+                if self.cycles >= (456 - 80).into() {
+                    self.cycles %= 456 - 80;
+                    self.pos.line_y += 1;
+
+                    if self.pos.line_y >= 144 {
+                        self.mode = Mode::VBlank;
+                    }
+                }
+            }
+            Mode::VBlank => {
+                if self.cycles >= 456.into() {
+                    self.cycles %= 456;
+                    self.pos.line_y += 1;
+
+                    if self.pos.line_y == 154 {
+                        self.mode = Mode::OAMScan;
+                        self.pos.line_y = 0;
+                    }
+                }
+            }
         }
     }
 
     pub fn draw(&self, frame: &mut [u8]) {
-        for (_i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let rgba: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
-            pixel.copy_from_slice(&rgba);
-        }
+        frame.copy_from_slice(&self.frame_buf);
     }
 }
 
@@ -46,13 +76,14 @@ impl Default for PPU {
             vram: vec![0; 8192].into_boxed_slice(),
             oam: vec![0; 160].into_boxed_slice(),
             cycles: 0.into(),
-            mode: PPUMode::OAMScan,
+            frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
+            mode: Mode::OAMScan,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum PPUMode {
+enum Mode {
     OAMScan,
     Draw,
     HBlank,
