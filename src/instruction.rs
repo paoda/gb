@@ -2136,9 +2136,27 @@ impl std::ops::Rem<u32> for Cycles {
     }
 }
 
+impl std::ops::RemAssign for Cycles {
+    fn rem_assign(&mut self, rhs: Self) {
+        *self = Self(self.0 % rhs.0);
+    }
+}
+
+impl std::ops::RemAssign<u32> for Cycles {
+    fn rem_assign(&mut self, rhs: u32) {
+        *self = Self(self.0 % rhs);
+    }
+}
+
 impl From<u32> for Cycles {
     fn from(num: u32) -> Self {
         Self(num)
+    }
+}
+
+impl From<Cycles> for u32 {
+    fn from(cycles: Cycles) -> Self {
+        cycles.0
     }
 }
 
