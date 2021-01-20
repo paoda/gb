@@ -82,10 +82,11 @@ impl Bus {
                 // 8KB Video RAM
                 self.ppu.vram[(addr - 0x8000) as usize]
             }
-            0xA000..=0xBFFF => {
+            0xA000..=0xBFFF => match &self.cartridge {
                 // 8KB External RAM
-                unimplemented!("Unable to read {:#06X} in Extermal RAM", addr);
-            }
+                Some(cart) => cart.read_byte(addr),
+                None => panic!("Tried to read from the external RAM of a non-existant cartridge"),
+            },
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
                 self.wram.read_byte((addr - 0xC000) as usize)
@@ -140,11 +141,17 @@ impl Bus {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
-                panic!("Tried to write to {:#06X} in ROM Bank 00", addr);
+                match self.cartridge.as_mut() {
+                    Some(cart) => cart.write_byte(addr, byte),
+                    None => panic!("Tried to write into non-existent Cartridge"),
+                }
             }
             0x4000..=0x7FFF => {
                 // 16KB ROM Bank 01 -> NN (switchable via MB)
-                panic!("Tried to write to {:#06X} in ROM Bank 01 -> NN", addr);
+                match self.cartridge.as_mut() {
+                    Some(cart) => cart.write_byte(addr, byte),
+                    None => panic!("Tried to write into non-existent Cartridge"),
+                }
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
@@ -152,7 +159,10 @@ impl Bus {
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
-                unimplemented!("Unable to write to {:#06X} in Extermal RAM", addr);
+                match self.cartridge.as_mut() {
+                    Some(cart) => cart.write_byte(addr, byte),
+                    None => panic!("Tried to write into non-existent Cartridge"),
+                }
             }
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0

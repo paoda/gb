@@ -1,7 +1,10 @@
 use super::bus::Bus;
 use super::instruction::{Cycles, Instruction};
 use super::ppu::PPU;
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    io::Write,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct Cpu {
@@ -75,12 +78,20 @@ impl Cpu {
         let opcode = self.fetch();
         let instr = self.decode(opcode);
 
-        println!(
-            "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
-            self.reg.pc, opcode, instr
-        );
+        // println!(
+        //     "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
+        //     self.reg.pc, opcode, instr
+        // );
 
         let cycles = self.execute(instr);
+
+        if self.bus.read_byte(0xFF02) == 0x81 {
+            let c = self.bus.read_byte(0xFF01) as char;
+            self.bus.write_byte(0xFF02, 0x00);
+
+            print!("{}", c);
+            std::io::stdout().flush().unwrap();
+        }
 
         self.bus.step(cycles);
 
