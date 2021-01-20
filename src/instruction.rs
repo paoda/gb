@@ -702,7 +702,7 @@ impl Instruction {
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // SBC A, n | Subtract the value from immediate byte from A, add the carry flag and then store in A
-                    // FIXME: The Fixme aboe applies to this variant as well
+                    // FIXME: The Fixme above applies to this variant as well
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let value = n + (flags.c as u8);
                     let diff = Self::sub_u8s(cpu.register(Register::A), value, &mut flags);
@@ -746,7 +746,7 @@ impl Instruction {
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
-                    // AND n | Bitwise AND immediate byte and register A, sotre in register A
+                    // AND n | Bitwise AND immediate byte and register A, store in register A
                     let mut flags: Flags = cpu.register(Register::Flag).into();
                     let result = cpu.register(Register::A) & n;
 
@@ -1016,7 +1016,7 @@ impl Instruction {
                 Cycles::new(4)
             }
             Instruction::CALL(cond, nn) => {
-                // CALL cc[y], nn | Store nn on the stack, then store nn in the program coutner if cond is met
+                // CALL cc[y], nn | Store nn on the stack, then store nn in the program counter if cond is met
                 // CALL nn        | Store nn on the stack, then store nn in the program counter
                 let flags: Flags = cpu.register(Register::Flag).into();
                 let pc = cpu.register_pair(RegisterPair::PC);
@@ -1369,7 +1369,7 @@ impl Instruction {
                 cycles
             }
             Instruction::SRL(reg) => {
-                // SRL r[z] | Shift right logic restier r[z]
+                // SRL r[z] | Shift right logic register r[z]
                 let mut flags: Flags = cpu.register(Register::Flag).into();
                 let lsb;
                 let shift_reg;
