@@ -2162,15 +2162,15 @@ mod tests {
 
     #[test]
     fn cycle_add_works() {
-        let lhs: Cycles = Cycles::new(0);
-        let rhs: Cycles = Cycles::new(0);
+        let lhs: Cycles = Cycles::new(5);
+        let rhs: Cycles = Cycles::new(4);
 
         assert_eq!(Cycles::new(9), rhs + lhs);
     }
 
     #[test]
     fn cycle_add_assign_works() {
-        let mut cycles: Cycles = Cycles::new(0);
+        let mut cycles: Cycles = Cycles::new(5);
         cycles += 5;
 
         assert_eq!(Cycles::new(10), cycles);
