@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use gb::cpu::Cpu as LR35902;
 use pixels::{Pixels, SurfaceTexture};
+use std::env::args;
 use winit::{
     dpi::LogicalSize,
     event::{Event, VirtualKeyCode},
@@ -19,7 +20,12 @@ fn main() -> Result<()> {
     let mut input = WinitInputHelper::new();
     let window = create_window(&event_loop)?;
     let mut pixels = create_pixels(&window)?;
-    let mut game_boy = LR35902::new();
+
+    let mut game_boy = match args().nth(1) {
+        Some(boot_path) => LR35902::boot_new(&boot_path),
+        None => LR35902::new(),
+    };
+
     game_boy.load_cartridge("bin/cpu_instrs.gb");
 
     event_loop.run(move |event, _, control_flow| {

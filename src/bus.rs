@@ -7,6 +7,7 @@ use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRAM, WorkRAM};
+use std::{convert::TryInto, fs::File, io::Read};
 
 #[derive(Debug, Clone)]
 pub struct Bus {
@@ -40,9 +41,15 @@ impl Default for Bus {
 }
 
 impl Bus {
-    pub fn with_boot() -> Self {
+    pub fn with_boot(path: &str) -> Self {
+        let mut file = File::open(path).unwrap();
+        let mut buf = Vec::with_capacity(256);
+        file.read_to_end(&mut buf).unwrap();
+
+        let boot_rom: [u8; 256] = buf.try_into().unwrap();
+
         Self {
-            boot: Some(include_bytes!("../bin/DMG_ROM.bin").to_owned()),
+            boot: Some(boot_rom),
             ..Default::default()
         }
     }

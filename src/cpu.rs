@@ -34,9 +34,9 @@ impl Cpu {
         }
     }
 
-    pub fn boot_new() -> Self {
+    pub fn boot_new(path: &str) -> Self {
         Self {
-            bus: Bus::with_boot(),
+            bus: Bus::with_boot(path),
             ..Default::default()
         }
     }
