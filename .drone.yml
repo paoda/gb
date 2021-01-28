@@ -1,0 +1,13 @@
+---
+kind: pipeline
+type: docker
+name: default
+
+
+steps:
+- name: cargo check
+  image: rust:1.49
+  - cargo check --verbose --all
+- name: cargo test
+  image: rust:1.49
+  - cargo test --verbose --all
