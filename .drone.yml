@@ -5,7 +5,7 @@ name: default
 
 steps:
 - name: cargo test
-  image: rust:1.49
+  image: rust:1.50
   commands: 
   - cargo build --verbose --all
   - cargo test --verbose --all
