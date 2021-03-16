@@ -24,9 +24,9 @@ pub struct SoundControl {
 bitfield! {
     pub struct FrequencyHigh(u8);
     impl Debug;
-    _, initial: 7;
-    from into FrequencyType, get_freq_type, set_freq_type: 6;
-    _, set_freq_high_bits: 2, 0;
+    pub _, set_initial: 7;
+    pub from into FrequencyType, get_freq_type, set_freq_type: 6;
+    pub _, set_freq_bits: 2, 0;
 }
 
 impl Copy for FrequencyHigh {}
@@ -110,11 +110,11 @@ impl Default for FrequencyType {
 bitfield! {
     pub struct SoundStatus(u8);
     impl Debug;
-    all_enabled, set_all_enabled: 7;
-    sound_4, _: 3;
-    sound_3, _: 2;
-    sound_2, _: 1;
-    sound_1, _: 0;
+    pub all_enabled, set_all_enabled: 7;
+    pub sound_4, _: 3;
+    pub sound_3, _: 2;
+    pub sound_2, _: 1;
+    pub sound_1, _: 0;
 }
 
 impl Copy for SoundStatus {}
@@ -153,9 +153,9 @@ pub struct Channel1 {
 bitfield! {
     pub struct VolumeEnvelope(u8);
     impl Debug;
-    init_vol, set_init_vol: 7, 4;
-    from into EnvelopeDirection, direction, set_direction: 3;
-    sweep_count, set_sweep_count: 2, 0;
+    pub init_vol, set_init_vol: 7, 4;
+    pub from into EnvelopeDirection, direction, set_direction: 3;
+    pub sweep_count, set_sweep_count: 2, 0;
 }
 
 impl Copy for VolumeEnvelope {}
@@ -211,8 +211,8 @@ impl Default for EnvelopeDirection {
 bitfield! {
     pub struct SoundDuty(u8);
     impl Debug;
-    from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
-    _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
+    pub from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
+    pub _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
 }
 
 impl Copy for SoundDuty {}
@@ -282,14 +282,14 @@ impl From<u8> for WavePattern {
 bitfield! {
     pub struct SoundOutput(u8);
     impl Debug;
-    snd4_so2, set_snd4_so2: 7;
-    snd3_so2, set_snd3_so2: 6;
-    snd2_so2, set_snd2_so2: 5;
-    snd1_so2, set_snd1_so2: 4;
-    snd4_so1, set_snd4_so1: 3;
-    snd3_so1, set_snd3_so1: 2;
-    snd2_so1, set_snd2_so1: 1;
-    snd1_so1, set_snd1_so1: 0;
+    pub snd4_so2, set_snd4_so2: 7;
+    pub snd3_so2, set_snd3_so2: 6;
+    pub snd2_so2, set_snd2_so2: 5;
+    pub snd1_so2, set_snd1_so2: 4;
+    pub snd4_so1, set_snd4_so1: 3;
+    pub snd3_so1, set_snd3_so1: 2;
+    pub snd2_so1, set_snd2_so1: 1;
+    pub snd1_so1, set_snd1_so1: 0;
 }
 
 impl Copy for SoundOutput {}
@@ -320,10 +320,10 @@ impl From<SoundOutput> for u8 {
 bitfield! {
     pub struct ChannelControl(u8);
     impl Debug;
-    vin_so2, set_vin_so2: 7;
-    so2_level, set_so2_level: 6, 4;
-    vin_so1, set_vin_so1: 3;
-    so1_level, set_so1_level: 2, 0;
+    pub vin_so2, set_vin_so2: 7;
+    pub so2_level, set_so2_level: 6, 4;
+    pub vin_so1, set_vin_so1: 3;
+    pub so1_level, set_so1_level: 2, 0;
 }
 
 impl Copy for ChannelControl {}
