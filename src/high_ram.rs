@@ -1,9 +1,9 @@
 #[derive(Debug, Clone)]
-pub struct HighRAM {
+pub struct HighRam {
     buf: Box<[u8]>,
 }
 
-impl Default for HighRAM {
+impl Default for HighRam {
     fn default() -> Self {
         Self {
             buf: vec![0u8; 128].into_boxed_slice(),
@@ -11,7 +11,7 @@ impl Default for HighRAM {
     }
 }
 
-impl HighRAM {
+impl HighRam {
     pub fn write_byte(&mut self, index: usize, byte: u8) {
         self.buf[index] = byte;
     }

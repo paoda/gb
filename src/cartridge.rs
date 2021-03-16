@@ -5,7 +5,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Default)]
 pub struct Cartridge {
     memory: Vec<u8>,
-    mbc: Box<dyn MBC>,
+    mbc: Box<dyn Mbc>,
 }
 
 impl Cartridge {
@@ -20,7 +20,7 @@ impl Cartridge {
         })
     }
 
-    fn detect_mbc(memory: &[u8]) -> Box<dyn MBC> {
+    fn detect_mbc(memory: &[u8]) -> Box<dyn Mbc> {
         let ram_size = Self::find_ram_size(&memory);
         let bank_count = Self::find_bank_count(&memory);
         let mbc_kind = Self::find_mbc(&memory);
@@ -40,7 +40,7 @@ impl Cartridge {
         Box::new(mbc)
     }
 
-    fn find_ram_size(memory: &[u8]) -> RAMSize {
+    fn find_ram_size(memory: &[u8]) -> RamSize {
         let id = memory[0x0149];
         id.into()
     }
@@ -89,7 +89,7 @@ struct MBC1 {
     current_rom_bank: u8, // 5-bit Number
     current_ram_bank: u8, // 2-bit number
     mode: bool,
-    ram_size: RAMSize,
+    ram_size: RamSize,
     ram: Box<[u8]>,
     bank_count: BankCount,
     ram_enabled: bool,
@@ -139,7 +139,7 @@ impl MBC1 {
     }
 }
 
-impl MBC for MBC1 {
+impl Mbc for MBC1 {
     fn handle_read(&self, addr: u16) -> MBCResult {
         use MBCResult::*;
 
@@ -159,10 +159,10 @@ impl MBC for MBC1 {
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     let ram_addr = match self.ram_size {
-                        RAMSize::_2KB | RAMSize::_8KB => {
+                        RamSize::_2KB | RamSize::_8KB => {
                             (addr as u32 - 0xA000) % self.ram_size.to_byte_count()
                         }
-                        RAMSize::_32KB => {
+                        RamSize::_32KB => {
                             if self.mode {
                                 0x2000 * self.current_ram_bank as u32 + (addr as u32 - 0xA000)
                             } else {
@@ -196,17 +196,17 @@ impl MBC for MBC1 {
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
                     let ram_addr = match self.ram_size {
-                        RAMSize::_2KB | RAMSize::_8KB => {
+                        RamSize::_2KB | RamSize::_8KB => {
                             (addr as u32 - 0xA000) % self.ram_size.to_byte_count()
                         }
-                        RAMSize::_32KB => {
+                        RamSize::_32KB => {
                             if self.mode {
                                 0x2000 * (self.current_ram_bank as u32) + (addr as u32 - 0xA000)
                             } else {
                                 addr as u32 - 0xA000
                             }
                         }
-                        _ => unreachable!("RAMSize can not be greater than 32KB on MBC1"),
+                        _ => unreachable!("RAM size can not be greater than 32KB on MBC1"),
                     };
 
                     self.ram[ram_addr as usize] = byte;
@@ -217,20 +217,20 @@ impl MBC for MBC1 {
     }
 }
 
-trait MBC: CloneMBC {
+trait Mbc: CloneMBC {
     fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
 
 trait CloneMBC {
-    fn clone_mbc<'a>(&self) -> Box<dyn MBC>;
+    fn clone_mbc(&self) -> Box<dyn Mbc>;
 }
 
 impl<T> CloneMBC for T
 where
-    T: MBC + Clone + 'static,
+    T: Mbc + Clone + 'static,
 {
-    fn clone_mbc<'a>(&self) -> Box<dyn MBC> {
+    fn clone_mbc<'a>(&self) -> Box<dyn Mbc> {
         Box::new(self.clone())
     }
 }
@@ -254,7 +254,7 @@ impl Default for MBCKind {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum RAMSize {
+enum RamSize {
     None = 0,
     _2KB = 1,
     _8KB = 2,
@@ -263,9 +263,9 @@ enum RAMSize {
     _64KB = 5,  // Split into 8 RAm Banks
 }
 
-impl RAMSize {
+impl RamSize {
     pub fn to_byte_count(&self) -> u32 {
-        use RAMSize::*;
+        use RamSize::*;
 
         match *self {
             None => 0,
@@ -278,15 +278,15 @@ impl RAMSize {
     }
 }
 
-impl Default for RAMSize {
+impl Default for RamSize {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl From<u8> for RAMSize {
+impl From<u8> for RamSize {
     fn from(byte: u8) -> Self {
-        use RAMSize::*;
+        use RamSize::*;
 
         match byte {
             0x00 => None,
@@ -366,19 +366,19 @@ impl From<u8> for BankCount {
     }
 }
 
-impl std::fmt::Debug for Box<dyn MBC> {
+impl std::fmt::Debug for Box<dyn Mbc> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Implement Debug for Box<dyn MBC> Trait Object");
     }
 }
 
-impl std::clone::Clone for Box<dyn MBC> {
+impl std::clone::Clone for Box<dyn Mbc> {
     fn clone(&self) -> Self {
         self.clone_mbc()
     }
 }
 
-impl std::default::Default for Box<dyn MBC> {
+impl std::default::Default for Box<dyn Mbc> {
     fn default() -> Self {
         Box::new(MBC1::default())
     }

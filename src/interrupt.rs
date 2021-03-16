@@ -41,7 +41,7 @@ impl InterruptEnable {
     pub fn set_vblank(&self, flag: &mut InterruptFlag, value: bool) {
         let prev = self._vblank();
 
-        if prev == false && value {
+        if !prev && value {
             flag.set_vblank(true);
         }
 
@@ -51,7 +51,7 @@ impl InterruptEnable {
     pub fn set_lcd_stat(&self, flag: &mut InterruptFlag, value: bool) {
         let prev = self._lcd_stat();
 
-        if prev == false && value {
+        if !prev && value {
             flag.set_lcd_stat(true);
         }
 
@@ -61,7 +61,7 @@ impl InterruptEnable {
     pub fn set_timer(&self, flag: &mut InterruptFlag, value: bool) {
         let prev = self._timer();
 
-        if prev == false && value {
+        if !prev && value {
             flag.set_timer(true);
         }
 
@@ -71,7 +71,7 @@ impl InterruptEnable {
     pub fn set_serial(&self, flag: &mut InterruptFlag, value: bool) {
         let prev = self._serial();
 
-        if prev == false && value {
+        if !prev && value {
             flag.set_serial(true);
         }
 
@@ -81,7 +81,7 @@ impl InterruptEnable {
     pub fn set_joypad(&self, flag: &mut InterruptFlag, value: bool) {
         let prev = self._joypad();
 
-        if prev == false && value {
+        if !prev && value {
             flag.set_joypad(true);
         }
 

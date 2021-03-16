@@ -1,25 +1,25 @@
 use super::cartridge::Cartridge;
-use super::high_ram::HighRAM;
+use super::high_ram::HighRam;
 use super::instruction::Cycles;
 use super::interrupt::Interrupt;
-use super::ppu::PPU;
+use super::ppu::Ppu;
 use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
-use super::work_ram::{VariableWorkRAM, WorkRAM};
+use super::work_ram::{VariableWorkRam, WorkRam};
 use std::{convert::TryInto, fs::File, io::Read};
 
 #[derive(Debug, Clone)]
 pub struct Bus {
     boot: Option<[u8; 256]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
-    pub ppu: PPU,
-    wram: WorkRAM,
-    vwram: VariableWorkRAM,
+    pub ppu: Ppu,
+    wram: WorkRam,
+    vwram: VariableWorkRam,
     timer: Timer,
     interrupt: Interrupt,
     sound: Sound,
-    hram: HighRAM,
+    hram: HighRam,
     serial: Serial,
 }
 

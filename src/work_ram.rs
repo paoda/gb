@@ -1,9 +1,9 @@
 #[derive(Debug, Clone)]
-pub struct WorkRAM {
+pub struct WorkRam {
     bank: Box<[u8]>,
 }
 
-impl WorkRAM {
+impl WorkRam {
     pub fn write_byte(&mut self, index: usize, byte: u8) {
         self.bank[index] = byte;
     }
@@ -13,7 +13,7 @@ impl WorkRAM {
     }
 }
 
-impl Default for WorkRAM {
+impl Default for WorkRam {
     fn default() -> Self {
         Self {
             bank: vec![0u8; 4096].into_boxed_slice(),
@@ -33,12 +33,12 @@ pub enum BankNumber {
 }
 
 #[derive(Debug, Clone)]
-pub struct VariableWorkRAM {
+pub struct VariableWorkRam {
     current: BankNumber,
     bank_n: Box<[[u8; 4096]]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
 }
 
-impl Default for VariableWorkRAM {
+impl Default for VariableWorkRam {
     fn default() -> Self {
         Self {
             current: BankNumber::One,
@@ -47,7 +47,7 @@ impl Default for VariableWorkRAM {
     }
 }
 
-impl VariableWorkRAM {
+impl VariableWorkRam {
     pub fn set_current_bank(&mut self, bank: BankNumber) {
         self.current = bank;
     }

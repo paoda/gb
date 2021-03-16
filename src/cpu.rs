@@ -1,6 +1,6 @@
 use super::bus::Bus;
 use super::instruction::{Cycles, Instruction};
-use super::ppu::PPU;
+use super::ppu::Ppu;
 use bitfield::bitfield;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
@@ -130,7 +130,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn get_ppu(&mut self) -> &mut PPU {
+    pub fn get_ppu(&mut self) -> &mut Ppu {
         &mut self.bus.ppu
     }
 }

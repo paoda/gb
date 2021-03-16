@@ -4,7 +4,7 @@ use bitfield::bitfield;
 const GB_WIDTH: usize = 160;
 const GB_HEIGHT: usize = 144;
 #[derive(Debug, Clone)]
-pub struct PPU {
+pub struct Ppu {
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
@@ -16,7 +16,7 @@ pub struct PPU {
     mode: Mode,
 }
 
-impl PPU {
+impl Ppu {
     pub fn step(&mut self, cycles: Cycles) {
         self.cycles += cycles;
 
@@ -67,7 +67,7 @@ impl PPU {
     }
 }
 
-impl Default for PPU {
+impl Default for Ppu {
     fn default() -> Self {
         Self {
             lcd_control: Default::default(),
@@ -131,7 +131,7 @@ impl From<LCDStatus> for u8 {
 pub enum LCDMode {
     HBlank = 0,
     VBlank = 1,
-    OAM = 2,
+    Oam = 2,
     Transfer = 3,
 }
 
@@ -140,7 +140,7 @@ impl From<u8> for LCDMode {
         match byte {
             0b00 => Self::HBlank,
             0b01 => Self::VBlank,
-            0b10 => Self::OAM,
+            0b10 => Self::Oam,
             0b11 => Self::Transfer,
             _ => unreachable!("{:#04X} is not a valid value for LCDMode", byte),
         }
