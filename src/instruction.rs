@@ -1503,7 +1503,7 @@ impl Instruction {
         }
     }
 
-    /// PUSHs a u16 onto the stack
+    /// PUSHes a u16 onto the stack
     ///
     /// Mutates the stack pointer and the stack
     fn push(cpu: &mut Cpu, value: u16) {
