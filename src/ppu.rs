@@ -1,4 +1,5 @@
 use crate::instruction::Cycles;
+use bitfield::bitfield;
 
 const GB_WIDTH: usize = 160;
 const GB_HEIGHT: usize = 144;
@@ -90,37 +91,65 @@ enum Mode {
     VBlank,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LCDStatus {
-    lyc_eq_ly: bool,
-    mode2_stat: bool,
-    mode1_stat: bool,
-    mode0_stat: bool,
-    coincidence: bool,
-    ppu_mode: u8,
+bitfield! {
+    pub struct LCDStatus(u8);
+    impl Debug;
+    pub lyc_ly_intr, set_lyc_ly_intr: 6;
+    pub oam_intr, set_oam_intr: 5;
+    pub vblank_intr, set_vblank_intr: 4;
+    pub hblank_intr, set_hblank_intr: 3;
+    pub lyc_ly_flag, _: 2;
+    pub from into LCDMode, mode, _: 1, 0;
+}
+
+impl Copy for LCDStatus {}
+impl Clone for LCDStatus {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for LCDStatus {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for LCDStatus {
     fn from(byte: u8) -> Self {
-        Self {
-            lyc_eq_ly: (byte >> 6) & 0x01 == 0x01,
-            mode2_stat: (byte >> 5) & 0x01 == 0x01,
-            mode1_stat: (byte >> 4) & 0x01 == 0x01,
-            mode0_stat: (byte >> 3) & 0x01 == 0x01,
-            coincidence: (byte >> 2) & 0x01 == 0x01,
-            ppu_mode: byte & 0x03,
-        }
+        Self(byte)
     }
 }
 
 impl From<LCDStatus> for u8 {
     fn from(status: LCDStatus) -> Self {
-        0x80 | (status.lyc_eq_ly as u8) << 6
-            | (status.mode2_stat as u8) << 5
-            | (status.mode1_stat as u8) << 4
-            | (status.mode0_stat as u8) << 3
-            | (status.coincidence as u8) << 2
-            | (status.ppu_mode & 0x03)
+        status.0
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LCDMode {
+    HBlank = 0,
+    VBlank = 1,
+    OAM = 2,
+    Transfer = 3,
+}
+
+impl From<u8> for LCDMode {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::HBlank,
+            0b01 => Self::VBlank,
+            0b10 => Self::OAM,
+            0b11 => Self::Transfer,
+            _ => unreachable!("{:#04X} is not a valid value for LCDMode", byte),
+        }
+    }
+}
+
+impl Default for LCDMode {
+    fn default() -> Self {
+        Self::HBlank
     }
 }
 
@@ -136,43 +165,107 @@ pub struct Monochrome {
     pub bg_palette: BackgroundPalette,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct LCDControl {
-    lcd_enable: bool, // Bit 7
-    window_tile_map_select: bool,
-    window_enable: bool,
-    tile_data_select: bool,
-    bg_tile_map_select: bool,
-    sprite_size: bool,
-    sprite_enable: bool,
-    display_priority: bool, // Bit 0
+bitfield! {
+    pub struct LCDControl(u8);
+    impl Debug;
+    lcd_enabled, set_lcd_enabled: 7;
+    from into TileMapRegister, win_tile_map_area, set_win_tile_map_area: 6;
+    window_enabled, set_window_enabled: 5;
+    from into TileDataRegister, tile_data_area, set_tile_data_area: 4;
+    from into TileMapRegister, gb_tile_map_area, set_gb_tile_map_area: 3;
+    from into OBJSize, obg_size, set_obj_size: 2;
+    obj_enabled, set_obj_enabled: 1;
+    bg_win_enabled, set_bg_win_enabled: 0;
+}
+
+impl Copy for LCDControl {}
+impl Clone for LCDControl {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for LCDControl {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for LCDControl {
     fn from(byte: u8) -> Self {
-        Self {
-            lcd_enable: (byte >> 7) == 0x01,
-            window_tile_map_select: ((byte >> 6) & 0x01) == 0x01,
-            window_enable: ((byte >> 5) & 0x01) == 0x01,
-            tile_data_select: ((byte >> 4) & 0x01) == 0x01,
-            bg_tile_map_select: ((byte >> 3) & 0x01) == 0x01,
-            sprite_size: ((byte >> 2) & 0x01) == 0x01,
-            sprite_enable: ((byte >> 1) & 0x01) == 0x01,
-            display_priority: (byte & 0x01) == 0x01,
-        }
+        Self(byte)
     }
 }
 
 impl From<LCDControl> for u8 {
     fn from(ctrl: LCDControl) -> Self {
-        (ctrl.lcd_enable as u8) << 7
-            | (ctrl.window_tile_map_select as u8) << 6
-            | (ctrl.window_enable as u8) << 5
-            | (ctrl.tile_data_select as u8) << 4
-            | (ctrl.bg_tile_map_select as u8) << 3
-            | (ctrl.sprite_size as u8) << 2
-            | (ctrl.sprite_enable as u8) << 1
-            | ctrl.display_priority as u8
+        ctrl.0
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TileMapRegister {
+    X9800 = 0,
+    X9C00 = 1,
+}
+
+impl From<u8> for TileMapRegister {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::X9800,
+            0b01 => Self::X9C00,
+            _ => unreachable!("{:#04X} is not a valid value for TileMapRegister", byte),
+        }
+    }
+}
+
+impl Default for TileMapRegister {
+    fn default() -> Self {
+        Self::X9800
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TileDataRegister {
+    X8800 = 0,
+    X8000 = 1,
+}
+
+impl From<u8> for TileDataRegister {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::X8800,
+            0b01 => Self::X8000,
+            _ => unreachable!("{:#04X} is not a valid value for TileDataRegister", byte),
+        }
+    }
+}
+
+impl Default for TileDataRegister {
+    fn default() -> Self {
+        Self::X8800
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ObjSize {
+    EightByEight = 0,
+    EightBySixteen = 1,
+}
+
+impl From<u8> for ObjSize {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::EightByEight,
+            0b01 => Self::EightBySixteen,
+            _ => unreachable!("{:#04X} is not a valid value for ObjSize", byte),
+        }
+    }
+}
+
+impl Default for ObjSize {
+    fn default() -> Self {
+        Self::EightByEight
     }
 }
 
