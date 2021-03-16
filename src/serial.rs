@@ -1,29 +1,41 @@
+use bitfield::bitfield;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Serial {
     pub next: u8,
     pub control: SerialControl,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SerialControl {
-    transfer_start: bool,
-    speed: ClockSpeed, // CGB Only
-    shift: ShiftClock,
+bitfield! {
+    pub struct SerialControl(u8);
+    impl Debug;
+    pub transfer_start, set_transfer_start: 7;
+    // pub from into ClockSpeed, speed, set_speed: 1; (CGB Only)
+    pub from into ShiftClock, shift, set_shift: 0;
+}
+
+impl Copy for SerialControl {}
+impl Clone for SerialControl {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for SerialControl {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for SerialControl {
     fn from(byte: u8) -> Self {
-        Self {
-            transfer_start: byte >> 7 == 0x01,
-            speed: ((byte >> 1) & 0x01).into(),
-            shift: (byte & 0x01).into(),
-        }
+        Self(byte)
     }
 }
 
 impl From<SerialControl> for u8 {
-    fn from(control: SerialControl) -> Self {
-        (control.transfer_start as u8) << 7 | (control.speed as u8) << 1 | control.shift as u8
+    fn from(ctrl: SerialControl) -> Self {
+        ctrl.0
     }
 }
 
