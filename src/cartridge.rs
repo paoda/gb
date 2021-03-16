@@ -29,7 +29,6 @@ impl Cartridge {
         let mbc = match mbc_kind {
             MBCKind::None => todo!("Handle no MBC Situation"),
             MBCKind::MBC1 => MBC1 {
-                kind: mbc_kind,
                 ram_size,
                 ram: vec![0; ram_byte_count as usize].into_boxed_slice(),
                 bank_count,
@@ -87,7 +86,6 @@ impl Cartridge {
 
 #[derive(Debug, Clone, Default)]
 struct MBC1 {
-    pub kind: MBCKind,
     current_rom_bank: u8, // 5-bit Number
     current_ram_bank: u8, // 2-bit number
     mode: bool,
@@ -215,9 +213,22 @@ impl MBC for MBC1 {
     }
 }
 
-trait MBC {
+trait MBC: CloneMBC {
     fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
+}
+
+trait CloneMBC {
+    fn clone_mbc<'a>(&self) -> Box<dyn MBC>;
+}
+
+impl<T> CloneMBC for T
+where
+    T: MBC + Clone + 'static,
+{
+    fn clone_mbc<'a>(&self) -> Box<dyn MBC> {
+        Box::new(self.clone())
+    }
 }
 
 enum MBCResult {
@@ -345,18 +356,18 @@ impl From<u8> for BankCount {
 
 impl std::fmt::Debug for Box<dyn MBC> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        todo!("Implement Debug for Box<dyn MBC> Trait Object");
     }
 }
 
 impl std::clone::Clone for Box<dyn MBC> {
     fn clone(&self) -> Self {
-        todo!()
+        self.clone_mbc()
     }
 }
 
 impl std::default::Default for Box<dyn MBC> {
     fn default() -> Self {
-        todo!()
+        Box::new(MBC1::default())
     }
 }
