@@ -240,19 +240,6 @@ impl From<SoundDuty> for u8 {
     }
 }
 
-impl From<WavePattern> for u8 {
-    fn from(pattern: WavePattern) -> Self {
-        use WavePattern::*;
-
-        match pattern {
-            OneEighth => 0b00,
-            OneQuarter => 0b01,
-            OneHalf => 0b10,
-            ThreeQuarters => 0b11,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum WavePattern {
     OneEighth = 0,     // 12.5% ( _-------_-------_------- )
@@ -264,6 +251,12 @@ pub enum WavePattern {
 impl Default for WavePattern {
     fn default() -> Self {
         Self::OneEighth // Rationale: OneEighth is 0x00
+    }
+}
+
+impl From<WavePattern> for u8 {
+    fn from(pattern: WavePattern) -> Self {
+        pattern as u8
     }
 }
 
