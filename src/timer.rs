@@ -60,6 +60,6 @@ impl From<TimerControl> for u8 {
     fn from(control: TimerControl) -> Self {
         let byte: u8 = control.speed as u8; // Get bit 1 and 0.
 
-        (byte & !(1u8 << 2)) | ((control.enabled as u8) << 2) // specifically manibulate bit 2
+        (byte & !(1u8 << 2)) | ((control.enabled as u8) << 2) // specifically manipulate bit 2
     }
 }
