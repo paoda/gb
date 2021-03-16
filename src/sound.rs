@@ -96,7 +96,7 @@ impl From<u8> for FrequencyType {
         match byte {
             0b00 => Self::Counter,
             0b01 => Self::Consecutive,
-            _ => unreachable!("{} is not a valid number for FrequencyType"),
+            _ => unreachable!("{:#04X} is not a valid value for FrequencyType"),
         }
     }
 }
@@ -194,10 +194,7 @@ impl From<u8> for EnvelopeDirection {
         match byte {
             0b00 => Self::Decrease,
             0b01 => Self::Increase,
-            _ => unreachable!(
-                "{:#04X} is not a possible value for EnvelopeDirection",
-                byte
-            ),
+            _ => unreachable!("{:#04X} is not a valid value for EnvelopeDirection", byte),
         }
     }
 }
@@ -267,7 +264,7 @@ impl From<u8> for WavePattern {
             0b01 => Self::OneQuarter,
             0b10 => Self::OneHalf,
             0b11 => Self::ThreeQuarters,
-            _ => unreachable!("{:#04X} is not a valid value for a Sound Wave", byte),
+            _ => unreachable!("{:#04X} is not a valid value for WavePattern", byte),
         }
     }
 }

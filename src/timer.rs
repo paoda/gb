@@ -32,11 +32,11 @@ pub enum TimerSpeed {
 impl From<u8> for TimerSpeed {
     fn from(byte: u8) -> Self {
         match byte {
-            0x00 => Self::Freq4096Hz,
-            0x01 => Self::Freq262144Hz,
-            0x10 => Self::Freq65536Hz,
-            0x11 => Self::Freq16384Hz,
-            _ => unreachable!("{:04X} is not a valid representation of TimerSpeed", byte),
+            0b00 => Self::Freq4096Hz,
+            0b01 => Self::Freq262144Hz,
+            0b10 => Self::Freq65536Hz,
+            0b11 => Self::Freq16384Hz,
+            _ => unreachable!("{:#04X} is not a valid value for TimerSpeed", byte),
         }
     }
 }

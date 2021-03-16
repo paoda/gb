@@ -197,7 +197,7 @@ impl From<u8> for GrayShade {
             0b01 => GrayShade::LightGray,
             0b10 => GrayShade::DarkGray,
             0b11 => GrayShade::Black,
-            _ => unreachable!("{:#04X} is not a valid Shade of Gray", byte),
+            _ => unreachable!("{:#04X} is not a valid value for GrayShade", byte),
         }
     }
 }
