@@ -1,6 +1,7 @@
 use super::bus::Bus;
 use super::instruction::{Cycles, Instruction};
 use super::ppu::PPU;
+use bitfield::bitfield;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io::Write,
@@ -218,6 +219,14 @@ impl Cpu {
             PC => self.reg.pc = value,
         }
     }
+
+    pub fn flags(&self) -> &Flags {
+        &self.flags
+    }
+
+    pub fn set_flags(&mut self, flags: Flags) {
+        self.flags = flags;
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -255,44 +264,58 @@ struct Registers {
     pc: u16,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
-pub struct Flags {
-    pub z: bool, // Zero Flag
-    pub n: bool, // Negative Flag
-    pub h: bool, // Half-Carry Flag
-    pub c: bool, // Carry Flag
+bitfield! {
+    pub struct Flags(u8);
+    impl Debug;
+    pub z, set_z: 7; // Zero Flag
+    pub n, set_n: 6; // Subtraction Flag
+    pub h, set_h: 5; // Half Carry Flag
+    pub c, set_c: 4; // Carry Flag
 }
 
 impl Flags {
     pub fn update(&mut self, z: bool, n: bool, h: bool, c: bool) {
-        self.z = z;
-        self.n = n;
-        self.h = h;
-        self.c = c;
+        self.set_z(z);
+        self.set_n(n);
+        self.set_h(h);
+        self.set_c(c);
+    }
+}
+
+impl Copy for Flags {}
+impl Clone for Flags {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self(0)
     }
 }
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        if self.z {
+        if self.z() {
             f.write_str("Z")?;
         } else {
             f.write_str("_")?;
         }
 
-        if self.n {
+        if self.n() {
             f.write_str("N")?;
         } else {
             f.write_str("_")?;
         }
 
-        if self.h {
+        if self.h() {
             f.write_str("H")?;
         } else {
             f.write_str("_")?;
         }
 
-        if self.c {
+        if self.c() {
             f.write_str("C")
         } else {
             f.write_str("_")
@@ -300,19 +323,14 @@ impl Display for Flags {
     }
 }
 
-impl From<u8> for Flags {
-    fn from(flag: u8) -> Self {
-        Self {
-            z: (flag >> 7) == 1,
-            n: ((flag >> 6) & 0x01) == 1,
-            h: ((flag >> 5) & 0x01) == 1,
-            c: ((flag >> 4) & 0x01) == 1,
-        }
+impl From<Flags> for u8 {
+    fn from(flags: Flags) -> Self {
+        flags.0
     }
 }
 
-impl From<Flags> for u8 {
-    fn from(flag: Flags) -> Self {
-        (flag.z as u8) << 7 | (flag.n as u8) << 6 | (flag.h as u8) << 5 | (flag.c as u8) << 4
+impl From<u8> for Flags {
+    fn from(byte: u8) -> Self {
+        Self(byte)
     }
 }

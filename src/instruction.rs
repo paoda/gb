@@ -300,7 +300,7 @@ impl Instruction {
                 // JR cc[y - 4], d | If condition is true, then add d to current address and jump
                 // JR d | Add d to current address and jump
                 let prev = cpu.register_pair(RegisterPair::PC);
-                let flags: Flags = cpu.register(Register::Flag).into();
+                let flags: &Flags = cpu.flags();
                 let new_addr = Self::add_u16_i8_no_flags(prev, offset);
 
                 match cond {
@@ -309,7 +309,7 @@ impl Instruction {
                         Cycles::new(12)
                     }
                     JumpCondition::NotZero => {
-                        if !flags.z {
+                        if !flags.z() {
                             cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles::new(12);
                         }
@@ -317,21 +317,21 @@ impl Instruction {
                         Cycles::new(8)
                     }
                     JumpCondition::Zero => {
-                        if flags.z {
+                        if flags.z() {
                             cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles::new(12);
                         }
                         Cycles::new(8)
                     }
                     JumpCondition::NotCarry => {
-                        if !flags.c {
+                        if !flags.c() {
                             cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles::new(12);
                         }
                         Cycles::new(8)
                     }
                     JumpCondition::Carry => {
-                        if flags.c {
+                        if flags.c() {
                             cpu.set_register_pair(RegisterPair::PC, new_addr);
                             return Cycles::new(12);
                         }
@@ -342,7 +342,7 @@ impl Instruction {
             Instruction::ADD(lhs, rhs) => match (lhs, rhs) {
                 (MATHTarget::RegisterPair(RegisterPair::HL), MATHTarget::RegisterPair(pair)) => {
                     // ADD HL, rp[p] | add register pair to HL.
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
 
                     match pair {
                         RegisterPair::BC
@@ -357,12 +357,12 @@ impl Instruction {
                         }
                         _ => unreachable!(),
                     }
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     Cycles::new(8)
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
                     // ADD A, r[z] | Add (A + r[z]) to register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let sum;
                     let cycles: Cycles;
@@ -386,12 +386,12 @@ impl Instruction {
                     }
 
                     cpu.set_register(Register::A, sum);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cycles
                 }
                 (MATHTarget::RegisterPair(RegisterPair::SP), MATHTarget::ImmediateByte(d)) => {
                     // ADD SP, d | Add d (is signed) to register pair SP.
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let d = d as i8;
                     let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
                     cpu.set_register_pair(RegisterPair::SP, sum);
@@ -399,11 +399,11 @@ impl Instruction {
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::ImmediateByte(n)) => {
                     // ADD A, n | Add n to register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let sum = Self::add_u8s(cpu.register(Register::A), n, &mut flags);
 
                     cpu.set_register(Register::A, sum);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     Cycles::new(8)
                 }
                 _ => unreachable!(),
@@ -412,7 +412,7 @@ impl Instruction {
                 match registers {
                     Registers::Byte(reg) => {
                         // INC r[y] | Increment Register
-                        let mut flags: Flags = cpu.register(Register::Flag).into();
+                        let mut flags: Flags = cpu.flags().clone();
                         let cycles: Cycles;
 
                         match reg {
@@ -436,7 +436,7 @@ impl Instruction {
                                 cycles = Cycles::new(12)
                             }
                         }
-                        cpu.set_register(Register::Flag, flags.into());
+                        cpu.set_flags(flags);
                         cycles
                     }
                     Registers::Word(pair) => {
@@ -468,7 +468,7 @@ impl Instruction {
             }
             Instruction::DEC(Registers::Byte(reg)) => {
                 // DEC r[y] | Decrement Register
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let cycles: Cycles;
 
                 match reg {
@@ -492,92 +492,92 @@ impl Instruction {
                         cycles = Cycles::new(12);
                     }
                 }
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cycles
             }
             Instruction::RLCA => {
                 // Rotate Register A left
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
                 let a = cpu.register(Register::A);
                 let msb = a >> 7;
                 let rot_a = a.rotate_left(1);
 
                 flags.update(false, false, false, msb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
                 Cycles::new(4)
             }
             Instruction::RRCA => {
                 // Rotate Register A right
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
                 let a = cpu.register(Register::A);
                 let lsb = a & 0x01;
                 let rot_a = a.rotate_right(1);
 
                 flags.update(false, false, false, lsb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
                 Cycles::new(4)
             }
             Instruction::RLA => {
                 // Rotate register A left through carry
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
                 let a = cpu.register(Register::A);
-                let (rot_a, carry) = Self::rl_thru_carry(a, flags.c);
+                let (rot_a, carry) = Self::rl_thru_carry(a, flags.c());
 
                 flags.update(false, false, false, carry);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
                 Cycles::new(4)
             }
             Instruction::RRA => {
                 // Rotate register A right through carry
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
                 let a = cpu.register(Register::A);
-                let (rot_a, carry) = Self::rr_thru_carry(a, flags.c);
+                let (rot_a, carry) = Self::rr_thru_carry(a, flags.c());
 
                 flags.update(false, false, false, carry);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
                 Cycles::new(4)
             }
             Instruction::DAA => unimplemented!(),
             Instruction::CPL => {
                 // Compliment A register (inverse)
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let a = cpu.register(Register::A);
 
-                flags.n = true;
-                flags.h = true;
+                flags.set_n(true);
+                flags.set_h(true);
 
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cpu.set_register(Register::A, !a); // Bitwise not is ! instead of ~
                 Cycles::new(4)
             }
             Instruction::SCF => {
                 // Set Carry Flag
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
-                flags.n = false;
-                flags.h = false;
-                flags.c = true;
+                flags.set_n(false);
+                flags.set_h(false);
+                flags.set_c(true);
 
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 Cycles::new(4)
             }
             Instruction::CCF => {
                 // Compliment Carry Flag (inverse)
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
 
-                flags.n = false;
-                flags.h = false;
-                flags.c = !flags.c;
+                flags.set_n(false);
+                flags.set_h(false);
+                flags.set_c(!flags.c());
 
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 Cycles::new(4)
             }
             Instruction::HALT => unimplemented!(),
@@ -585,7 +585,7 @@ impl Instruction {
                 MATHTarget::Register(reg) => {
                     // ADC A, r[z] | Add register r[z] plus the Carry flag to A
                     // FIXME: Do I Add register A as well?
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let sum;
@@ -599,7 +599,7 @@ impl Instruction {
                         | InstrRegister::L
                         | InstrRegister::A => {
                             let value =
-                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c as u8);
+                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c() as u8);
                             sum = Self::add_u8s(a_value, value, &mut flags);
                             cycles = Cycles::new(4);
                         }
@@ -609,17 +609,17 @@ impl Instruction {
                             cycles = Cycles::new(8);
                         }
                     }
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, sum);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // ADC A, n | Add immediate byte plus the carry flag to A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
-                    let value = n + (flags.c as u8);
+                    let mut flags: Flags = cpu.flags().clone();
+                    let value = n + (flags.c() as u8);
                     let sum = Self::add_u8s(cpu.register(Register::A), value, &mut flags);
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, sum);
                     Cycles::new(8)
                 }
@@ -628,7 +628,7 @@ impl Instruction {
             Instruction::SUB(target) => match target {
                 MATHTarget::Register(reg) => {
                     // SUB r[z] | Subtract the value in register r[z] from register A, then store in A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let diff;
@@ -652,16 +652,16 @@ impl Instruction {
                         }
                     }
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // SUB n | Subtract the immediate byte from register A, then store in A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let diff = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
                     Cycles::new(8)
                 }
@@ -671,7 +671,7 @@ impl Instruction {
                 MATHTarget::Register(reg) => {
                     // SBC A, r[z] | Subtract the value from register r[z] from A, add the Carry flag and then store in A
                     // FIXME: See ADC, is this a correct understanding of this Instruction
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let diff;
@@ -685,7 +685,7 @@ impl Instruction {
                         | InstrRegister::L
                         | InstrRegister::A => {
                             let value =
-                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c as u8);
+                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c() as u8);
                             diff = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles::new(4);
                         }
@@ -697,17 +697,17 @@ impl Instruction {
                     }
 
                     cpu.set_register(Register::A, diff);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // SBC A, n | Subtract the value from immediate byte from A, add the carry flag and then store in A
                     // FIXME: The Fixme above applies to this variant as well
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
-                    let value = n + (flags.c as u8);
+                    let mut flags: Flags = cpu.flags().clone();
+                    let value = n + (flags.c() as u8);
                     let diff = Self::sub_u8s(cpu.register(Register::A), value, &mut flags);
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
                     Cycles::new(8)
                 }
@@ -716,7 +716,7 @@ impl Instruction {
             Instruction::AND(target) => match target {
                 MATHTarget::Register(reg) => {
                     // AND r[z] | Bitwise AND register r[z] and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let result;
@@ -741,17 +741,17 @@ impl Instruction {
                     }
 
                     flags.update(result == 0, false, true, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // AND n | Bitwise AND immediate byte and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let result = cpu.register(Register::A) & n;
 
                     flags.update(result == 0, false, true, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
@@ -760,7 +760,7 @@ impl Instruction {
             Instruction::XOR(target) => match target {
                 MATHTarget::Register(reg) => {
                     // XOR r[z] | Bitwise XOR register r[z] and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let result;
@@ -785,17 +785,17 @@ impl Instruction {
                     }
 
                     flags.update(result == 0, false, false, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // XOR n | Bitwise XOR immediate byte and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let result = cpu.register(Register::A) ^ n;
 
                     flags.update(result == 0, false, false, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
@@ -804,7 +804,7 @@ impl Instruction {
             Instruction::OR(target) => match target {
                 MATHTarget::Register(reg) => {
                     // OR r[z] | Bitwise OR register r[z] and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
                     let result;
@@ -829,17 +829,17 @@ impl Instruction {
                     }
 
                     flags.update(result == 0, false, false, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // OR n | Bitwise OR on immediate byte n and register A, store in register A
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let result = cpu.register(Register::A) | n;
 
                     flags.update(result == 0, false, false, false);
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
@@ -848,7 +848,7 @@ impl Instruction {
             Instruction::CP(target) => match target {
                 MATHTarget::Register(reg) => {
                     // CP r[z] | Same behaviour as SUB, except the result is not stored.
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let a_value = cpu.register(Register::A);
                     let cycles: Cycles;
 
@@ -871,15 +871,15 @@ impl Instruction {
                         }
                     }
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
                     // CP n | Same behaviour as SUB, except the result is not stored,
-                    let mut flags: Flags = cpu.register(Register::Flag).into();
+                    let mut flags: Flags = cpu.flags().clone();
                     let _ = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
 
-                    cpu.set_register(Register::Flag, flags.into());
+                    cpu.set_flags(flags);
                     Cycles::new(8)
                 }
                 _ => unreachable!(),
@@ -887,11 +887,11 @@ impl Instruction {
             Instruction::RET(cond) => {
                 // RET cc[y] | Essentially a POP PC, Return from Subroutine
                 // RET       | Essentially a POP PC, Return from Subroutine
-                let flags: Flags = cpu.register(Register::Flag).into();
+                let flags: &Flags = cpu.flags();
 
                 match cond {
                     JumpCondition::NotZero => {
-                        if !flags.z {
+                        if !flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles::new(20);
@@ -899,7 +899,7 @@ impl Instruction {
                         Cycles::new(8)
                     }
                     JumpCondition::Zero => {
-                        if flags.z {
+                        if flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles::new(20);
@@ -907,7 +907,7 @@ impl Instruction {
                         Cycles::new(8)
                     }
                     JumpCondition::NotCarry => {
-                        if !flags.c {
+                        if !flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles::new(20);
@@ -915,7 +915,7 @@ impl Instruction {
                         Cycles::new(8)
                     }
                     JumpCondition::Carry => {
-                        if flags.c {
+                        if flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
                             return Cycles::new(20);
@@ -932,7 +932,7 @@ impl Instruction {
             Instruction::LDHL(d) => {
                 // LDHL SP + d   | Add SP + d to register HL
                 // LD HL, SP + d | Add SP + d to register HL
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
                 cpu.set_register_pair(RegisterPair::HL, sum);
                 Cycles::new(12)
@@ -965,32 +965,32 @@ impl Instruction {
                 JPTarget::ImmediateWord(nn) => {
                     // JP cc[y], nn | Store Immediate Word in the Program Counter if cond is met
                     // JP nn        | Store Immediate Word in the Program Counter
-                    let flags: Flags = cpu.register(Register::Flag).into();
+                    let flags: &Flags = cpu.flags();
 
                     match cond {
                         JumpCondition::NotZero => {
-                            if !flags.z {
+                            if !flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
                                 return Cycles::new(16);
                             }
                             Cycles::new(12)
                         }
                         JumpCondition::Zero => {
-                            if flags.z {
+                            if flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
                                 return Cycles::new(16);
                             }
                             Cycles::new(12)
                         }
                         JumpCondition::NotCarry => {
-                            if !flags.c {
+                            if !flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
                                 return Cycles::new(16);
                             }
                             Cycles::new(12)
                         }
                         JumpCondition::Carry => {
-                            if flags.c {
+                            if flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
                                 return Cycles::new(16);
                             }
@@ -1018,12 +1018,12 @@ impl Instruction {
             Instruction::CALL(cond, nn) => {
                 // CALL cc[y], nn | Store nn on the stack, then store nn in the program counter if cond is met
                 // CALL nn        | Store nn on the stack, then store nn in the program counter
-                let flags: Flags = cpu.register(Register::Flag).into();
+                let flags: &Flags = cpu.flags();
                 let pc = cpu.register_pair(RegisterPair::PC);
 
                 match cond {
                     JumpCondition::NotZero => {
-                        if !flags.z {
+                        if !flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles::new(24);
@@ -1031,7 +1031,7 @@ impl Instruction {
                         Cycles::new(12)
                     }
                     JumpCondition::Zero => {
-                        if flags.z {
+                        if flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles::new(24);
@@ -1039,7 +1039,7 @@ impl Instruction {
                         Cycles::new(12)
                     }
                     JumpCondition::NotCarry => {
-                        if !flags.c {
+                        if !flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles::new(24);
@@ -1047,7 +1047,7 @@ impl Instruction {
                         Cycles::new(12)
                     }
                     JumpCondition::Carry => {
-                        if flags.c {
+                        if flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
                             return Cycles::new(24);
@@ -1081,7 +1081,7 @@ impl Instruction {
             }
             Instruction::RLC(reg) => {
                 // RLC r[z] | Rotate register r[z] left
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let msb;
                 let rot_reg;
                 let cycles: Cycles;
@@ -1116,12 +1116,12 @@ impl Instruction {
                 }
 
                 flags.update(rot_reg == 0, false, false, msb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cycles
             }
             Instruction::RRC(reg) => {
                 // RRC r[z] | Rotate Register r[z] right
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let lsb;
                 let rot_reg;
                 let cycles: Cycles;
@@ -1156,12 +1156,12 @@ impl Instruction {
                 }
 
                 flags.update(rot_reg == 0, false, false, lsb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
                 cycles
             }
             Instruction::RL(reg) => {
                 // RL r[z] | Rotate register r[z] left through carry
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let carry;
                 let rot_reg;
                 let cycles: Cycles;
@@ -1177,7 +1177,7 @@ impl Instruction {
                         let register = Register::try_from(reg).unwrap();
                         let value = cpu.register(register);
 
-                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c());
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1188,7 +1188,7 @@ impl Instruction {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c());
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1198,13 +1198,13 @@ impl Instruction {
                 }
 
                 flags.update(rot_reg == 0, false, false, carry);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::RR(reg) => {
                 // RR r[z] | Rotate register r[z] right through carry
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let carry;
                 let rot_reg;
                 let cycles: Cycles;
@@ -1220,7 +1220,7 @@ impl Instruction {
                         let register = Register::try_from(reg).unwrap();
                         let value = cpu.register(register);
 
-                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c());
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1231,7 +1231,7 @@ impl Instruction {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c);
+                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c());
                         rot_reg = new_reg;
                         carry = new_carry;
 
@@ -1241,13 +1241,13 @@ impl Instruction {
                 }
 
                 flags.update(rot_reg == 0, false, false, carry);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SLA(reg) => {
                 // SLA r[z] | Shift left arithmetic register r[z]
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let shift_reg;
                 let msb;
                 let cycles: Cycles;
@@ -1282,13 +1282,13 @@ impl Instruction {
                 }
 
                 flags.update(shift_reg == 0, false, false, msb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SRA(reg) => {
                 // SRA r[z] | Shift right arithmetic register r[z]
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let shift_reg;
                 let lsb;
                 let cycles: Cycles;
@@ -1325,13 +1325,13 @@ impl Instruction {
                 }
 
                 flags.update(shift_reg == 0, false, false, lsb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SWAP(reg) => {
                 // SWAP r[z] | Swap the 4 highest and lowest bits in a byte
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let swap_reg;
                 let cycles: Cycles;
 
@@ -1364,13 +1364,13 @@ impl Instruction {
                 }
 
                 flags.update(swap_reg == 0, false, false, false);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SRL(reg) => {
                 // SRL r[z] | Shift right logic register r[z]
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let lsb;
                 let shift_reg;
                 let cycles: Cycles;
@@ -1405,13 +1405,13 @@ impl Instruction {
                 }
 
                 flags.update(shift_reg == 0, false, false, lsb == 0x01);
-                cpu.set_register(Register::Flag, flags.into());
+                cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::BIT(y, reg) => {
                 // BIT y, r[z] | Test y is in register r[z]
-                let mut flags: Flags = cpu.register(Register::Flag).into();
+                let mut flags: Flags = cpu.flags().clone();
                 let is_bit_set;
                 let cycles: Cycles;
                 match reg {
@@ -1437,8 +1437,8 @@ impl Instruction {
                     }
                 }
 
-                flags.update(!is_bit_set, false, true, flags.c);
-                cpu.set_register(Register::Flag, flags.into());
+                flags.update(!is_bit_set, false, true, flags.c());
+                cpu.set_flags(flags);
 
                 cycles
             }
@@ -1542,7 +1542,7 @@ impl Instruction {
     fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let diff = left.wrapping_sub(right);
 
-        flags.update(diff == 0, true, Self::u8_half_carry(left, right), flags.c);
+        flags.update(diff == 0, true, Self::u8_half_carry(left, right), flags.c());
         diff
     }
 
@@ -1577,7 +1577,7 @@ impl Instruction {
     fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let sum = left.wrapping_add(right);
 
-        flags.update(sum == 0, false, Self::u8_half_carry(left, right), flags.c);
+        flags.update(sum == 0, false, Self::u8_half_carry(left, right), flags.c());
         sum
     }
 
@@ -1599,7 +1599,7 @@ impl Instruction {
         flags.update(
             false,
             Self::u16_half_carry(left, right),
-            flags.h,
+            flags.h(),
             did_overflow,
         );
         sum
