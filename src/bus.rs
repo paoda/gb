@@ -70,17 +70,18 @@ impl Bus {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
-                if addr <= 0x00FF && self.boot.is_some() {
-                    let boot = self.boot.unwrap();
-                    boot[addr as usize]
-                } else {
-                    match &self.cartridge {
-                        Some(cart) => cart.read_byte(addr),
-                        None => panic!("Tried to read from a non-existant cartridge"),
+                if addr < 0x00FF {
+                    if let Some(boot) = self.boot {
+                        return boot[addr as usize];
                     }
                 }
+
+                match self.cartridge.as_ref() {
+                    Some(cart) => cart.read_byte(addr),
+                    None => panic!("Tried to read from a non-existant cartridge"),
+                }
             }
-            0x4000..=0x7FFF => match &self.cartridge {
+            0x4000..=0x7FFF => match self.cartridge.as_ref() {
                 // 16KB ROM Bank 01 -> NN (switchable via MB)
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from a non-existant cartridge"),
@@ -89,7 +90,7 @@ impl Bus {
                 // 8KB Video RAM
                 self.ppu.vram[(addr - 0x8000) as usize]
             }
-            0xA000..=0xBFFF => match &self.cartridge {
+            0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from the external RAM of a non-existant cartridge"),
