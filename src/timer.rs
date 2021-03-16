@@ -22,7 +22,7 @@ impl Default for Timer {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TimerSpeed {
+pub enum TimerSpeed {
     Freq4096Hz = 0,
     Freq262144Hz = 1,
     Freq65536Hz = 2,
@@ -50,8 +50,8 @@ impl From<TimerSpeed> for u8 {
 bitfield! {
     pub struct TimerControl(u8);
     impl Debug;
-    enabled, set_enabled: 2;
-    from into TimerSpeed, speed, set_speed: 1, 0;
+    pub enabled, set_enabled: 2;
+    pub from into TimerSpeed, speed, set_speed: 1, 0;
 }
 
 impl Copy for TimerControl {}
