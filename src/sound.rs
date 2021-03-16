@@ -49,8 +49,8 @@ impl From<u8> for FrequencyHigh {
 }
 
 impl From<FrequencyHigh> for u8 {
-    fn from(duty: FrequencyHigh) -> Self {
-        duty.0
+    fn from(freq: FrequencyHigh) -> Self {
+        freq.0
     }
 }
 
@@ -137,8 +137,8 @@ impl From<u8> for SoundStatus {
 }
 
 impl From<SoundStatus> for u8 {
-    fn from(duty: SoundStatus) -> Self {
-        duty.0
+    fn from(status: SoundStatus) -> Self {
+        status.0
     }
 }
 
@@ -178,8 +178,8 @@ impl From<u8> for VolumeEnvelope {
 }
 
 impl From<VolumeEnvelope> for u8 {
-    fn from(duty: VolumeEnvelope) -> Self {
-        duty.0
+    fn from(envelope: VolumeEnvelope) -> Self {
+        envelope.0
     }
 }
 
@@ -312,8 +312,8 @@ impl From<u8> for SoundOutput {
 }
 
 impl From<SoundOutput> for u8 {
-    fn from(duty: SoundOutput) -> Self {
-        duty.0
+    fn from(output: SoundOutput) -> Self {
+        output.0
     }
 }
 
@@ -346,7 +346,7 @@ impl From<u8> for ChannelControl {
 }
 
 impl From<ChannelControl> for u8 {
-    fn from(duty: ChannelControl) -> Self {
-        duty.0
+    fn from(ctrl: ChannelControl) -> Self {
+        ctrl.0
     }
 }
