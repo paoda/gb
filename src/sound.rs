@@ -1,5 +1,5 @@
 use crate::instruction::Cycles;
-
+use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Sound {
     pub control: SoundControl,
@@ -15,16 +15,74 @@ impl Sound {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SoundControl {
     pub channel: ChannelControl,
-    pub select: SoundOutputSelect,
+    pub output: SoundOutput,
     pub status: SoundStatus,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Frequency {
-    initial: bool,
-    freq_type: FrequencyType,
-    lo: u8, // Bottom 8 bits
-    hi: u8, // Top 3 bits (11 bits total)
+// TODO: What to do about the separation of freq bits
+// across multiple registers?
+bitfield! {
+    pub struct FrequencyHigh(u8);
+    impl Debug;
+    _, initial: 7;
+    from into FrequencyType, get_freq_type, set_freq_type: 6;
+    _, set_freq_high_bits: 2, 0;
+}
+
+impl Copy for FrequencyHigh {}
+impl Clone for FrequencyHigh {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for FrequencyHigh {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for FrequencyHigh {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+impl From<FrequencyHigh> for u8 {
+    fn from(duty: FrequencyHigh) -> Self {
+        duty.0
+    }
+}
+
+bitfield! {
+    pub struct FrequencyLow(u8);
+    impl Debug;
+    pub _, set_freq_bits: 7, 0;
+}
+
+impl Copy for FrequencyLow {}
+impl Clone for FrequencyLow {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for FrequencyLow {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for FrequencyLow {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+pub fn get_11bit_freq(low: &FrequencyLow, high: FrequencyHigh) -> u16 {
+    let high_bits = high.0 & 0b111;
+
+    (low.0 as u16) << 8 | ((high_bits as u16) << 4)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,61 +107,38 @@ impl Default for FrequencyType {
     }
 }
 
-impl Frequency {
-    fn get_11bit_freq(&self) -> u16 {
-        (self.hi as u16) << 8 | self.lo as u16
-    }
+bitfield! {
+    pub struct SoundStatus(u8);
+    impl Debug;
+    all_enabled, set_all_enabled: 7;
+    sound_4, _: 3;
+    sound_3, _: 2;
+    sound_2, _: 1;
+    sound_1, _: 0;
+}
 
-    pub fn set_lo(&mut self, byte: u8) {
-        self.lo = byte;
-    }
-
-    pub fn get_lo(&self) -> u8 {
-        self.lo
-    }
-
-    pub fn set_hi(&mut self, byte: u8) {
-        *self = Self {
-            initial: byte >> 7 == 0x01,
-            freq_type: ((byte >> 6) & 0x01).into(),
-            lo: self.lo,
-            hi: byte & 0x07,
-        };
-    }
-
-    pub fn get_hi(&self) -> u8 {
-        (self.initial as u8) << 7 | (self.freq_type as u8) << 6 | self.hi
+impl Copy for SoundStatus {}
+impl Clone for SoundStatus {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SoundStatus {
-    pub all_enabled: bool, // You can actually write to this one.
-    sound_4: bool,
-    sound_3: bool,
-    sound_2: bool,
-    sound_1: bool,
+impl Default for SoundStatus {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for SoundStatus {
     fn from(byte: u8) -> Self {
-        Self {
-            all_enabled: (byte >> 7) & 0x01 == 0x01,
-            sound_4: (byte >> 3) & 0x01 == 0x01,
-            sound_3: (byte >> 2) & 0x01 == 0x01,
-            sound_2: (byte >> 1) & 0x01 == 0x01,
-            sound_1: (byte >> 0) & 0x01 == 0x01,
-        }
+        Self(byte)
     }
 }
 
 impl From<SoundStatus> for u8 {
-    fn from(status: SoundStatus) -> Self {
-        (status.all_enabled as u8) << 7
-            | (status.sound_4 as u8) << 3
-            | (status.sound_3 as u8) << 2
-            | (status.sound_2 as u8) << 1
-            | (status.sound_1 as u8) << 0
+    fn from(duty: SoundStatus) -> Self {
+        duty.0
     }
 }
 
@@ -111,33 +146,40 @@ impl From<SoundStatus> for u8 {
 pub struct Channel1 {
     pub sound_duty: SoundDuty,
     pub vol_envelope: VolumeEnvelope,
-    pub freq: Frequency,
+    pub freq_hi: FrequencyHigh,
+    pub freq_lo: FrequencyLow,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct VolumeEnvelope {
-    init_vol: u8,
-    direction: EnvelopeDirection,
-    sweep_count: u8,
+bitfield! {
+    pub struct VolumeEnvelope(u8);
+    impl Debug;
+    init_vol, set_init_vol: 7, 4;
+    from into EnvelopeDirection, direction, set_direction: 3;
+    sweep_count, set_sweep_count: 2, 0;
+}
+
+impl Copy for VolumeEnvelope {}
+impl Clone for VolumeEnvelope {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for VolumeEnvelope {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for VolumeEnvelope {
     fn from(byte: u8) -> Self {
-        Self {
-            init_vol: byte >> 4,                    // Bit 7 -> 4
-            direction: ((byte >> 3) & 0x01).into(), // Bit 3
-            sweep_count: byte & 0x07,               // Bits 2 -> 0
-        }
+        Self(byte)
     }
 }
 
 impl From<VolumeEnvelope> for u8 {
-    fn from(envelope: VolumeEnvelope) -> Self {
-        let dir_bit: u8 = envelope.direction as u8;
-        let mut byte = envelope.init_vol << 4;
-        byte |= dir_bit << 3;
-        byte |= envelope.sweep_count;
-        byte
+    fn from(duty: VolumeEnvelope) -> Self {
+        duty.0
     }
 }
 
@@ -166,47 +208,66 @@ impl Default for EnvelopeDirection {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SoundDuty {
-    wave_pattern: WaveDuty,
-    sound_length: u8, //
+bitfield! {
+    pub struct SoundDuty(u8);
+    impl Debug;
+    from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
+    _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
+}
+
+impl Copy for SoundDuty {}
+impl Clone for SoundDuty {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for SoundDuty {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for SoundDuty {
     fn from(byte: u8) -> Self {
-        let pattern = byte >> 6; // Get bytes 7 and 6
-        let sound_length = byte & 0x3F; // Clear bytes 7 and 6
-
-        SoundDuty {
-            wave_pattern: pattern.into(),
-            sound_length,
-        }
+        Self(byte)
     }
 }
 
 impl From<SoundDuty> for u8 {
     fn from(duty: SoundDuty) -> Self {
-        let mut byte: u8 = duty.wave_pattern as u8;
-        byte = (byte << 6) | duty.sound_length;
-        byte
+        duty.0
+    }
+}
+
+impl From<WavePattern> for u8 {
+    fn from(pattern: WavePattern) -> Self {
+        use WavePattern::*;
+
+        match pattern {
+            OneEighth => 0b00,
+            OneQuarter => 0b01,
+            OneHalf => 0b10,
+            ThreeQuarters => 0b11,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum WaveDuty {
+pub enum WavePattern {
     OneEighth = 0,     // 12.5% ( _-------_-------_------- )
     OneQuarter = 1,    // 25%   ( __------__------__------ )
     OneHalf = 2,       // 50%   ( ____----____----____---- ) (normal)
     ThreeQuarters = 3, // 75%   ( ______--______--______-- )
 }
 
-impl Default for WaveDuty {
+impl Default for WavePattern {
     fn default() -> Self {
         Self::OneEighth // Rationale: OneEighth is 0x00
     }
 }
 
-impl From<u8> for WaveDuty {
+impl From<u8> for WavePattern {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::OneEighth,
@@ -218,70 +279,74 @@ impl From<u8> for WaveDuty {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SoundOutputSelect {
-    pub snd4_term2: bool,
-    pub snd3_term2: bool,
-    pub snd2_term2: bool,
-    pub snd1_term2: bool,
-    pub snd4_term1: bool,
-    pub snd3_term1: bool,
-    pub snd2_term1: bool,
-    pub snd1_term1: bool,
+bitfield! {
+    pub struct SoundOutput(u8);
+    impl Debug;
+    snd4_so2, set_snd4_so2: 7;
+    snd3_so2, set_snd3_so2: 6;
+    snd2_so2, set_snd2_so2: 5;
+    snd1_so2, set_snd1_so2: 4;
+    snd4_so1, set_snd4_so1: 3;
+    snd3_so1, set_snd3_so1: 2;
+    snd2_so1, set_snd2_so1: 1;
+    snd1_so1, set_snd1_so1: 0;
 }
 
-impl From<SoundOutputSelect> for u8 {
-    fn from(select: SoundOutputSelect) -> Self {
-        (select.snd4_term2 as u8) << 7
-            | (select.snd3_term2 as u8) << 6
-            | (select.snd2_term2 as u8) << 5
-            | (select.snd1_term2 as u8) << 4
-            | (select.snd4_term1 as u8) << 3
-            | (select.snd3_term1 as u8) << 2
-            | (select.snd2_term1 as u8) << 1
-            | (select.snd1_term1 as u8)
+impl Copy for SoundOutput {}
+impl Clone for SoundOutput {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-impl From<u8> for SoundOutputSelect {
+impl Default for SoundOutput {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for SoundOutput {
     fn from(byte: u8) -> Self {
-        Self {
-            snd4_term2: byte >> 7 == 0x01,
-            snd3_term2: (byte >> 6) & 0x01 == 0x01,
-            snd2_term2: (byte >> 5) & 0x01 == 0x01,
-            snd1_term2: (byte >> 4) & 0x01 == 0x01,
-            snd4_term1: (byte >> 3) & 0x01 == 0x01,
-            snd3_term1: (byte >> 2) & 0x01 == 0x01,
-            snd2_term1: (byte >> 1) & 0x01 == 0x01,
-            snd1_term1: byte & 0x01 == 0x01,
-        }
+        Self(byte)
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ChannelControl {
-    vin_to_term2: bool,
-    term2_level: u8,
-    vin_to_term1: bool,
-    term1_level: u8,
+impl From<SoundOutput> for u8 {
+    fn from(duty: SoundOutput) -> Self {
+        duty.0
+    }
+}
+
+bitfield! {
+    pub struct ChannelControl(u8);
+    impl Debug;
+    vin_so2, set_vin_so2: 7;
+    so2_level, set_so2_level: 6, 4;
+    vin_so1, set_vin_so1: 3;
+    so1_level, set_so1_level: 2, 0;
+}
+
+impl Copy for ChannelControl {}
+impl Clone for ChannelControl {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for ChannelControl {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for ChannelControl {
     fn from(byte: u8) -> Self {
-        Self {
-            vin_to_term2: byte >> 7 == 0x01, // Get 7th bit
-            term2_level: (byte & 0x7F) >> 4, // Clear 7th then get 6 -> 4th bit
-            vin_to_term1: (byte >> 3) & 0x01 == 0x01,
-            term1_level: byte & 0x07, // Bits 2 -> 0
-        }
+        Self(byte)
     }
 }
 
 impl From<ChannelControl> for u8 {
-    fn from(control: ChannelControl) -> Self {
-        (control.vin_to_term1 as u8) << 7
-            | (control.term2_level as u8) << 4
-            | (control.vin_to_term1 as u8) << 3
-            | control.term1_level as u8
+    fn from(duty: ChannelControl) -> Self {
+        duty.0
     }
 }
