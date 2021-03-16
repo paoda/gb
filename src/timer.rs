@@ -1,3 +1,5 @@
+use bitfield::bitfield;
+
 use crate::instruction::Cycles;
 
 #[derive(Debug, Clone, Copy)]
@@ -34,32 +36,45 @@ impl From<u8> for TimerSpeed {
             0x01 => Self::Freq262144Hz,
             0x10 => Self::Freq65536Hz,
             0x11 => Self::Freq16384Hz,
-            _ => unreachable!(),
+            _ => unreachable!("{:04X} is not a valid representation of TimerSpeed", byte),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct TimerControl {
-    enabled: bool,
-    speed: TimerSpeed,
+impl From<TimerSpeed> for u8 {
+    fn from(speed: TimerSpeed) -> Self {
+        speed as u8
+    }
+}
+
+bitfield! {
+    pub struct TimerControl(u8);
+    impl Debug;
+    enabled, set_enabled: 2;
+    from into TimerSpeed, speed, set_speed: 1, 0;
+}
+
+impl Copy for TimerControl {}
+impl Clone for TimerControl {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for TimerControl {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for TimerControl {
     fn from(byte: u8) -> Self {
-        let byte = byte & 0x07; // Clear everything but last 3 bits
-
-        Self {
-            enabled: (byte >> 2) == 0x01,
-            speed: (byte & 0x03).into(), // Clear everything but last 2 bits
-        }
+        Self(byte)
     }
 }
 
 impl From<TimerControl> for u8 {
-    fn from(control: TimerControl) -> Self {
-        let byte: u8 = control.speed as u8; // Get bit 1 and 0.
-
-        (byte & !(1u8 << 2)) | ((control.enabled as u8) << 2) // specifically manipulate bit 2
+    fn from(ctrl: TimerControl) -> Self {
+        ctrl.0
     }
 }
