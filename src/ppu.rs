@@ -13,7 +13,6 @@ pub struct Ppu {
     frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     pub stat: LCDStatus,
     cycles: Cycles,
-    mode: Mode,
 }
 
 impl Ppu {
@@ -23,38 +22,46 @@ impl Ppu {
         // let tmp: u32 = self.cycles.into();
         // println!("Mode: {:?} | Cycles: {}", self.mode, tmp);
 
-        match self.mode {
-            Mode::OAMScan => {
+        match self.stat.mode() {
+            Mode::OamScan => {
                 if self.cycles >= 80.into() {
-                    self.cycles %= 80;
-                    self.mode = Mode::Draw;
+                    self.stat.set_mode(Mode::Drawing);
                 }
             }
-            Mode::Draw => {
+            Mode::Drawing => {
+                // This mode can take from 172 -> 289 Cycles
+                // Remember: There's no guarantee that we start this mode
+                // with self.cycles == 80, since we aren't going for an accurate
+                // emulator
+
+                // TODO: This 172 needs to be variable somehow?
                 if self.cycles >= 172.into() {
-                    // 172 -> 129 Cycles
-                    // self.cycles %= 172;
-                    self.mode = Mode::HBlank;
+                    self.stat.set_mode(Mode::HBlank);
                 }
             }
             Mode::HBlank => {
-                // The 80 comes from the 80 cycles we made disappear in OAMScan above.
-                if self.cycles >= (456 - 80).into() {
-                    self.cycles %= 456 - 80;
+                // We've reached the end of a scanline
+                if self.cycles >= 456.into() {
                     self.pos.line_y += 1;
 
-                    if self.pos.line_y >= 144 {
-                        self.mode = Mode::VBlank;
-                    }
+                    let next_mode = if self.pos.line_y >= 143 {
+                        Mode::VBlank
+                    } else {
+                        Mode::OamScan
+                    };
+
+                    self.stat.set_mode(next_mode);
                 }
             }
             Mode::VBlank => {
+                // We've reached the end of the screen
+
                 if self.cycles >= 456.into() {
                     self.cycles %= 456;
                     self.pos.line_y += 1;
 
-                    if self.pos.line_y == 154 {
-                        self.mode = Mode::OAMScan;
+                    if self.pos.line_y >= 153 {
+                        self.stat.set_mode(Mode::OamScan);
                         self.pos.line_y = 0;
                     }
                 }
@@ -78,19 +85,9 @@ impl Default for Ppu {
             oam: vec![0; 160].into_boxed_slice(),
             cycles: 0.into(),
             frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
-            mode: Mode::OAMScan,
         }
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-enum Mode {
-    OAMScan,
-    Draw,
-    HBlank,
-    VBlank,
-}
-
 bitfield! {
     pub struct LCDStatus(u8);
     impl Debug;
@@ -98,8 +95,14 @@ bitfield! {
     pub oam_intr, set_oam_intr: 5;
     pub vblank_intr, set_vblank_intr: 4;
     pub hblank_intr, set_hblank_intr: 3;
-    pub lyc_ly_flag, _: 2;
-    pub from into LCDMode, mode, _: 1, 0;
+    pub coincidence, _: 2; // LYC == LY Flag
+    from into Mode, _mode, set_mode: 1, 0;
+}
+
+impl LCDStatus {
+    pub fn mode(&self) -> Mode {
+        self._mode()
+    }
 }
 
 impl Copy for LCDStatus {}
@@ -128,26 +131,32 @@ impl From<LCDStatus> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum LCDMode {
+pub enum Mode {
     HBlank = 0,
     VBlank = 1,
-    Oam = 2,
-    Transfer = 3,
+    OamScan = 2,
+    Drawing = 3,
 }
 
-impl From<u8> for LCDMode {
+impl From<u8> for Mode {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::HBlank,
             0b01 => Self::VBlank,
-            0b10 => Self::Oam,
-            0b11 => Self::Transfer,
+            0b10 => Self::OamScan,
+            0b11 => Self::Drawing,
             _ => unreachable!("{:#04X} is not a valid value for LCDMode", byte),
         }
     }
 }
 
-impl Default for LCDMode {
+impl From<Mode> for u8 {
+    fn from(mode: Mode) -> Self {
+        mode as u8
+    }
+}
+
+impl Default for Mode {
     fn default() -> Self {
         Self::HBlank
     }
@@ -270,7 +279,7 @@ impl Default for ObjSize {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum GrayShade {
+pub enum GrayShade {
     White = 0,
     LightGray = 1,
     DarkGray = 2,
