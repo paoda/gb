@@ -169,11 +169,6 @@ pub struct ScreenPosition {
     pub line_y: u8,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Monochrome {
-    pub bg_palette: BackgroundPalette,
-}
-
 bitfield! {
     pub struct LCDControl(u8);
     impl Debug;
@@ -304,33 +299,82 @@ impl From<u8> for GrayShade {
     }
 }
 
+impl From<GrayShade> for u8 {
+    fn from(shade: GrayShade) -> Self {
+        shade as u8
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
-pub struct BackgroundPalette {
-    colour: GrayShade,
-    colour2: GrayShade,
-    colour3: GrayShade,
-    colour0: GrayShade, // FIXME: Is this supposed to be colour0?
+pub struct Monochrome {
+    pub bg_palette: BackgroundPalette,
+    pub obj_palette_0: ObjectPalette,
+    pub obj_palette_1: ObjectPalette,
+}
+
+bitfield! {
+    pub struct BackgroundPalette(u8);
+    impl Debug;
+    pub from into GrayShade, i3_colour, set_i3_colour: 7, 6;
+    pub from into GrayShade, i2_colour, set_i2_colour: 5, 4;
+    pub from into GrayShade, i1_colour, set_i1_colour: 3, 2;
+    pub from into GrayShade, i0_colour, set_i0_colour: 1, 0;
+}
+
+impl Copy for BackgroundPalette {}
+impl Clone for BackgroundPalette {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for BackgroundPalette {
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 impl From<u8> for BackgroundPalette {
     fn from(byte: u8) -> Self {
-        Self {
-            colour: (byte >> 6).into(),
-            colour2: ((byte >> 4) & 0x03).into(),
-            colour3: ((byte >> 2) & 0x03).into(),
-            colour0: (byte & 0x03).into(),
-        }
+        Self(byte)
     }
 }
 
 impl From<BackgroundPalette> for u8 {
     fn from(palette: BackgroundPalette) -> Self {
-        // FIXME: There is a bug here, see the above FIXME
-        let colour0: u8 = palette.colour0 as u8;
-        let colour1: u8 = palette.colour3 as u8;
-        let colour2: u8 = palette.colour2 as u8;
-        let colour3: u8 = palette.colour0 as u8;
+        palette.0
+    }
+}
 
-        colour3 << 6 | colour2 << 4 | colour1 << 2 | colour0
+bitfield! {
+    pub struct ObjectPalette(u8);
+    impl Debug;
+    pub from into GrayShade, i3_colour, set_i3_colour: 7, 6;
+    pub from into GrayShade, i2_colour, set_i2_colour: 5, 4;
+    pub from into GrayShade, i1_colour, set_i1_colour: 3, 2;
+}
+
+impl Copy for ObjectPalette {}
+impl Clone for ObjectPalette {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for ObjectPalette {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for ObjectPalette {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+impl From<ObjectPalette> for u8 {
+    fn from(palette: ObjectPalette) -> Self {
+        palette.0
     }
 }

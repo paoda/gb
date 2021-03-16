@@ -131,6 +131,8 @@ impl Bus {
                     0xFF43 => self.ppu.pos.scroll_x,
                     0xFF44 => self.ppu.pos.line_y,
                     0xFF47 => self.ppu.monochrome.bg_palette.into(),
+                    0xFF48 => self.ppu.monochrome.obj_palette_0.into(),
+                    0xFF49 => self.ppu.monochrome.obj_palette_1.into(),
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -212,6 +214,8 @@ impl Bus {
                     0xFF43 => self.ppu.pos.scroll_x = byte,
                     0xFF44 => self.ppu.pos.line_y = byte,
                     0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),
+                    0xFF48 => self.ppu.monochrome.obj_palette_0 = byte.into(),
+                    0xFF49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
                     0xFF50 => {
                         // Disable Boot ROM
                         if byte != 0 {
