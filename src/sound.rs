@@ -30,15 +30,15 @@ pub struct Frequency {
 #[derive(Debug, Clone, Copy)]
 enum FrequencyType {
     Counter = 0,
-    Consequtive = 1,
+    Consecutive = 1,
 }
 
 impl From<u8> for FrequencyType {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::Counter,
-            0b01 => Self::Consequtive,
-            _ => unreachable!("{} is not a valid number for FreuquencyType"),
+            0b01 => Self::Consecutive,
+            _ => unreachable!("{} is not a valid number for FrequencyType"),
         }
     }
 }

@@ -149,65 +149,73 @@ impl Default for State {
 
 impl Cpu {
     pub fn set_register(&mut self, register: Register, value: u8) {
+        use Register::*;
+
         match register {
-            Register::A => self.reg.a = value,
-            Register::B => self.reg.b = value,
-            Register::C => self.reg.c = value,
-            Register::D => self.reg.d = value,
-            Register::E => self.reg.e = value,
-            Register::H => self.reg.h = value,
-            Register::L => self.reg.l = value,
-            Register::Flag => self.flags = value.into(),
+            A => self.reg.a = value,
+            B => self.reg.b = value,
+            C => self.reg.c = value,
+            D => self.reg.d = value,
+            E => self.reg.e = value,
+            H => self.reg.h = value,
+            L => self.reg.l = value,
+            Flag => self.flags = value.into(),
         }
     }
 
     pub fn register(&self, register: Register) -> u8 {
+        use Register::*;
+
         match register {
-            Register::A => self.reg.a,
-            Register::B => self.reg.b,
-            Register::C => self.reg.c,
-            Register::D => self.reg.d,
-            Register::E => self.reg.e,
-            Register::H => self.reg.h,
-            Register::L => self.reg.l,
-            Register::Flag => self.flags.into(),
+            A => self.reg.a,
+            B => self.reg.b,
+            C => self.reg.c,
+            D => self.reg.d,
+            E => self.reg.e,
+            H => self.reg.h,
+            L => self.reg.l,
+            Flag => self.flags.into(),
         }
     }
 
     pub fn register_pair(&self, pair: RegisterPair) -> u16 {
+        use RegisterPair::*;
+
         match pair {
-            RegisterPair::AF => (self.reg.a as u16) << 8 | u8::from(self.flags) as u16,
-            RegisterPair::BC => (self.reg.b as u16) << 8 | self.reg.c as u16,
-            RegisterPair::DE => (self.reg.d as u16) << 8 | self.reg.e as u16,
-            RegisterPair::HL => (self.reg.h as u16) << 8 | self.reg.l as u16,
-            RegisterPair::SP => self.reg.sp,
-            RegisterPair::PC => self.reg.pc,
+            AF => (self.reg.a as u16) << 8 | u8::from(self.flags) as u16,
+            BC => (self.reg.b as u16) << 8 | self.reg.c as u16,
+            DE => (self.reg.d as u16) << 8 | self.reg.e as u16,
+            HL => (self.reg.h as u16) << 8 | self.reg.l as u16,
+            SP => self.reg.sp,
+            PC => self.reg.pc,
         }
     }
 
     pub fn set_register_pair(&mut self, pair: RegisterPair, value: u16) {
+        use RegisterPair::*;
+
         let high = (value >> 8) as u8;
         let low = value as u8;
 
         match pair {
-            RegisterPair::AF => {
+            AF => {
                 self.reg.a = high;
                 self.flags = low.into();
             }
-            RegisterPair::BC => {
+            BC => {
                 self.reg.b = high;
                 self.reg.c = low;
             }
-            RegisterPair::DE => {
+            DE => {
                 self.reg.d = high;
                 self.reg.e = low;
             }
-            RegisterPair::HL => {
+            HL => {
                 self.reg.h = high;
                 self.reg.l = low;
             }
-            RegisterPair::SP => self.reg.sp = value,
-            RegisterPair::PC => self.reg.pc = value,
+            SP => self.reg.sp = value,
+            PC => self.reg.pc = value,
         }
     }
 }

@@ -125,13 +125,15 @@ impl MBC1 {
     }
 
     fn apply_rom_size_bitmask(&self, byte: u8) -> u8 {
+        use BankCount::*;
+
         match self.bank_count {
-            BankCount::Four => byte & 0b00000011,
-            BankCount::Eight => byte & 0b00000111,
-            BankCount::Sixteen => byte & 0b00001111,
-            BankCount::ThirtyTwo => byte & 0b00011111,
-            BankCount::SixtyFour => byte & 0b00011111,
-            BankCount::OneHundredTwentyEight => byte & 0b00011111,
+            Four => byte & 0b00000011,
+            Eight => byte & 0b00000111,
+            Sixteen => byte & 0b00001111,
+            ThirtyTwo => byte & 0b00011111,
+            SixtyFour => byte & 0b00011111,
+            OneHundredTwentyEight => byte & 0b00011111,
             _ => unreachable!("{#:?} is not a valid ROM Bank Number for MBC1"),
         }
     }
@@ -139,18 +141,20 @@ impl MBC1 {
 
 impl MBC for MBC1 {
     fn handle_read(&self, addr: u16) -> MBCResult {
+        use MBCResult::*;
+
         match addr {
             0x0000..=0x3FFF => {
                 if self.mode {
                     let zero_bank_number = self.calc_zero_bank_number() as u16;
-                    MBCResult::Address(0x4000 * zero_bank_number + addr)
+                    Address(0x4000 * zero_bank_number + addr)
                 } else {
-                    MBCResult::Address(addr)
+                    Address(addr)
                 }
             }
             0x4000..=0x7FFF => {
                 let high_bank_number = self.calc_high_bank_number() as u16;
-                MBCResult::Address(0x4000 * high_bank_number * (addr - 0x4000))
+                Address(0x4000 * high_bank_number * (addr - 0x4000))
             }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
@@ -168,9 +172,9 @@ impl MBC for MBC1 {
                         _ => unreachable!(""),
                     };
 
-                    MBCResult::RamValue(self.ram[ram_addr as usize])
+                    RamValue(self.ram[ram_addr as usize])
                 } else {
-                    MBCResult::Address(0x00FF)
+                    Address(0x00FF)
                 }
             }
             _ => unimplemented!(),
@@ -261,13 +265,15 @@ enum RAMSize {
 
 impl RAMSize {
     pub fn to_byte_count(&self) -> u32 {
+        use RAMSize::*;
+
         match *self {
-            RAMSize::None => 0,
-            RAMSize::_2KB => 2_048,
-            RAMSize::_8KB => 8_192,
-            RAMSize::_32KB => 32_768,
-            RAMSize::_128KB => 131_072,
-            RAMSize::_64KB => 65_536,
+            None => 0,
+            _2KB => 2_048,
+            _8KB => 8_192,
+            _32KB => 32_768,
+            _128KB => 131_072,
+            _64KB => 65_536,
         }
     }
 }
@@ -280,13 +286,15 @@ impl Default for RAMSize {
 
 impl From<u8> for RAMSize {
     fn from(byte: u8) -> Self {
+        use RAMSize::*;
+
         match byte {
-            0x00 => Self::None,
-            0x01 => Self::_2KB,
-            0x02 => Self::_8KB,
-            0x03 => Self::_32KB,
-            0x04 => Self::_64KB,
-            0x05 => Self::_128KB,
+            0x00 => None,
+            0x01 => _2KB,
+            0x02 => _8KB,
+            0x03 => _32KB,
+            0x04 => _64KB,
+            0x05 => _128KB,
             _ => unreachable!("{:#04X} is an invalid value for RAMSize"),
         }
     }
@@ -317,45 +325,49 @@ impl Default for BankCount {
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
     pub fn to_byte_count(&self) -> u32 {
+        use BankCount::*;
+
         match *self {
-            BankCount::None => 32_768,
-            BankCount::Four => 65_536,
-            BankCount::Eight => 131_072,
-            BankCount::Sixteen => 262_144,
-            BankCount::ThirtyTwo => 524_288,
-            BankCount::SixtyFour => 1_048_576,
-            BankCount::OneHundredTwentyEight => 2_097_152,
-            BankCount::TwoHundredFiftySix => 4_194_304,
-            BankCount::FiveHundredTwelve => 8_388_608,
-            BankCount::SeventyTwo => 1_179_648,
-            BankCount::Eighty => 1_310_720,
-            BankCount::NinetySix => 1_572_864,
+            None => 32_768,
+            Four => 65_536,
+            Eight => 131_072,
+            Sixteen => 262_144,
+            ThirtyTwo => 524_288,
+            SixtyFour => 1_048_576,
+            OneHundredTwentyEight => 2_097_152,
+            TwoHundredFiftySix => 4_194_304,
+            FiveHundredTwelve => 8_388_608,
+            SeventyTwo => 1_179_648,
+            Eighty => 1_310_720,
+            NinetySix => 1_572_864,
         }
     }
 }
 
 impl From<u8> for BankCount {
     fn from(byte: u8) -> Self {
+        use BankCount::*;
+
         match byte {
-            0x00 => Self::None,
-            0x01 => Self::Four,
-            0x02 => Self::Eight,
-            0x03 => Self::Sixteen,
-            0x04 => Self::ThirtyTwo,
-            0x05 => Self::SixtyFour,
-            0x06 => Self::OneHundredTwentyEight,
-            0x07 => Self::TwoHundredFiftySix,
-            0x08 => Self::FiveHundredTwelve,
-            0x52 => Self::SeventyTwo,
-            0x53 => Self::Eighty,
-            0x54 => Self::NinetySix,
+            0x00 => None,
+            0x01 => Four,
+            0x02 => Eight,
+            0x03 => Sixteen,
+            0x04 => ThirtyTwo,
+            0x05 => SixtyFour,
+            0x06 => OneHundredTwentyEight,
+            0x07 => TwoHundredFiftySix,
+            0x08 => FiveHundredTwelve,
+            0x52 => SeventyTwo,
+            0x53 => Eighty,
+            0x54 => NinetySix,
             _ => unreachable!("{:#04X} is an invalid value for BankCount"),
         }
     }
 }
 
 impl std::fmt::Debug for Box<dyn MBC> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Implement Debug for Box<dyn MBC> Trait Object");
     }
 }

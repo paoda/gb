@@ -107,7 +107,7 @@ impl Bus {
                 unimplemented!("Unable to read {:#06X} in Restricted Mirror", addr);
             }
             0xFE00..=0xFE9F => {
-                // Sprite Attrbute Table
+                // Sprite Attribute Table
                 unimplemented!("Unable to read {:#06X} in the Sprite Attribute Table", addr);
             }
             0xFEA0..=0xFEFF => unimplemented!("{:#06X} is not allowed to be used", addr),
@@ -138,7 +138,7 @@ impl Bus {
                 self.hram.read_byte((addr - 0xFF80) as usize)
             }
             0xFFFF => {
-                // Interupts Enable Register
+                // Interrupts Enable Register
                 self.interrupt.enable.into()
             }
         }
@@ -184,7 +184,7 @@ impl Bus {
                 unimplemented!("Unable to write to {:#06X} in Restricted Mirror", addr);
             }
             0xFE00..=0xFE9F => {
-                // Sprite Attrbute Table
+                // Sprite Attribute Table
                 unimplemented!(
                     "Unable to write to {:#06X} in the Sprite Attribute Table",
                     addr
@@ -225,7 +225,7 @@ impl Bus {
                 self.hram.write_byte((addr - 0xFF80) as usize, byte);
             }
             0xFFFF => {
-                // Interupts Enable Register
+                // Interrupts Enable Register
                 self.interrupt.enable = byte.into();
             }
         }

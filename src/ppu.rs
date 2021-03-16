@@ -19,8 +19,8 @@ impl PPU {
     pub fn step(&mut self, cycles: Cycles) {
         self.cycles += cycles;
 
-        // let smth: u32 = self.cycles.into();
-        // println!("Mode: {:?} | Cycles: {}", self.mode, smth);
+        // let tmp: u32 = self.cycles.into();
+        // println!("Mode: {:?} | Cycles: {}", self.mode, tmp);
 
         match self.mode {
             Mode::OAMScan => {
@@ -164,15 +164,15 @@ impl From<u8> for LCDControl {
 }
 
 impl From<LCDControl> for u8 {
-    fn from(lcdc: LCDControl) -> Self {
-        (lcdc.lcd_enable as u8) << 7
-            | (lcdc.window_tile_map_select as u8) << 6
-            | (lcdc.window_enable as u8) << 5
-            | (lcdc.tile_data_select as u8) << 4
-            | (lcdc.bg_tile_map_select as u8) << 3
-            | (lcdc.sprite_size as u8) << 2
-            | (lcdc.sprite_enable as u8) << 1
-            | lcdc.display_priority as u8
+    fn from(ctrl: LCDControl) -> Self {
+        (ctrl.lcd_enable as u8) << 7
+            | (ctrl.window_tile_map_select as u8) << 6
+            | (ctrl.window_enable as u8) << 5
+            | (ctrl.tile_data_select as u8) << 4
+            | (ctrl.bg_tile_map_select as u8) << 3
+            | (ctrl.sprite_size as u8) << 2
+            | (ctrl.sprite_enable as u8) << 1
+            | ctrl.display_priority as u8
     }
 }
 
@@ -204,30 +204,31 @@ impl From<u8> for GrayShade {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BackgroundPalette {
-    color3: GrayShade,
-    color2: GrayShade,
-    color1: GrayShade,
-    color0: GrayShade,
+    colour: GrayShade,
+    colour2: GrayShade,
+    colour3: GrayShade,
+    colour0: GrayShade, // FIXME: Is this supposed to be colour0?
 }
 
 impl From<u8> for BackgroundPalette {
     fn from(byte: u8) -> Self {
         Self {
-            color3: (byte >> 6).into(),
-            color2: ((byte >> 4) & 0x03).into(),
-            color1: ((byte >> 2) & 0x03).into(),
-            color0: (byte & 0x03).into(),
+            colour: (byte >> 6).into(),
+            colour2: ((byte >> 4) & 0x03).into(),
+            colour3: ((byte >> 2) & 0x03).into(),
+            colour0: (byte & 0x03).into(),
         }
     }
 }
 
 impl From<BackgroundPalette> for u8 {
     fn from(palette: BackgroundPalette) -> Self {
-        let color0: u8 = palette.color0 as u8;
-        let color1: u8 = palette.color1 as u8;
-        let color2: u8 = palette.color2 as u8;
-        let color3: u8 = palette.color0 as u8;
+        // FIXME: There is a bug here, see the above FIXME
+        let colour0: u8 = palette.colour0 as u8;
+        let colour1: u8 = palette.colour3 as u8;
+        let colour2: u8 = palette.colour2 as u8;
+        let colour3: u8 = palette.colour0 as u8;
 
-        color3 << 6 | color2 << 4 | color1 << 2 | color0
+        colour3 << 6 | colour2 << 4 | colour1 << 2 | colour0
     }
 }
