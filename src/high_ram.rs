@@ -1,12 +1,12 @@
 #[derive(Debug, Clone)]
 pub struct HighRam {
-    buf: Box<[u8]>,
+    buf: Box<[u8; 127]>,
 }
 
 impl Default for HighRam {
     fn default() -> Self {
         Self {
-            buf: vec![0u8; 128].into_boxed_slice(),
+            buf: Box::new([0u8; 127]),
         }
     }
 }

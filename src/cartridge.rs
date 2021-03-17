@@ -30,7 +30,7 @@ impl Cartridge {
             MBCKind::None => todo!("Handle no MBC Situation"),
             MBCKind::MBC1 => MBC1 {
                 ram_size,
-                ram: vec![0; ram_byte_count as usize].into_boxed_slice(),
+                ram: vec![0; ram_byte_count as usize],
                 bank_count,
                 ..Default::default()
             },
@@ -90,7 +90,7 @@ struct MBC1 {
     current_ram_bank: u8, // 2-bit number
     mode: bool,
     ram_size: RamSize,
-    ram: Box<[u8]>,
+    ram: Vec<u8>,
     bank_count: BankCount,
     ram_enabled: bool,
 }

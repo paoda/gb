@@ -1,6 +1,6 @@
 #[derive(Debug, Clone)]
 pub struct WorkRam {
-    bank: Box<[u8]>,
+    bank: Box<[u8; 4096]>,
 }
 
 impl WorkRam {
@@ -16,7 +16,7 @@ impl WorkRam {
 impl Default for WorkRam {
     fn default() -> Self {
         Self {
-            bank: vec![0u8; 4096].into_boxed_slice(),
+            bank: Box::new([0u8; 4096]),
         }
     }
 }
@@ -35,14 +35,14 @@ pub enum BankNumber {
 #[derive(Debug, Clone)]
 pub struct VariableWorkRam {
     current: BankNumber,
-    bank_n: Box<[[u8; 4096]]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
+    bank_n: Box<[[u8; 4096]; 7]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
 }
 
 impl Default for VariableWorkRam {
     fn default() -> Self {
         Self {
             current: BankNumber::One,
-            bank_n: vec![[0u8; 4096]; 7].into_boxed_slice(),
+            bank_n: Box::new([[0u8; 4096]; 7]),
         }
     }
 }
