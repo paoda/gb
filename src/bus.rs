@@ -88,7 +88,7 @@ impl Bus {
             },
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.ppu.vram[(addr - 0x8000) as usize]
+                self.ppu.read_byte(addr)
             }
             0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
@@ -97,11 +97,11 @@ impl Bus {
             },
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                self.wram.read_byte((addr - 0xC000) as usize)
+                self.wram.read_byte(addr)
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                self.vwram.read_byte((addr - 0xD000) as usize)
+                self.vwram.read_byte(addr)
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
@@ -141,7 +141,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                self.hram.read_byte((addr - 0xFF80) as usize)
+                self.hram.read_byte(addr)
             }
             0xFFFF => {
                 // Interrupts Enable Register
@@ -168,7 +168,7 @@ impl Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.ppu.vram[(addr - 0x8000) as usize] = byte;
+                self.ppu.write_byte(addr, byte);
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -179,11 +179,11 @@ impl Bus {
             }
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                self.wram.write_byte((addr - 0xC000) as usize, byte);
+                self.wram.write_byte(addr, byte);
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                self.vwram.write_byte((addr - 0xD000) as usize, byte);
+                self.vwram.write_byte(addr, byte);
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
@@ -233,7 +233,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                self.hram.write_byte((addr - 0xFF80) as usize, byte);
+                self.hram.write_byte(addr, byte);
             }
             0xFFFF => {
                 // Interrupts Enable Register

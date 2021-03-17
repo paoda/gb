@@ -4,12 +4,12 @@ pub struct WorkRam {
 }
 
 impl WorkRam {
-    pub fn write_byte(&mut self, index: usize, byte: u8) {
-        self.bank[index] = byte;
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.bank[addr as usize - 0xC000] = byte;
     }
 
-    pub fn read_byte(&self, index: usize) -> u8 {
-        self.bank[index]
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        self.bank[addr as usize - 0xC000]
     }
 }
 
@@ -56,11 +56,11 @@ impl VariableWorkRam {
         self.current
     }
 
-    pub fn write_byte(&mut self, index: usize, byte: u8) {
-        self.bank_n[self.current as usize][index] = byte;
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.bank_n[self.current as usize][addr as usize - 0xD000] = byte;
     }
 
-    pub fn read_byte(&self, index: usize) -> u8 {
-        self.bank_n[self.current as usize][index]
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        self.bank_n[self.current as usize][addr as usize - 0xD000]
     }
 }

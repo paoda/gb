@@ -12,11 +12,11 @@ impl Default for HighRam {
 }
 
 impl HighRam {
-    pub fn write_byte(&mut self, index: usize, byte: u8) {
-        self.buf[index] = byte;
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.buf[addr as usize - 0xFF80] = byte;
     }
 
-    pub fn read_byte(&self, index: usize) -> u8 {
-        self.buf[index]
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        self.buf[addr as usize - 0xFF80]
     }
 }

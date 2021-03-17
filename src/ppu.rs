@@ -16,6 +16,16 @@ pub struct Ppu {
 }
 
 impl Ppu {
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        unimplemented!()
+    }
+
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        unimplemented!()
+    }
+}
+
+impl Ppu {
     pub fn step(&mut self, cycles: Cycles) {
         self.cycles += cycles;
 
