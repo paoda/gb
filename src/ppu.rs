@@ -167,6 +167,9 @@ pub struct ScreenPosition {
     pub scroll_y: u8,
     pub scroll_x: u8,
     pub line_y: u8,
+    pub ly_compare: bool,
+    pub window_y: u8,
+    pub window_x: u8,
 }
 
 bitfield! {
