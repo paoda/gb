@@ -17,11 +17,11 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn read_byte(&self, addr: u16) -> u8 {
-        unimplemented!()
+        self.vram[addr as usize - 0x8000]
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        unimplemented!()
+        self.vram[addr as usize - 0x8000] = byte;
     }
 }
 
@@ -35,6 +35,7 @@ impl Ppu {
         match self.stat.mode() {
             Mode::OamScan => {
                 if self.cycles >= 80.into() {
+                    self.cycles %= 80;
                     self.stat.set_mode(Mode::Drawing);
                 }
             }
@@ -46,15 +47,19 @@ impl Ppu {
 
                 // TODO: This 172 needs to be variable somehow?
                 if self.cycles >= 172.into() {
+                    self.cycles %= 172;
+
                     self.stat.set_mode(Mode::HBlank);
+                    self.draw_scanline();
                 }
             }
             Mode::HBlank => {
                 // We've reached the end of a scanline
-                if self.cycles >= 456.into() {
+                if self.cycles >= 200.into() {
+                    self.cycles %= 200;
                     self.pos.line_y += 1;
 
-                    let next_mode = if self.pos.line_y >= 143 {
+                    let next_mode = if self.pos.line_y >= 144 {
                         Mode::VBlank
                     } else {
                         Mode::OamScan
@@ -70,7 +75,7 @@ impl Ppu {
                     self.cycles %= 456;
                     self.pos.line_y += 1;
 
-                    if self.pos.line_y >= 153 {
+                    if self.pos.line_y == 154 {
                         self.stat.set_mode(Mode::OamScan);
                         self.pos.line_y = 0;
                     }
@@ -79,7 +84,53 @@ impl Ppu {
         }
     }
 
-    pub fn draw(&self, frame: &mut [u8]) {
+    fn draw_scanline(&mut self) {
+        let mut scanline: [u8; GB_WIDTH * 4] = [0; GB_WIDTH * 4];
+
+        let scroll_y = self.pos.scroll_y;
+        let scroll_x = self.pos.scroll_x;
+        // let window_y = self.pos.window_y;
+        // let window_x = self.pos.window_x - 7;
+
+        let tile_map_addr = match self.lcd_control.bg_tile_map_addr() {
+            TileMapAddress::X9800 => 0x9800,
+            TileMapAddress::X9C00 => 0x9C00,
+        };
+
+        let y_pos: usize = scroll_y as usize + self.pos.line_y as usize;
+        let tile_row: usize = (y_pos as usize / 8) * 32;
+
+        for (i, chunk) in scanline.chunks_mut(4).enumerate() {
+            let x_pos = i as u8 + scroll_x;
+            let tile_column = x_pos / 8;
+
+            let tile_addr = tile_map_addr + tile_row as u16 + tile_column as u16;
+            let tile_number = self.read_byte(tile_addr);
+
+            let tile_data_addr = match self.lcd_control.tile_data_addr() {
+                TileDataAddress::X8800 => (0x9000 as i32 + (tile_number as i32 * 16)) as u16,
+                TileDataAddress::X8000 => 0x8000 + (tile_number as u16 * 16),
+            };
+
+            // Find the correct vertical line we're on
+            let line = (y_pos % 8) * 2; // *2 since each vertical line takes up 2 bytes
+
+            let higher = self.read_byte(tile_data_addr + line as u16);
+            let lower = self.read_byte(tile_data_addr + line as u16 + 1);
+            // println!("Hi: {:#010b} | Lo: {:#010b}", higher, lower);
+
+            let bit = x_pos % 8;
+            let colour = ((higher >> bit) & 0x01) << 1 | ((lower >> bit) & 0x01);
+            let shade: GrayShade = colour.into();
+
+            chunk.copy_from_slice(&shade.into_rgba());
+        }
+
+        let i = (GB_WIDTH * 4) * self.pos.line_y as usize;
+        self.frame_buf[i..(i + scanline.len())].copy_from_slice(&scanline);
+    }
+
+    pub fn copy_to_gui(&self, frame: &mut [u8]) {
         frame.copy_from_slice(&self.frame_buf);
     }
 }
@@ -186,11 +237,11 @@ bitfield! {
     pub struct LCDControl(u8);
     impl Debug;
     lcd_enabled, set_lcd_enabled: 7;
-    from into TileMapRegister, win_tile_map_area, set_win_tile_map_area: 6;
+    from into TileMapAddress, win_tile_map_addr, set_win_tile_map_addr: 6, 6;
     window_enabled, set_window_enabled: 5;
-    from into TileDataRegister, tile_data_area, set_tile_data_area: 4;
-    from into TileMapRegister, gb_tile_map_area, set_gb_tile_map_area: 3;
-    from into OBJSize, obg_size, set_obj_size: 2;
+    from into TileDataAddress, tile_data_addr, set_tile_data_addr: 4, 4;
+    from into TileMapAddress, bg_tile_map_addr, set_bg_tile_map_addr: 3, 3;
+    from into ObjectSize, obg_size, set_obj_size: 2, 2;
     obj_enabled, set_obj_enabled: 1;
     bg_win_enabled, set_bg_win_enabled: 0;
 }
@@ -221,12 +272,12 @@ impl From<LCDControl> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TileMapRegister {
+enum TileMapAddress {
     X9800 = 0,
     X9C00 = 1,
 }
 
-impl From<u8> for TileMapRegister {
+impl From<u8> for TileMapAddress {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::X9800,
@@ -236,19 +287,25 @@ impl From<u8> for TileMapRegister {
     }
 }
 
-impl Default for TileMapRegister {
+impl From<TileMapAddress> for u8 {
+    fn from(reg: TileMapAddress) -> Self {
+        reg as u8
+    }
+}
+
+impl Default for TileMapAddress {
     fn default() -> Self {
         Self::X9800
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TileDataRegister {
+enum TileDataAddress {
     X8800 = 0,
     X8000 = 1,
 }
 
-impl From<u8> for TileDataRegister {
+impl From<u8> for TileDataAddress {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::X8800,
@@ -258,19 +315,25 @@ impl From<u8> for TileDataRegister {
     }
 }
 
-impl Default for TileDataRegister {
+impl From<TileDataAddress> for u8 {
+    fn from(reg: TileDataAddress) -> Self {
+        reg as u8
+    }
+}
+
+impl Default for TileDataAddress {
     fn default() -> Self {
         Self::X8800
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum ObjSize {
+enum ObjectSize {
     EightByEight = 0,
     EightBySixteen = 1,
 }
 
-impl From<u8> for ObjSize {
+impl From<u8> for ObjectSize {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::EightByEight,
@@ -280,7 +343,13 @@ impl From<u8> for ObjSize {
     }
 }
 
-impl Default for ObjSize {
+impl From<ObjectSize> for u8 {
+    fn from(size: ObjectSize) -> Self {
+        size as u8
+    }
+}
+
+impl Default for ObjectSize {
     fn default() -> Self {
         Self::EightByEight
     }
@@ -292,6 +361,17 @@ pub enum GrayShade {
     LightGray = 1,
     DarkGray = 2,
     Black = 3,
+}
+
+impl GrayShade {
+    pub fn into_rgba(self) -> [u8; 4] {
+        match self {
+            GrayShade::White => [0xFF, 0xFF, 0xFF, 0xFF],
+            GrayShade::LightGray => [0xCC, 0xCC, 0xCC, 0xFF],
+            GrayShade::DarkGray => [0x77, 0x77, 0x77, 0xFF],
+            GrayShade::Black => [0x00, 0x00, 0x00, 0x00],
+        }
+    }
 }
 
 impl Default for GrayShade {
@@ -391,3 +471,5 @@ impl From<ObjectPalette> for u8 {
         palette.0
     }
 }
+
+struct BackgroundMap([u8; 32]);

@@ -33,7 +33,7 @@ fn main() -> Result<()> {
             let ppu = game_boy.get_ppu();
             let frame = pixels.get_frame();
 
-            ppu.draw(frame);
+            ppu.copy_to_gui(frame);
 
             if pixels
                 .render()
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
 
             // Emulation
             let _cycles = game_boy.step();
-            // window.request_redraw();
+            window.request_redraw();
         }
     });
 }
