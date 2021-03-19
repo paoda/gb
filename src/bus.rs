@@ -59,9 +59,9 @@ impl Bus {
     }
 
     pub fn step(&mut self, cycles: Cycles) {
-        let _ = self.timer.step(cycles);
-        let _ = self.sound.step(cycles);
-        let _ = self.ppu.step(cycles);
+        self.timer.step(cycles);
+        self.sound.step(cycles);
+        self.ppu.step(cycles);
     }
 }
 

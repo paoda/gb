@@ -30,11 +30,6 @@ fn main() -> Result<()> {
 
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
-            let ppu = game_boy.get_ppu();
-            let frame = pixels.get_frame();
-
-            ppu.copy_to_gui(frame);
-
             if pixels
                 .render()
                 .map_err(|e| anyhow!("pixels.render() failed: {}", e))
@@ -57,6 +52,10 @@ fn main() -> Result<()> {
 
             // Emulation
             let _cycles = game_boy.step();
+
+            let ppu = game_boy.get_ppu();
+            let frame = pixels.get_frame();
+            ppu.copy_to_gui(frame);
             window.request_redraw();
         }
     });

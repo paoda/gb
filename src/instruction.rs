@@ -1017,7 +1017,7 @@ impl Instruction {
                 Cycles::new(4)
             }
             Instruction::CALL(cond, nn) => {
-                // CALL cc[y], nn | Store nn on the stack, then store nn in the program counter if cond is met
+                // CALL cc[y], nn | Store pc on the stack, then store nn in the program counter if cond is met
                 // CALL nn        | Store nn on the stack, then store nn in the program counter
                 let flags: &Flags = cpu.flags();
                 let pc = cpu.register_pair(RegisterPair::PC);

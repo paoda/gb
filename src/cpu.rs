@@ -1,11 +1,9 @@
 use super::bus::Bus;
-use super::instruction::{Cycles, Instruction};
+use super::instruction::{Cycles, Instruction, JumpCondition};
+use super::interrupt::{InterruptEnable, InterruptFlag};
 use super::ppu::Ppu;
 use bitfield::bitfield;
-use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
-    io::Write,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Clone, Default)]
 pub struct Cpu {
@@ -86,15 +84,17 @@ impl Cpu {
 
         let cycles = self.execute(instr);
 
-        if self.bus.read_byte(0xFF02) == 0x81 {
-            let c = self.bus.read_byte(0xFF01) as char;
-            self.bus.write_byte(0xFF02, 0x00);
+        // if self.bus.read_byte(0xFF02) == 0x81 {
+        //     let c = self.bus.read_byte(0xFF01) as char;
+        //     self.bus.write_byte(0xFF02, 0x00);
 
-            print!("{}", c);
-            std::io::stdout().flush().unwrap();
-        }
+        //     print!("{}", c);
+        //     std::io::stdout().flush().unwrap();
+        // }
 
         self.bus.step(cycles);
+
+        self.handle_interrupts();
 
         cycles
     }
@@ -132,6 +132,68 @@ impl Cpu {
 impl Cpu {
     pub fn get_ppu(&mut self) -> &mut Ppu {
         &mut self.bus.ppu
+    }
+
+    pub fn handle_interrupts(&mut self) {
+        if self.ime() {
+            use JumpCondition::Always;
+
+            let mut req: InterruptFlag = self.read_byte(0xFF0F).into();
+            let mut enabled: InterruptEnable = self.read_byte(0xFFFF).into();
+
+            let vector = if req.vblank() && enabled.vblank() {
+                // Handle VBlank Interrupt
+                req.set_vblank(false);
+                enabled.set_vblank(false);
+
+                // INT 40h
+                Some(0x0040)
+            } else if req.lcd_stat() && enabled.lcd_stat() {
+                // Handle LCD STAT Interrupt
+                req.set_lcd_stat(false);
+                enabled.set_lcd_stat(false);
+
+                // INT 48h
+                Some(0x0048)
+            } else if req.timer() && enabled.timer() {
+                // Handle Timer Interrupt
+                req.set_timer(false);
+                enabled.set_timer(false);
+
+                // INT 50h
+                Some(0x0050)
+            } else if req.serial() && enabled.serial() {
+                // Handle Serial Interrupt
+                req.set_serial(false);
+                enabled.set_serial(false);
+
+                // INT 58h
+                Some(0x0058)
+            } else if req.joypad() && enabled.joypad() {
+                // Handle Joypad Interrupt
+                req.set_joypad(false);
+                enabled.set_joypad(false);
+
+                // INT 60h
+                Some(0x0060)
+            } else {
+                None
+            };
+
+            let _ = match vector {
+                Some(register) => {
+                    //  Write the Changes to 0xFF0F and 0xFFFF registers
+                    self.write_byte(0xFF0F, req.into());
+                    self.write_byte(0xFFFF, enabled.into());
+
+                    // Disable all future interrupts
+                    self.set_ime(false);
+
+                    self.execute(Instruction::CALL(Always, register))
+                }
+                None => Cycles::new(0), // NO Interrupts were enabled and / or requested
+            };
+        }
     }
 }
 
