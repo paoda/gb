@@ -261,24 +261,20 @@ impl Bus {
 
 impl Bus {
     fn interrupt_flag(&self) -> InterruptFlag {
-        // Read the current Interrupt status from the PPU
-        let ppu_vblank = self.ppu.interrupt.vblank();
-        let ppu_lcd_stat = self.ppu.interrupt.lcd_stat();
+        // Read the current interrupt information from the PPU
+        let vblank = self.ppu.interrupt.vblank();
+        let lcd_stat = self.ppu.interrupt.lcd_stat();
 
-        // We actually don't care about what the InterruptFlag currently says
-        // about vblank and lcd_stat, because the PPU has the more accurate
-        // knowledge about what state these interrupt flags are in.
-
-        // In order to have the PPU be the source of truth
-        // (and accounting for the fact that we aren't able to update)
-        // the interrupt flag register 0xFF0F in the method, we can
-        // mask over those two interruptss
+        // Read the currrent interrupt information from the Joypad
+        let joypad = self.joypad.interrupt();
 
         // Copy the Interrupt Flag register 0xFF0F
         let mut flag = self.interrupt.flag;
-        flag.set_vblank(ppu_vblank);
-        flag.set_lcd_stat(ppu_lcd_stat);
 
+        // Update the flag to have the most accurate information
+        flag.set_vblank(vblank);
+        flag.set_lcd_stat(lcd_stat);
+        flag.set_joypad(joypad);
         flag
     }
 
@@ -288,9 +284,13 @@ impl Bus {
 
         let vblank = self.interrupt.flag.vblank();
         let lcd_stat = self.interrupt.flag.lcd_stat();
+        let joypad = self.interrupt.flag.joypad();
 
-        // Update the PPU's internal tracking of the interrupt register 0xFF0F
+        // Update the PPU's instance of the following interrupts
         self.ppu.interrupt.set_vblank(vblank);
         self.ppu.interrupt.set_lcd_stat(lcd_stat);
+
+        // Update the Joypad's instance of the following interrupts
+        self.joypad.set_interrupt(joypad);
     }
 }

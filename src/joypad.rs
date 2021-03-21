@@ -3,7 +3,17 @@ use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Joypad {
     pub status: JoypadStatus,
-    pub interrupt: bool,
+    interrupt: bool,
+}
+
+impl Joypad {
+    pub fn interrupt(&self) -> bool {
+        self.interrupt
+    }
+
+    pub fn set_interrupt(&mut self, value: bool) {
+        self.interrupt = value;
+    }
 }
 
 bitfield! {
