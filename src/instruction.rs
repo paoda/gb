@@ -2085,7 +2085,7 @@ impl std::fmt::Debug for Registers {
 }
 
 impl Cycles {
-    pub fn new(num: u32) -> Self {
+    pub const fn new(num: u32) -> Self {
         Self(num)
     }
 }
