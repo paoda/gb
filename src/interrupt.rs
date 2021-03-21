@@ -75,11 +75,3 @@ impl From<InterruptFlag> for u8 {
         flag.0
     }
 }
-
-enum InterruptType {
-    VBlank,
-    LCDStat,
-    Timer,
-    Serial,
-    Joypad,
-}

@@ -2,10 +2,14 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+const RAM_SIZE_ADDRESS: usize = 0x0149;
+const ROM_SIZE_ADDRESS: usize = 0x0148;
+const MBC_TYPE_ADDRESS: usize = 0x0147;
+
 #[derive(Debug, Clone, Default)]
 pub struct Cartridge {
     memory: Vec<u8>,
-    mbc: Box<dyn Mbc>,
+    mbc: Box<dyn MemoryBankController>,
 }
 
 impl Cartridge {
@@ -20,7 +24,7 @@ impl Cartridge {
         })
     }
 
-    fn detect_mbc(memory: &[u8]) -> Box<dyn Mbc> {
+    fn detect_mbc(memory: &[u8]) -> Box<dyn MemoryBankController> {
         let ram_size = Self::find_ram_size(&memory);
         let bank_count = Self::find_bank_count(&memory);
         let mbc_kind = Self::find_mbc(&memory);
@@ -41,17 +45,17 @@ impl Cartridge {
     }
 
     fn find_ram_size(memory: &[u8]) -> RamSize {
-        let id = memory[0x0149];
+        let id = memory[RAM_SIZE_ADDRESS];
         id.into()
     }
 
     fn find_bank_count(memory: &[u8]) -> BankCount {
-        let id = memory[0x0148];
+        let id = memory[ROM_SIZE_ADDRESS];
         id.into()
     }
 
     fn find_mbc(memory: &[u8]) -> MBCKind {
-        let id = memory[0x0147];
+        let id = memory[MBC_TYPE_ADDRESS];
 
         // TODO: Refactor this to match the other enums in this module
         match id {
@@ -67,7 +71,7 @@ impl Cartridge {
     pub fn read_byte(&self, addr: u16) -> u8 {
         match self.mbc.handle_read(addr) {
             MBCResult::Address(addr) => self.memory[addr as usize],
-            MBCResult::RamValue(byte) => byte,
+            MBCResult::Value(byte) => byte,
         }
     }
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
@@ -139,7 +143,7 @@ impl MBC1 {
     }
 }
 
-impl Mbc for MBC1 {
+impl MemoryBankController for MBC1 {
     fn handle_read(&self, addr: u16) -> MBCResult {
         use MBCResult::*;
 
@@ -172,7 +176,7 @@ impl Mbc for MBC1 {
                         _ => unreachable!(""),
                     };
 
-                    RamValue(self.ram[ram_addr as usize])
+                    Value(self.ram[ram_addr as usize])
                 } else {
                     Address(0x00FF)
                 }
@@ -217,27 +221,27 @@ impl Mbc for MBC1 {
     }
 }
 
-trait Mbc: CloneMBC {
+trait MemoryBankController: CloneMBC {
     fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
 
 trait CloneMBC {
-    fn clone_mbc(&self) -> Box<dyn Mbc>;
+    fn clone_mbc(&self) -> Box<dyn MemoryBankController>;
 }
 
 impl<T> CloneMBC for T
 where
-    T: Mbc + Clone + 'static,
+    T: MemoryBankController + Clone + 'static,
 {
-    fn clone_mbc<'a>(&self) -> Box<dyn Mbc> {
+    fn clone_mbc<'a>(&self) -> Box<dyn MemoryBankController> {
         Box::new(self.clone())
     }
 }
 
 enum MBCResult {
     Address(u16),
-    RamValue(u8),
+    Value(u8),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -366,19 +370,19 @@ impl From<u8> for BankCount {
     }
 }
 
-impl std::fmt::Debug for Box<dyn Mbc> {
+impl std::fmt::Debug for Box<dyn MemoryBankController> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Implement Debug for Box<dyn MBC> Trait Object");
     }
 }
 
-impl std::clone::Clone for Box<dyn Mbc> {
+impl std::clone::Clone for Box<dyn MemoryBankController> {
     fn clone(&self) -> Self {
         self.clone_mbc()
     }
 }
 
-impl std::default::Default for Box<dyn Mbc> {
+impl std::default::Default for Box<dyn MemoryBankController> {
     fn default() -> Self {
         Box::new(MBC1::default())
     }

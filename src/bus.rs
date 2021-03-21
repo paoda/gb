@@ -9,9 +9,11 @@ use super::timer::Timer;
 use super::work_ram::{VariableWorkRam, WorkRam};
 use std::{convert::TryInto, fs::File, io::Read};
 
+const BOOT_ROM_SIZE: usize = 256;
+
 #[derive(Debug, Clone)]
 pub struct Bus {
-    boot: Option<[u8; 256]>, // Boot ROM is 256b long
+    boot: Option<[u8; BOOT_ROM_SIZE]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
     pub ppu: Ppu,
     wram: WorkRam,
@@ -43,10 +45,10 @@ impl Default for Bus {
 impl Bus {
     pub fn with_boot(path: &str) -> Self {
         let mut file = File::open(path).unwrap();
-        let mut buf = Vec::with_capacity(256);
+        let mut buf = Vec::with_capacity(BOOT_ROM_SIZE);
         file.read_to_end(&mut buf).unwrap();
 
-        let boot_rom: [u8; 256] = buf.try_into().unwrap();
+        let boot_rom: [u8; BOOT_ROM_SIZE] = buf.try_into().unwrap();
 
         Self {
             boot: Some(boot_rom),

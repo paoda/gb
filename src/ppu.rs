@@ -1,16 +1,25 @@
-use crate::instruction::Cycles;
+use crate::Cycles;
+use crate::GB_HEIGHT;
+use crate::GB_WIDTH;
 use bitfield::bitfield;
 
-const GB_WIDTH: usize = 160;
-const GB_HEIGHT: usize = 144;
+const VRAM_SIZE: usize = 8192;
+const OAM_SIZE: usize = 160;
+const PPU_START_ADDRESS: usize = 0x8000;
+
+const WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
+const LIGHT_GRAY: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xFF];
+const DARK_GRAY: [u8; 4] = [0x77, 0x77, 0x77, 0xFF];
+const BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+
 #[derive(Debug, Clone)]
 pub struct Ppu {
     pub interrupt: Interrupt,
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
-    pub vram: Box<[u8; 8192]>,
-    pub oam: Box<[u8; 160]>,
+    pub vram: Box<[u8; VRAM_SIZE]>,
+    pub oam: Box<[u8; OAM_SIZE]>,
     frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     pub stat: LCDStatus,
     cycles: Cycles,
@@ -18,11 +27,11 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn read_byte(&self, addr: u16) -> u8 {
-        self.vram[addr as usize - 0x8000]
+        self.vram[addr as usize - PPU_START_ADDRESS]
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.vram[addr as usize - 0x8000] = byte;
+        self.vram[addr as usize - PPU_START_ADDRESS] = byte;
     }
 }
 
@@ -145,8 +154,8 @@ impl Default for Ppu {
             monochrome: Default::default(),
             pos: Default::default(),
             stat: Default::default(),
-            vram: Box::new([0u8; 8192]),
-            oam: Box::new([0u8; 160]),
+            vram: Box::new([0u8; VRAM_SIZE]),
+            oam: Box::new([0u8; OAM_SIZE]),
             cycles: 0.into(),
             frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
         }
@@ -394,10 +403,10 @@ pub enum GrayShade {
 impl GrayShade {
     pub fn into_rgba(self) -> [u8; 4] {
         match self {
-            GrayShade::White => [0xFF, 0xFF, 0xFF, 0xFF],
-            GrayShade::LightGray => [0xCC, 0xCC, 0xCC, 0xFF],
-            GrayShade::DarkGray => [0x77, 0x77, 0x77, 0xFF],
-            GrayShade::Black => [0x00, 0x00, 0x00, 0x00],
+            GrayShade::White => WHITE,
+            GrayShade::LightGray => LIGHT_GRAY,
+            GrayShade::DarkGray => DARK_GRAY,
+            GrayShade::Black => BLACK,
         }
     }
 }
@@ -499,5 +508,3 @@ impl From<ObjectPalette> for u8 {
         palette.0
     }
 }
-
-struct BackgroundMap([u8; 32]);

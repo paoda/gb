@@ -1,8 +1,12 @@
+pub use cpu::Cpu as LR35902;
 pub use instruction::Cycles;
+
+pub const GB_WIDTH: usize = 160;
+pub const GB_HEIGHT: usize = 144;
 
 mod bus;
 mod cartridge;
-pub mod cpu;
+mod cpu;
 mod high_ram;
 mod instruction;
 mod interrupt;

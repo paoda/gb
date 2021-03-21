@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use gb::cpu::Cpu as LR35902;
-use gb::Cycles;
+use gb::{Cycles, LR35902};
 use pixels::{Pixels, SurfaceTexture};
 use std::env::args;
 use std::time::{Duration, Instant};
@@ -85,7 +84,7 @@ fn main() -> Result<()> {
 pub fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
     let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
     Ok(WindowBuilder::new()
-        .with_title("DMG-1 Game Boy Emulator")
+        .with_title("DMG-1 Emulator")
         .with_inner_size(size)
         .with_min_inner_size(size)
         .build(&event_loop)?)

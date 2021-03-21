@@ -1,22 +1,27 @@
+const WORK_RAM_SIZE: usize = 4096;
+const VARIABLE_WORK_RAM_SIZE: usize = WORK_RAM_SIZE;
+const WORK_RAM_START_ADDRESS: usize = 0xC000;
+const VARIABLE_WORK_RAM_START_ADDRESS: usize = 0xD000;
+
 #[derive(Debug, Clone)]
 pub struct WorkRam {
-    bank: Box<[u8; 4096]>,
+    bank: Box<[u8; WORK_RAM_SIZE]>,
 }
 
 impl WorkRam {
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.bank[addr as usize - 0xC000] = byte;
+        self.bank[addr as usize - WORK_RAM_START_ADDRESS] = byte;
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
-        self.bank[addr as usize - 0xC000]
+        self.bank[addr as usize - WORK_RAM_START_ADDRESS]
     }
 }
 
 impl Default for WorkRam {
     fn default() -> Self {
         Self {
-            bank: Box::new([0u8; 4096]),
+            bank: Box::new([0u8; WORK_RAM_SIZE]),
         }
     }
 }
@@ -35,14 +40,14 @@ pub enum BankNumber {
 #[derive(Debug, Clone)]
 pub struct VariableWorkRam {
     current: BankNumber,
-    bank_n: Box<[[u8; 4096]; 7]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
+    bank_n: Box<[[u8; VARIABLE_WORK_RAM_SIZE]; 7]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
 }
 
 impl Default for VariableWorkRam {
     fn default() -> Self {
         Self {
             current: BankNumber::One,
-            bank_n: Box::new([[0u8; 4096]; 7]),
+            bank_n: Box::new([[0u8; VARIABLE_WORK_RAM_SIZE]; 7]),
         }
     }
 }
@@ -57,10 +62,10 @@ impl VariableWorkRam {
     }
 
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.bank_n[self.current as usize][addr as usize - 0xD000] = byte;
+        self.bank_n[self.current as usize][addr as usize - VARIABLE_WORK_RAM_START_ADDRESS] = byte;
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
-        self.bank_n[self.current as usize][addr as usize - 0xD000]
+        self.bank_n[self.current as usize][addr as usize - VARIABLE_WORK_RAM_START_ADDRESS]
     }
 }
