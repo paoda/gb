@@ -1,7 +1,7 @@
 use super::cartridge::Cartridge;
 use super::high_ram::HighRam;
 use super::instruction::Cycles;
-use super::interrupt::Interrupt;
+use super::interrupt::{Interrupt, InterruptFlag};
 use super::ppu::Ppu;
 use super::serial::Serial;
 use super::sound::Sound;
@@ -118,7 +118,7 @@ impl Bus {
                     0xFF01 => self.serial.next,
                     0xFF02 => self.serial.control.into(),
                     0xFF07 => self.timer.control.into(),
-                    0xFF0F => self.interrupt.flag.into(),
+                    0xFF0F => self.interrupt_flag().into(),
                     0xFF11 => self.sound.ch1.sound_duty.into(),
                     0xFF12 => self.sound.ch1.vol_envelope.into(),
                     0xFF14 => self.sound.ch1.freq_hi.into(),
@@ -203,7 +203,7 @@ impl Bus {
                     0xFF01 => self.serial.next = byte,
                     0xFF02 => self.serial.control = byte.into(),
                     0xFF07 => self.timer.control = byte.into(),
-                    0xFF0F => self.interrupt.flag = byte.into(),
+                    0xFF0F => self.set_interrupt_flag(byte),
                     0xFF11 => self.sound.ch1.sound_duty = byte.into(),
                     0xFF12 => self.sound.ch1.vol_envelope = byte.into(),
                     0xFF13 => self.sound.ch1.freq_lo = byte.into(),
@@ -249,5 +249,41 @@ impl Bus {
     pub fn write_word(&mut self, addr: u16, word: u16) {
         self.write_byte(addr + 1, (word >> 8) as u8);
         self.write_byte(addr, (word & 0x00FF) as u8);
+    }
+}
+
+impl Bus {
+    fn interrupt_flag(&self) -> InterruptFlag {
+        // Read the current Interrupt status from the PPU
+        let ppu_vblank = self.ppu.interrupt.vblank();
+        let ppu_lcd_stat = self.ppu.interrupt.lcd_stat();
+
+        // We actually don't care about what the InterruptFlag currently says
+        // about vblank and lcd_stat, because the PPU has the more accurate
+        // knowledge about what state these interrupt flags are in.
+
+        // In order to have the PPU be the source of truth
+        // (and accounting for the fact that we aren't able to update)
+        // the interrupt flag register 0xFF0F in the method, we can
+        // mask over those two interruptss
+
+        // Copy the Interrupt Flag register 0xFF0F
+        let mut flag = self.interrupt.flag;
+        flag.set_vblank(ppu_vblank);
+        flag.set_lcd_stat(ppu_lcd_stat);
+
+        flag
+    }
+
+    fn set_interrupt_flag(&mut self, byte: u8) {
+        // Update the Interrupt register 0xFF0F
+        self.interrupt.flag = byte.into();
+
+        let vblank = self.interrupt.flag.vblank();
+        let lcd_stat = self.interrupt.flag.lcd_stat();
+
+        // Update the PPU's internal tracking of the interrupt register 0xFF0F
+        self.ppu.interrupt.set_vblank(vblank);
+        self.ppu.interrupt.set_lcd_stat(lcd_stat);
     }
 }

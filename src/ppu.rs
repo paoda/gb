@@ -5,6 +5,7 @@ const GB_WIDTH: usize = 160;
 const GB_HEIGHT: usize = 144;
 #[derive(Debug, Clone)]
 pub struct Ppu {
+    pub interrupt: Interrupt,
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
@@ -60,6 +61,7 @@ impl Ppu {
                     self.pos.line_y += 1;
 
                     let next_mode = if self.pos.line_y >= 144 {
+                        self.interrupt.set_vblank(true);
                         Mode::VBlank
                     } else {
                         Mode::OamScan
@@ -138,6 +140,7 @@ impl Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
+            interrupt: Interrupt::default(),
             lcd_control: Default::default(),
             monochrome: Default::default(),
             pos: Default::default(),
@@ -149,6 +152,31 @@ impl Default for Ppu {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Interrupt {
+    _vblank: bool,
+    _lcd_stat: bool,
+}
+
+impl Interrupt {
+    pub fn vblank(&self) -> bool {
+        self._vblank
+    }
+
+    pub fn set_vblank(&mut self, enabled: bool) {
+        self._vblank = enabled;
+    }
+
+    pub fn lcd_stat(&self) -> bool {
+        self._lcd_stat
+    }
+
+    pub fn set_lcd_stat(&mut self, enabled: bool) {
+        self._lcd_stat = enabled;
+    }
+}
+
 bitfield! {
     pub struct LCDStatus(u8);
     impl Debug;
