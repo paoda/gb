@@ -128,11 +128,13 @@ impl Ppu {
 
             let higher = self.read_byte(tile_data_addr + line as u16);
             let lower = self.read_byte(tile_data_addr + line as u16 + 1);
+
+            let pixels = Pixels::from_bytes(higher, lower);
             // println!("Hi: {:#010b} | Lo: {:#010b}", higher, lower);
 
             let bit = x_pos % 8;
-            let colour = ((higher >> bit) & 0x01) << 1 | ((lower >> bit) & 0x01);
-            let shade: GrayShade = colour.into();
+            let palette = self.monochrome.bg_palette;
+            let shade = palette.colour(pixels.colour_id(bit));
 
             chunk.copy_from_slice(&shade.into_rgba());
         }
@@ -451,6 +453,18 @@ bitfield! {
     pub from into GrayShade, i0_colour, set_i0_colour: 1, 0;
 }
 
+impl BackgroundPalette {
+    pub fn colour(&self, id: u8) -> GrayShade {
+        match id {
+            0b00 => self.i0_colour(),
+            0b01 => self.i1_colour(),
+            0b10 => self.i2_colour(),
+            0b11 => self.i3_colour(),
+            _ => unreachable!("{:#04X} is not a valid colour id", id),
+        }
+    }
+}
+
 impl Copy for BackgroundPalette {}
 impl Clone for BackgroundPalette {
     fn clone(&self) -> Self {
@@ -506,5 +520,20 @@ impl From<u8> for ObjectPalette {
 impl From<ObjectPalette> for u8 {
     fn from(palette: ObjectPalette) -> Self {
         palette.0
+    }
+}
+
+struct Pixels([u8; 2]);
+
+impl Pixels {
+    pub fn from_bytes(higher: u8, lower: u8) -> Self {
+        Self([higher, lower])
+    }
+
+    pub fn colour_id(&self, bit: u8) -> u8 {
+        let higher = &self.0[0] >> bit;
+        let lower = &self.0[1] >> bit;
+
+        (higher & 0x01) << 1 | lower & 0x01
     }
 }
