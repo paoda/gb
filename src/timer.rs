@@ -5,6 +5,7 @@ use crate::instruction::Cycles;
 #[derive(Debug, Clone, Copy)]
 pub struct Timer {
     pub control: TimerControl,
+    pub counter: u8,
 }
 
 impl Timer {
@@ -16,7 +17,8 @@ impl Timer {
 impl Default for Timer {
     fn default() -> Self {
         Self {
-            control: 0x00.into(),
+            control: Default::default(),
+            counter: 0,
         }
     }
 }
