@@ -2146,6 +2146,34 @@ impl std::ops::RemAssign<u32> for Cycles {
     }
 }
 
+impl std::ops::Sub for Cycles {
+    type Output = Cycles;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::Sub<u32> for Cycles {
+    type Output = Cycles;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl std::ops::SubAssign for Cycles {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = Self(self.0 - rhs.0);
+    }
+}
+
+impl std::ops::SubAssign<u32> for Cycles {
+    fn sub_assign(&mut self, rhs: u32) {
+        *self = Self(self.0 - rhs);
+    }
+}
+
 impl From<u32> for Cycles {
     fn from(num: u32) -> Self {
         Self(num)

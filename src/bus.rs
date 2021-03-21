@@ -83,13 +83,13 @@ impl Bus {
 
                 match self.cartridge.as_ref() {
                     Some(cart) => cart.read_byte(addr),
-                    None => panic!("Tried to read from a non-existant cartridge"),
+                    None => panic!("Tried to read from a non-existent cartridge"),
                 }
             }
             0x4000..=0x7FFF => match self.cartridge.as_ref() {
                 // 16KB ROM Bank 01 -> NN (switchable via MB)
                 Some(cart) => cart.read_byte(addr),
-                None => panic!("Tried to read from a non-existant cartridge"),
+                None => panic!("Tried to read from a non-existent cartridge"),
             },
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
@@ -98,7 +98,7 @@ impl Bus {
             0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
-                None => panic!("Tried to read from the external RAM of a non-existant cartridge"),
+                None => panic!("Tried to read from the external RAM of a non-existent cartridge"),
             },
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
@@ -123,7 +123,9 @@ impl Bus {
                     0xFF00 => self.joypad.status.into(),
                     0xFF01 => self.serial.next,
                     0xFF02 => self.serial.control.into(),
+                    0xFF04 => self.timer.divider,
                     0xFF05 => self.timer.counter,
+                    0xFF06 => self.timer.modulo,
                     0xFF07 => self.timer.control.into(),
                     0xFF0F => self.interrupt_flag().into(),
                     0xFF11 => self.sound.ch1.sound_duty.into(),
@@ -210,7 +212,9 @@ impl Bus {
                     0xFF00 => self.joypad.status = byte.into(),
                     0xFF01 => self.serial.next = byte,
                     0xFF02 => self.serial.control = byte.into(),
+                    0xFF04 => self.timer.divider = 0x00,
                     0xFF05 => self.timer.counter = byte.into(),
+                    0xFF06 => self.timer.modulo = byte.into(),
                     0xFF07 => self.timer.control = byte.into(),
                     0xFF0F => self.set_interrupt_flag(byte),
                     0xFF11 => self.sound.ch1.sound_duty = byte.into(),
@@ -276,8 +280,11 @@ impl Bus {
         let vblank = self.ppu.interrupt.vblank();
         let lcd_stat = self.ppu.interrupt.lcd_stat();
 
-        // Read the currrent interrupt information from the Joypad
+        // Read the current interrupt information from the Joypad
         let joypad = self.joypad.interrupt();
+
+        // Read the current interrupt information from the Timer
+        let timer = self.timer.interrupt();
 
         // Copy the Interrupt Flag register 0xFF0F
         let mut flag = self.interrupt.flag;
@@ -286,6 +293,7 @@ impl Bus {
         flag.set_vblank(vblank);
         flag.set_lcd_stat(lcd_stat);
         flag.set_joypad(joypad);
+        flag.set_timer(timer);
         flag
     }
 
@@ -296,6 +304,7 @@ impl Bus {
         let vblank = self.interrupt.flag.vblank();
         let lcd_stat = self.interrupt.flag.lcd_stat();
         let joypad = self.interrupt.flag.joypad();
+        let timer = self.interrupt.flag.timer();
 
         // Update the PPU's instance of the following interrupts
         self.ppu.interrupt.set_vblank(vblank);
@@ -303,5 +312,8 @@ impl Bus {
 
         // Update the Joypad's instance of the following interrupts
         self.joypad.set_interrupt(joypad);
+
+        // Update the Timer's instance of the following interrupts
+        self.timer.set_interrupt(timer);
     }
 }
