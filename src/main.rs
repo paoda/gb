@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use gb::LR35902_CLOCK_SPEED;
 use gb::{Cycles, LR35902};
 use pixels::{Pixels, SurfaceTexture};
 use std::env::args;
@@ -14,7 +15,6 @@ const GB_WIDTH: u32 = 160;
 const GB_HEIGHT: u32 = 144;
 const SCALE: f64 = 5.0;
 
-const LR35902_CLOCK_SPEED: u32 = 4194304; // Hz | 4.194304Mhz
 const LR35902_CYCLE_TIME: f64 = 1.0f64 / LR35902_CLOCK_SPEED as f64;
 const CYCLES_IN_FRAME: Cycles = Cycles::new(70224);
 

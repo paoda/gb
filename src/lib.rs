@@ -3,6 +3,7 @@ pub use instruction::Cycles;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;
+pub const LR35902_CLOCK_SPEED: u32 = 4194304; // Hz | 4.194304Mhz
 
 mod bus;
 mod cartridge;
