@@ -76,24 +76,9 @@ impl Cpu {
     pub fn step(&mut self) -> Cycles {
         let opcode = self.fetch();
         let instr = self.decode(opcode);
-
-        // println!(
-        //     "Addr: {:#06X} | Opcode: {:#04X} | Instr: {:X?}",
-        //     self.reg.pc, opcode, instr
-        // );
-
         let cycles = self.execute(instr);
 
-        // if self.bus.read_byte(0xFF02) == 0x81 {
-        //     let c = self.bus.read_byte(0xFF01) as char;
-        //     self.bus.write_byte(0xFF02, 0x00);
-
-        //     print!("{}", c);
-        //     std::io::stdout().flush().unwrap();
-        // }
-
         self.bus.step(cycles);
-
         self.handle_interrupts();
 
         cycles
@@ -188,7 +173,6 @@ impl Cpu {
 
                     // Disable all future interrupts
                     self.set_ime(false);
-
                     self.execute(Instruction::CALL(Always, register))
                 }
                 None => Cycles::new(0), // NO Interrupts were enabled and / or requested

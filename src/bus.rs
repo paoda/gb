@@ -223,7 +223,16 @@ impl Bus {
                     0xFF42 => self.ppu.pos.scroll_y = byte,
                     0xFF43 => self.ppu.pos.scroll_x = byte,
                     0xFF44 => self.ppu.pos.line_y = byte,
-                    0xFF45 => self.ppu.pos.ly_compare = byte == 0x01, // FIXME: We don't consider the possibility of a byte being different form 0x00 or 0x01
+                    0xFF45 => {
+                        // Update LYC
+                        self.ppu.pos.ly_compare = byte;
+
+                        // Update Coincidence Flag
+                        if self.ppu.stat.coincidence_intr() {
+                            let are_equal = self.ppu.pos.line_y == byte;
+                            self.ppu.stat.set_coincidence(are_equal);
+                        }
+                    }
                     0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),
                     0xFF48 => self.ppu.monochrome.obj_palette_0 = byte.into(),
                     0xFF49 => self.ppu.monochrome.obj_palette_1 = byte.into(),

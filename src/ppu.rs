@@ -39,9 +39,6 @@ impl Ppu {
     pub fn step(&mut self, cycles: Cycles) {
         self.cycles += cycles;
 
-        // let tmp: u32 = self.cycles.into();
-        // println!("Mode: {:?} | Cycles: {}", self.mode, tmp);
-
         match self.stat.mode() {
             Mode::OamScan => {
                 if self.cycles >= 80.into() {
@@ -59,6 +56,10 @@ impl Ppu {
                 if self.cycles >= 172.into() {
                     self.cycles %= 172;
 
+                    if self.stat.hblank_intr() {
+                        self.interrupt.set_lcd_stat(true);
+                    }
+
                     self.stat.set_mode(Mode::HBlank);
                     self.draw_scanline();
                 }
@@ -71,12 +72,26 @@ impl Ppu {
 
                     let next_mode = if self.pos.line_y >= 144 {
                         self.interrupt.set_vblank(true);
+
+                        if self.stat.vblank_intr() {
+                            self.interrupt.set_lcd_stat(true);
+                        }
+
                         Mode::VBlank
                     } else {
+                        if self.stat.oam_intr() {
+                            self.interrupt.set_lcd_stat(true);
+                        }
+
                         Mode::OamScan
                     };
 
                     self.stat.set_mode(next_mode);
+
+                    if self.stat.coincidence_intr() {
+                        let are_equal = self.pos.line_y == self.pos.ly_compare;
+                        self.stat.set_coincidence(are_equal);
+                    }
                 }
             }
             Mode::VBlank => {
@@ -89,6 +104,11 @@ impl Ppu {
                     if self.pos.line_y == 154 {
                         self.stat.set_mode(Mode::OamScan);
                         self.pos.line_y = 0;
+                    }
+
+                    if self.stat.coincidence_intr() {
+                        let are_equal = self.pos.line_y == self.pos.ly_compare;
+                        self.stat.set_coincidence(are_equal);
                     }
                 }
             }
@@ -192,11 +212,11 @@ impl Interrupt {
 bitfield! {
     pub struct LCDStatus(u8);
     impl Debug;
-    pub lyc_ly_intr, set_lyc_ly_intr: 6;
+    pub coincidence_intr, set_coincidence_intr: 6;
     pub oam_intr, set_oam_intr: 5;
     pub vblank_intr, set_vblank_intr: 4;
     pub hblank_intr, set_hblank_intr: 3;
-    pub coincidence, _: 2; // LYC == LY Flag
+    pub coincidence, set_coincidence: 2; // LYC == LY Flag
     from into Mode, _mode, set_mode: 1, 0;
 }
 
@@ -215,7 +235,7 @@ impl Clone for LCDStatus {
 
 impl Default for LCDStatus {
     fn default() -> Self {
-        Self(0)
+        Self(0x80) // bit 7 is always 1
     }
 }
 
@@ -268,7 +288,7 @@ pub struct ScreenPosition {
     pub scroll_y: u8,
     pub scroll_x: u8,
     pub line_y: u8,
-    pub ly_compare: bool,
+    pub ly_compare: u8,
     pub window_y: u8,
     pub window_x: u8,
 }
