@@ -253,7 +253,7 @@ impl Default for WavePattern {
 
 impl From<WavePattern> for u8 {
     fn from(pattern: WavePattern) -> Self {
-        pattern as u8
+        pattern as Self
     }
 }
 

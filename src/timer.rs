@@ -43,7 +43,7 @@ impl From<u8> for TimerSpeed {
 
 impl From<TimerSpeed> for u8 {
     fn from(speed: TimerSpeed) -> Self {
-        speed as u8
+        speed as Self
     }
 }
 

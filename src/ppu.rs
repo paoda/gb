@@ -250,7 +250,7 @@ impl From<u8> for Mode {
 
 impl From<Mode> for u8 {
     fn from(mode: Mode) -> Self {
-        mode as u8
+        mode as Self
     }
 }
 
@@ -326,7 +326,7 @@ impl From<u8> for TileMapAddress {
 
 impl From<TileMapAddress> for u8 {
     fn from(reg: TileMapAddress) -> Self {
-        reg as u8
+        reg as Self
     }
 }
 
@@ -354,7 +354,7 @@ impl From<u8> for TileDataAddress {
 
 impl From<TileDataAddress> for u8 {
     fn from(reg: TileDataAddress) -> Self {
-        reg as u8
+        reg as Self
     }
 }
 
@@ -382,7 +382,7 @@ impl From<u8> for ObjectSize {
 
 impl From<ObjectSize> for u8 {
     fn from(size: ObjectSize) -> Self {
-        size as u8
+        size as Self
     }
 }
 
@@ -431,7 +431,7 @@ impl From<u8> for GrayShade {
 
 impl From<GrayShade> for u8 {
     fn from(shade: GrayShade) -> Self {
-        shade as u8
+        shade as Self
     }
 }
 
