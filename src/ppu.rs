@@ -108,8 +108,8 @@ impl Ppu {
             TileMapAddress::X9C00 => 0x9C00,
         };
 
-        let y_pos: usize = scroll_y as usize + self.pos.line_y as usize;
-        let tile_row: usize = (y_pos as usize / 8) * 32;
+        let y_pos: u16 = scroll_y as u16 + self.pos.line_y as u16;
+        let tile_row: u16 = (y_pos as u16 / 8) * 32;
 
         for (i, chunk) in scanline.chunks_mut(4).enumerate() {
             let x_pos = i as u8 + scroll_x;
