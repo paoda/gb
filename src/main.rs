@@ -1,19 +1,23 @@
 use anyhow::{anyhow, Result};
 use gb::cpu::Cpu as LR35902;
+use gb::Cycles;
 use pixels::{Pixels, SurfaceTexture};
 use std::env::args;
-use winit::{
-    dpi::LogicalSize,
-    event::{Event, VirtualKeyCode},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-    window::WindowBuilder,
-};
+use std::time::{Duration, Instant};
+use winit::dpi::LogicalSize;
+use winit::event::{Event, VirtualKeyCode};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
 // 160 x 144
 const GB_WIDTH: u32 = 160;
 const GB_HEIGHT: u32 = 144;
+const SCALE: f64 = 5.0;
+
+const LR35902_CLOCK_SPEED: u32 = 4194304; // Hz | 4.194304Mhz
+const LR35902_CYCLE_TIME: f64 = 1.0f64 / LR35902_CLOCK_SPEED as f64;
+const CYCLES_IN_FRAME: Cycles = Cycles::new(70224);
 
 fn main() -> Result<()> {
     let event_loop = EventLoop::new();
@@ -28,6 +32,8 @@ fn main() -> Result<()> {
 
     game_boy.load_cartridge("bin/cpu_instrs.gb");
 
+    let mut now = Instant::now();
+    let mut cycles_in_frame = Cycles::default();
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
             if pixels
@@ -50,21 +56,36 @@ fn main() -> Result<()> {
                 pixels.resize(size.width, size.height);
             }
 
-            // Emulation
-            let _cycles = game_boy.step();
+            // Emulate Game Boy
+            let delta = now.elapsed().subsec_nanos();
+            now = Instant::now();
 
-            let ppu = game_boy.get_ppu();
-            let frame = pixels.get_frame();
-            ppu.copy_to_gui(frame);
-            window.request_redraw();
+            let cycle_time = Duration::from_secs_f64(LR35902_CYCLE_TIME).subsec_nanos();
+            let pending_cycles = Cycles::new(delta / cycle_time);
+
+            let mut elapsed_cycles = Cycles::default();
+            while elapsed_cycles <= pending_cycles {
+                elapsed_cycles += game_boy.step();
+            }
+
+            cycles_in_frame += elapsed_cycles;
+
+            if cycles_in_frame >= CYCLES_IN_FRAME {
+                let ppu = game_boy.get_ppu();
+                let frame = pixels.get_frame();
+                ppu.copy_to_gui(frame);
+                window.request_redraw();
+
+                cycles_in_frame = Cycles::default()
+            }
         }
     });
 }
 
 pub fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
-    let size = LogicalSize::new(GB_WIDTH as f64, GB_HEIGHT as f64);
+    let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
     Ok(WindowBuilder::new()
-        .with_title("DMG-1 Game Boy")
+        .with_title("DMG-1 Game Boy Emulator")
         .with_inner_size(size)
         .with_min_inner_size(size)
         .build(&event_loop)?)

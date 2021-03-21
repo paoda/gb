@@ -1,3 +1,5 @@
+pub use instruction::Cycles;
+
 mod bus;
 mod cartridge;
 pub mod cpu;
