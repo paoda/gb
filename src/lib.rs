@@ -10,6 +10,7 @@ mod cpu;
 mod high_ram;
 mod instruction;
 mod interrupt;
+mod joypad;
 mod ppu;
 mod serial;
 mod sound;

@@ -2,6 +2,7 @@ use super::cartridge::Cartridge;
 use super::high_ram::HighRam;
 use super::instruction::Cycles;
 use super::interrupt::{Interrupt, InterruptFlag};
+use super::joypad::Joypad;
 use super::ppu::Ppu;
 use super::serial::Serial;
 use super::sound::Sound;
@@ -23,6 +24,7 @@ pub struct Bus {
     sound: Sound,
     hram: HighRam,
     serial: Serial,
+    joypad: Joypad,
 }
 
 impl Default for Bus {
@@ -38,6 +40,7 @@ impl Default for Bus {
             sound: Default::default(),
             hram: Default::default(),
             serial: Default::default(),
+            joypad: Default::default(),
         }
     }
 }
@@ -117,6 +120,7 @@ impl Bus {
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
+                    0xFF00 => self.joypad.status.into(),
                     0xFF01 => self.serial.next,
                     0xFF02 => self.serial.control.into(),
                     0xFF07 => self.timer.control.into(),
@@ -202,6 +206,7 @@ impl Bus {
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
+                    0xFF00 => self.joypad.status = byte.into(),
                     0xFF01 => self.serial.next = byte,
                     0xFF02 => self.serial.control = byte.into(),
                     0xFF07 => self.timer.control = byte.into(),
