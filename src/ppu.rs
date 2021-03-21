@@ -98,24 +98,27 @@ impl Ppu {
     fn draw_scanline(&mut self) {
         let mut scanline: [u8; GB_WIDTH * 4] = [0; GB_WIDTH * 4];
 
-        let scroll_y = self.pos.scroll_y;
-        let scroll_x = self.pos.scroll_x;
-        // let window_y = self.pos.window_y;
-        // let window_x = self.pos.window_x - 7;
-
         let tile_map_addr = match self.lcd_control.bg_tile_map_addr() {
             TileMapAddress::X9800 => 0x9800,
             TileMapAddress::X9C00 => 0x9C00,
         };
 
-        let y_pos: u16 = scroll_y as u16 + self.pos.line_y as u16;
-        let tile_row: u16 = (y_pos as u16 / 8) * 32;
+        let y_pos = self.pos.line_y as u16 + self.pos.scroll_y as u16;
 
-        for (i, chunk) in scanline.chunks_mut(4).enumerate() {
-            let x_pos = i as u8 + scroll_x;
+        // There are always 20 rows of tiles in the LCD Viewport
+        // 160 / 20 = 8, so we can figure out the row of a tile with the following
+        let tile_row: u16 = y_pos as u16 / 8;
+
+        for (line_x, chunk) in scanline.chunks_mut(4).enumerate() {
+            let x_pos = line_x as u16 + self.pos.scroll_x as u16;
+
+            // There are always 18 columns of tiles in the LCD Viewport
+            // 144 / 18 = 8, so we can figure out the column of a tile with the following
             let tile_column = x_pos / 8;
 
-            let tile_addr = tile_map_addr + tile_row as u16 + tile_column as u16;
+            // A tile is 8 x 8, and any given pixel in a tile comes from two bytes
+            // so the size of a tile is (8 + 8) * 2 which is 32
+            let tile_addr = tile_map_addr + (tile_row * 32) as u16 + tile_column as u16;
             let tile_number = self.read_byte(tile_addr);
 
             let tile_data_addr = match self.lcd_control.tile_data_addr() {
@@ -128,13 +131,11 @@ impl Ppu {
 
             let higher = self.read_byte(tile_data_addr + line as u16);
             let lower = self.read_byte(tile_data_addr + line as u16 + 1);
-
             let pixels = Pixels::from_bytes(higher, lower);
-            // println!("Hi: {:#010b} | Lo: {:#010b}", higher, lower);
 
-            let bit = x_pos % 8;
+            let bit = x_pos as usize % 8;
             let palette = self.monochrome.bg_palette;
-            let shade = palette.colour(pixels.colour_id(bit));
+            let shade = palette.colour(pixels.pixel(7 - bit)); // Flip Horizontally
 
             chunk.copy_from_slice(&shade.into_rgba());
         }
@@ -530,7 +531,7 @@ impl Pixels {
         Self([higher, lower])
     }
 
-    pub fn colour_id(&self, bit: u8) -> u8 {
+    pub fn pixel(&self, bit: usize) -> u8 {
         let higher = &self.0[0] >> bit;
         let lower = &self.0[1] >> bit;
 
