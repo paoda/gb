@@ -29,7 +29,9 @@ fn main() -> Result<()> {
         None => LR35902::new(),
     };
 
+    // game_boy.load_cartridge("bin/instr_timing.gb");
     game_boy.load_cartridge("bin/cpu_instrs.gb");
+    // game_boy.load_cartridge("bin/tetris.gb");
 
     let mut now = Instant::now();
     let mut cycles_in_frame = Cycles::default();

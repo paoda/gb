@@ -123,14 +123,16 @@ impl Ppu {
             TileMapAddress::X9C00 => 0x9C00,
         };
 
-        let y_pos = self.pos.line_y as u16 + self.pos.scroll_y as u16;
+        // let y_pos = self.pos.line_y as u16 + self.pos.scroll_y as u16;
+        let y_pos = self.pos.line_y as u16;
 
         // There are always 20 rows of tiles in the LCD Viewport
         // 160 / 20 = 8, so we can figure out the row of a tile with the following
         let tile_row: u16 = y_pos as u16 / 8;
 
         for (line_x, chunk) in scanline.chunks_mut(4).enumerate() {
-            let x_pos = line_x as u16 + self.pos.scroll_x as u16;
+            // let x_pos = line_x as u16 + self.pos.scroll_x as u16;
+            let x_pos = line_x as u16;
 
             // There are always 18 columns of tiles in the LCD Viewport
             // 144 / 18 = 8, so we can figure out the column of a tile with the following
