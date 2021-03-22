@@ -275,6 +275,33 @@ impl Cpu {
     }
 }
 
+impl Cpu {
+    fn log_state(&self) -> std::io::Result<()> {
+        use std::io::Write;
+
+        let out = std::io::stdout();
+        let mut handle = out.lock();
+
+        write!(handle, "A: {:02X} ", self.reg.a)?;
+        write!(handle, "F: {:02X} ", u8::from(self.flags))?;
+        write!(handle, "B: {:02X} ", self.reg.b)?;
+        write!(handle, "C: {:02X} ", self.reg.c)?;
+        write!(handle, "D: {:02X} ", self.reg.d)?;
+        write!(handle, "E: {:02X} ", self.reg.e)?;
+        write!(handle, "H: {:02X} ", self.reg.h)?;
+        write!(handle, "L: {:02X} ", self.reg.l)?;
+        write!(handle, "SP: {:04X} ", self.reg.sp)?;
+        write!(handle, "PC: 00:{:04X} ", self.reg.pc)?;
+        write!(handle, "({:02X} ", self.read_byte(self.reg.pc))?;
+        write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
+        write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
+        write!(handle, "{:02X})\n", self.read_byte(self.reg.pc + 3))?;
+        handle.flush()?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum Register {
     A,

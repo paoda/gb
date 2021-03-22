@@ -363,28 +363,23 @@ impl Instruction {
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
                     // ADD A, r[z] | Add (A + r[z]) to register A
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let sum;
-                    let cycles: Cycles;
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+
+                    let (cycles, sum) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(Register::try_from(reg).unwrap());
-                            sum = Self::add_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(8);
+                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            (Cycles::new(4), sum)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            sum = Self::add_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(4);
+                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            (Cycles::new(8), sum)
                         }
-                    }
+                    };
 
                     cpu.set_register(Register::A, sum);
                     cpu.set_flags(flags);
@@ -851,9 +846,8 @@ impl Instruction {
                     // CP r[z] | Same behaviour as SUB, except the result is not stored.
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
 
-                    match reg {
+                    let cycles = match reg {
                         InstrRegister::B
                         | InstrRegister::C
                         | InstrRegister::D
@@ -863,14 +857,14 @@ impl Instruction {
                         | InstrRegister::A => {
                             let value = cpu.register(Register::try_from(reg).unwrap());
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(4);
+                            Cycles::new(4)
                         }
                         InstrRegister::IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(8);
+                            Cycles::new(8)
                         }
-                    }
+                    };
 
                     cpu.set_flags(flags);
                     cycles
@@ -1543,7 +1537,10 @@ impl Instruction {
     fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let diff = left.wrapping_sub(right);
 
-        flags.update(diff == 0, true, Self::u8_half_carry(left, right), flags.c());
+        flags.set_z(diff == 0);
+        flags.set_n(true);
+        flags.set_h(Self::sub_u8_half_carry(left, right));
+
         diff
     }
 
@@ -1553,7 +1550,7 @@ impl Instruction {
         flags.update(
             diff == 0,
             true,
-            Self::u8_half_carry(left, right),
+            Self::sub_u8_half_carry(left, right),
             did_overflow,
         );
         diff
@@ -1569,7 +1566,7 @@ impl Instruction {
         flags.update(
             false,
             false,
-            Self::u16_half_carry(left, right as u16),
+            Self::add_u16_half_carry(left, right as u16),
             did_overflow,
         );
         sum
@@ -1578,7 +1575,9 @@ impl Instruction {
     fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let sum = left.wrapping_add(right);
 
-        flags.update(sum == 0, false, Self::u8_half_carry(left, right), flags.c());
+        flags.set_z(sum == 0);
+        flags.set_n(false);
+        flags.set_h(Self::add_u8_half_carry(left, right));
         sum
     }
 
@@ -1588,7 +1587,7 @@ impl Instruction {
         flags.update(
             sum == 0,
             false,
-            Self::u8_half_carry(left, right),
+            Self::add_u8_half_carry(left, right),
             did_overflow,
         );
         sum
@@ -1599,20 +1598,24 @@ impl Instruction {
 
         flags.update(
             false,
-            Self::u16_half_carry(left, right),
+            Self::add_u16_half_carry(left, right),
             flags.h(),
             did_overflow,
         );
         sum
     }
 
-    fn u16_half_carry(left: u16, right: u16) -> bool {
-        // Self::u8_half_carry((left >> 8) as u8, (right >> 8) as u8)
-        left + right > 0xFFF // Thanks @Nectar Boy#1003
+    fn add_u16_half_carry(left: u16, right: u16) -> bool {
+        Self::add_u8_half_carry((left >> 8) as u8, (right >> 8) as u8)
+        // left + right > 0xFFF // Thanks @Nectar Boy#1003
     }
 
-    fn u8_half_carry(left: u8, right: u8) -> bool {
-        ((left & 0xF) + (right & 0xF)) & 0x10 == 0x10
+    fn add_u8_half_carry(left: u8, right: u8) -> bool {
+        (((left & 0xF) + (right & 0xF)) & 0x10) == 0x10
+    }
+
+    fn sub_u8_half_carry(left: u8, right: u8) -> bool {
+        (left & 0xF) < (right & 0xF)
     }
 
     fn rl_thru_carry(byte: u8, carry: bool) -> (u8, bool) {
