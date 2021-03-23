@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
+use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::LR35902_CLOCK_SPEED;
 use gb::{Cycles, LR35902};
 use pixels::{Pixels, SurfaceTexture};
-use std::env::args;
 use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
@@ -19,19 +19,50 @@ const LR35902_CYCLE_TIME: f64 = 1.0f64 / LR35902_CLOCK_SPEED as f64;
 const CYCLES_IN_FRAME: Cycles = Cycles::new(70224);
 
 fn main() -> Result<()> {
+    let app = App::new(crate_name!())
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!());
+
+    let m = app
+        .arg(
+            Arg::with_name("rom")
+                .value_name("ROM_FILE")
+                .takes_value(true)
+                .required(true)
+                .index(1)
+                .help("The ROM that the emulator will run"),
+        )
+        .arg(
+            Arg::with_name("boot")
+                .short("b")
+                .long("boot")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("Path to Boot ROM"),
+        )
+        .get_matches();
+
+    let mut game_boy = match m.value_of("boot") {
+        Some(path) => LR35902::boot_new(path).expect("Failed to load boot ROM"),
+        None => LR35902::new(),
+    };
+
+    // This is a required value so if we program gets here,
+    // a string **will** have been provided to the rom argument
+    let rom_path = m
+        .value_of("rom")
+        .expect("ROM Path not provided despite it being a required argument");
+
+    game_boy
+        .load_cartridge(rom_path)
+        .expect("Failed to load ROM");
+
+    // Initialize GUI
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = create_window(&event_loop)?;
     let mut pixels = create_pixels(&window)?;
-
-    let mut game_boy = match args().nth(1) {
-        Some(boot_path) => LR35902::boot_new(&boot_path),
-        None => LR35902::new(),
-    };
-
-    // game_boy.load_cartridge("bin/instr_timing.gb");
-    game_boy.load_cartridge("bin/cpu_instrs.gb");
-    // game_boy.load_cartridge("bin/tetris.gb");
 
     let mut now = Instant::now();
     let mut cycles_in_frame = Cycles::default();
@@ -83,7 +114,7 @@ fn main() -> Result<()> {
     });
 }
 
-pub fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
+fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
     let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
     Ok(WindowBuilder::new()
         .with_title("DMG-1 Emulator")
@@ -92,7 +123,7 @@ pub fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
         .build(&event_loop)?)
 }
 
-pub fn create_pixels(window: &Window) -> Result<Pixels<Window>> {
+fn create_pixels(window: &Window) -> Result<Pixels<Window>> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     Ok(Pixels::new(GB_WIDTH, GB_HEIGHT, surface_texture)?)

@@ -8,6 +8,7 @@ use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRam, WorkRam};
+use anyhow::anyhow;
 use std::{convert::TryInto, fs::File, io::Read};
 
 const BOOT_ROM_SIZE: usize = 256;
@@ -46,21 +47,24 @@ impl Default for Bus {
 }
 
 impl Bus {
-    pub fn with_boot(path: &str) -> Self {
-        let mut file = File::open(path).unwrap();
+    pub fn with_boot(path: &str) -> anyhow::Result<Self> {
+        let mut file = File::open(path)?;
         let mut buf = Vec::with_capacity(BOOT_ROM_SIZE);
-        file.read_to_end(&mut buf).unwrap();
+        file.read_to_end(&mut buf)?;
 
-        let boot_rom: [u8; BOOT_ROM_SIZE] = buf.try_into().unwrap();
+        let boot_rom: [u8; BOOT_ROM_SIZE] = buf
+            .try_into()
+            .map_err(|_| anyhow!("{} was not {} bytes in size", path, BOOT_ROM_SIZE))?;
 
-        Self {
+        Ok(Self {
             boot: Some(boot_rom),
             ..Default::default()
-        }
+        })
     }
 
-    pub fn load_cartridge(&mut self, path: &str) {
-        self.cartridge = Some(Cartridge::new(path).unwrap());
+    pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
+        self.cartridge = Some(Cartridge::new(path)?);
+        Ok(())
     }
 
     pub fn step(&mut self, cycles: Cycles) {

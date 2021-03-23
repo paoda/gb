@@ -33,11 +33,11 @@ impl Cpu {
         }
     }
 
-    pub fn boot_new(path: &str) -> Self {
-        Self {
-            bus: Bus::with_boot(path),
+    pub fn boot_new(path: &str) -> anyhow::Result<Self> {
+        Ok(Self {
+            bus: Bus::with_boot(path)?,
             ..Default::default()
-        }
+        })
     }
 
     pub fn ime(&self) -> bool {
@@ -52,8 +52,8 @@ impl Cpu {
         self.reg.pc += 1;
     }
 
-    pub fn load_cartridge(&mut self, path: &str) {
-        self.bus.load_cartridge(path);
+    pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
+        Ok(self.bus.load_cartridge(path)?)
     }
 }
 
