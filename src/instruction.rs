@@ -147,7 +147,7 @@ impl Instruction {
                         InstrRegisterPair::BC | InstrRegisterPair::DE => {
                             // LD (BC), A | Put A into memory address BC
                             // LD (DE), A | Put A into memory address DE
-                            let addr = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
+                            let addr = cpu.register_pair(pair.to_register_pair());
                             cpu.write_byte(addr, a);
                         }
                         InstrRegisterPair::IncrementHL => {
@@ -173,7 +173,7 @@ impl Instruction {
                         InstrRegisterPair::BC | InstrRegisterPair::DE => {
                             // LD A, (BC) | Put value at address BC into A
                             // LD A, (DE) | Put value at address DE into A
-                            let addr = cpu.register_pair(RegisterPair::try_from(pair).unwrap());
+                            let addr = cpu.register_pair(pair.to_register_pair());
                             let byte = cpu.read_byte(addr);
                             cpu.set_register(Register::A, byte);
                         }
@@ -212,7 +212,7 @@ impl Instruction {
                         | InstrRegister::E
                         | InstrRegister::H
                         | InstrRegister::L => {
-                            cpu.set_register(Register::try_from(reg).unwrap(), n);
+                            cpu.set_register(reg.to_register(), n);
                             Cycles::new(8)
                         }
                     }
@@ -240,7 +240,7 @@ impl Instruction {
                             | InstrRegister::E
                             | InstrRegister::H
                             | InstrRegister::L
-                            | InstrRegister::A => cpu.register(Register::try_from(rhs).unwrap()),
+                            | InstrRegister::A => cpu.register(rhs.to_register()),
                             InstrRegister::IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 cpu.read_byte(addr)
@@ -256,7 +256,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            cpu.set_register(Register::try_from(lhs).unwrap(), rhs_value);
+                            cpu.set_register(lhs.to_register(), rhs_value);
                             Cycles::new(4)
                         }
                         InstrRegister::IndirectHL => {
@@ -370,7 +370,7 @@ impl Instruction {
 
                     let (cycles, sum) = match reg {
                         B | C | D | E | H | L | A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             let sum = Self::add_u8s(a_value, value, &mut flags);
                             (Cycles::new(4), sum)
                         }
@@ -419,7 +419,7 @@ impl Instruction {
                             | InstrRegister::H
                             | InstrRegister::L
                             | InstrRegister::A => {
-                                let reg = Register::try_from(reg).unwrap();
+                                let reg = reg.to_register();
 
                                 let value = cpu.register(reg);
                                 cpu.set_register(reg, Self::inc_register(value, &mut flags));
@@ -475,7 +475,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let reg = Register::try_from(reg).unwrap();
+                        let reg = reg.to_register();
 
                         let value = cpu.register(reg);
                         cpu.set_register(reg, Self::dec_register(value, &mut flags));
@@ -594,8 +594,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value =
-                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c() as u8);
+                            let value = cpu.register(reg.to_register()) + (flags.c() as u8);
                             sum = Self::add_u8s(a_value, value, &mut flags);
                             cycles = Cycles::new(4);
                         }
@@ -637,7 +636,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             diff = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles::new(4);
                         }
@@ -680,8 +679,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value =
-                                cpu.register(Register::try_from(reg).unwrap()) + (flags.c() as u8);
+                            let value = cpu.register(reg.to_register()) + (flags.c() as u8);
                             diff = Self::sub_u8s(a_value, value, &mut flags);
                             cycles = Cycles::new(4);
                         }
@@ -725,7 +723,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             result = a_value & value;
                             cycles = Cycles::new(4);
                         }
@@ -769,7 +767,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             result = a_value ^ value;
                             cycles = Cycles::new(4);
                         }
@@ -813,7 +811,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             result = a_value | value;
                             cycles = Cycles::new(4);
                         }
@@ -855,7 +853,7 @@ impl Instruction {
                         | InstrRegister::H
                         | InstrRegister::L
                         | InstrRegister::A => {
-                            let value = cpu.register(Register::try_from(reg).unwrap());
+                            let value = cpu.register(reg.to_register());
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
                             Cycles::new(4)
                         }
@@ -1089,7 +1087,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
 
                         let value = cpu.register(register);
                         msb = value >> 7;
@@ -1129,7 +1127,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
 
                         let value = cpu.register(register);
                         lsb = value & 0x01;
@@ -1169,7 +1167,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c());
@@ -1212,7 +1210,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c());
@@ -1255,7 +1253,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         msb = (value >> 7) & 0x01;
@@ -1296,7 +1294,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         lsb = value & 0x01;
@@ -1338,7 +1336,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         swap_reg = Self::swap_bits(value);
@@ -1378,7 +1376,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         lsb = value & 0x01;
@@ -1417,7 +1415,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         is_bit_set = ((value >> y) & 0x01) == 0x01;
@@ -1451,7 +1449,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value & !(1u8 << y));
@@ -1479,7 +1477,7 @@ impl Instruction {
                     | InstrRegister::H
                     | InstrRegister::L
                     | InstrRegister::A => {
-                        let register = Register::try_from(reg).unwrap();
+                        let register = reg.to_register();
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value | (1u8 << y));
@@ -2186,6 +2184,18 @@ impl From<u32> for Cycles {
 impl From<Cycles> for u32 {
     fn from(cycles: Cycles) -> Self {
         cycles.0
+    }
+}
+
+impl InstrRegisterPair {
+    pub fn to_register_pair(self) -> RegisterPair {
+        RegisterPair::try_from(self).expect("Failed to convert InstrRegisterPair to RegisterPair")
+    }
+}
+
+impl InstrRegister {
+    pub fn to_register(self) -> Register {
+        Register::try_from(self).expect("Failed to convert from InstrRegister to Register")
     }
 }
 
