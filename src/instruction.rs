@@ -132,11 +132,10 @@ impl Instruction {
                 }
                 (LDTarget::RegisterPair(pair), LDTarget::ImmediateWord(nn)) => {
                     // LD rp[p], nn | Put value nn into register pair
+                    use RegisterPair::*;
+
                     match pair {
-                        RegisterPair::BC
-                        | RegisterPair::DE
-                        | RegisterPair::HL
-                        | RegisterPair::SP => cpu.set_register_pair(pair, nn),
+                        BC | DE | HL | SP => cpu.set_register_pair(pair, nn),
                         _ => unreachable!("There is no \"LD {:?}, nn\" instruction", pair),
                     }
                     Cycles::new(12)
@@ -231,38 +230,40 @@ impl Instruction {
                 }
                 (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
                     // LD r[y], r[z] | Store value of RHS Register in LHS Register
+                    use InstrRegister::*;
 
-                    let rhs_value = {
-                        match rhs {
-                            InstrRegister::B
-                            | InstrRegister::C
-                            | InstrRegister::D
-                            | InstrRegister::E
-                            | InstrRegister::H
-                            | InstrRegister::L
-                            | InstrRegister::A => cpu.register(rhs.to_register()),
-                            InstrRegister::IndirectHL => {
-                                let addr = cpu.register_pair(RegisterPair::HL);
-                                cpu.read_byte(addr)
+                    match rhs {
+                        B | C | D | E | H | L | A => {
+                            let right = cpu.register(rhs.to_register());
+
+                            match lhs {
+                                B | C | D | E | H | L | A => {
+                                    cpu.set_register(lhs.to_register(), right);
+                                    Cycles::new(4)
+                                }
+                                IndirectHL => {
+                                    let addr = cpu.register_pair(RegisterPair::HL);
+                                    cpu.write_byte(addr, right);
+                                    Cycles::new(8)
+                                }
                             }
                         }
-                    };
-
-                    match lhs {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
-                            cpu.set_register(lhs.to_register(), rhs_value);
-                            Cycles::new(4)
-                        }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
-                            cpu.write_byte(addr, rhs_value);
-                            Cycles::new(8)
+                            let right = cpu.read_byte(addr);
+
+                            match lhs {
+                                B | C | D | E | H | L | A => {
+                                    cpu.set_register(lhs.to_register(), right);
+                                    Cycles::new(8)
+                                }
+                                IndirectHL => {
+                                    unreachable!(
+                                        "There is no \"LD ({:?}), ({:?})\" instruction",
+                                        lhs, rhs
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -300,43 +301,47 @@ impl Instruction {
             Instruction::JR(cond, offset) => {
                 // JR cc[y - 4], d | If condition is true, then add d to current address and jump
                 // JR d | Add d to current address and jump
-                let prev = cpu.register_pair(RegisterPair::PC);
                 let flags: &Flags = cpu.flags();
-                let new_addr = Self::add_u16_i8_no_flags(prev, offset);
+
+                let prev = cpu.register_pair(RegisterPair::PC);
+                let addr = Self::add_u16_i8_no_flags(prev, offset);
 
                 match cond {
                     JumpCondition::Always => {
-                        cpu.set_register_pair(RegisterPair::PC, new_addr);
+                        cpu.set_register_pair(RegisterPair::PC, addr);
                         Cycles::new(12)
                     }
                     JumpCondition::NotZero => {
                         if !flags.z() {
-                            cpu.set_register_pair(RegisterPair::PC, new_addr);
-                            return Cycles::new(12);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            Cycles::new(12)
+                        } else {
+                            Cycles::new(8)
                         }
-
-                        Cycles::new(8)
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
-                            cpu.set_register_pair(RegisterPair::PC, new_addr);
-                            return Cycles::new(12);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            Cycles::new(12)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
-                            cpu.set_register_pair(RegisterPair::PC, new_addr);
-                            return Cycles::new(12);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            Cycles::new(12)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
-                            cpu.set_register_pair(RegisterPair::PC, new_addr);
-                            return Cycles::new(12);
+                            cpu.set_register_pair(RegisterPair::PC, addr);
+                            Cycles::new(12)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                 }
             }
@@ -408,40 +413,36 @@ impl Instruction {
                 match registers {
                     Registers::Byte(reg) => {
                         // INC r[y] | Increment Register
-                        let mut flags: Flags = *cpu.flags();
-                        let cycles: Cycles;
+                        use InstrRegister::*;
 
-                        match reg {
-                            InstrRegister::B
-                            | InstrRegister::C
-                            | InstrRegister::D
-                            | InstrRegister::E
-                            | InstrRegister::H
-                            | InstrRegister::L
-                            | InstrRegister::A => {
+                        let mut flags: Flags = *cpu.flags();
+
+                        let cycles = match reg {
+                            B | C | D | E | H | L | A => {
                                 let reg = reg.to_register();
 
                                 let value = cpu.register(reg);
                                 cpu.set_register(reg, Self::inc_register(value, &mut flags));
-                                cycles = Cycles::new(4)
+                                Cycles::new(4)
                             }
-                            InstrRegister::IndirectHL => {
+                            IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let byte = Self::inc_register(cpu.read_byte(addr), &mut flags);
                                 cpu.write_byte(addr, byte);
-                                cycles = Cycles::new(12)
+                                Cycles::new(12)
                             }
-                        }
+                        };
+
                         cpu.set_flags(flags);
                         cycles
                     }
                     Registers::Word(pair) => {
                         // INC rp[p] | Increment Register Pair
+                        // Note: According to RGBDS, no flags are set here.
+                        use RegisterPair::*;
+
                         match pair {
-                            RegisterPair::BC
-                            | RegisterPair::DE
-                            | RegisterPair::HL
-                            | RegisterPair::SP => {
+                            BC | DE | HL | SP => {
                                 let value = cpu.register_pair(pair);
                                 cpu.set_register_pair(pair, value + 1);
                             }
@@ -451,45 +452,47 @@ impl Instruction {
                     }
                 }
             }
-            Instruction::DEC(Registers::Word(pair)) => {
-                // DEC rp[p] | Decrement Register Pair
-                match pair {
-                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::SP => {
-                        let value = cpu.register_pair(pair);
-                        cpu.set_register_pair(pair, value - 1);
-                    }
-                    _ => unreachable!("There is no \"DEC {:?}\" instruction", pair),
-                }
-                Cycles::new(8)
-            }
-            Instruction::DEC(Registers::Byte(reg)) => {
-                // DEC r[y] | Decrement Register
-                let mut flags: Flags = *cpu.flags();
-                let cycles: Cycles;
+            Instruction::DEC(registers) => {
+                match registers {
+                    Registers::Byte(reg) => {
+                        // DEC r[y] | Decrement Register
+                        use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
-                        let reg = reg.to_register();
+                        let mut flags: Flags = *cpu.flags();
 
-                        let value = cpu.register(reg);
-                        cpu.set_register(reg, Self::dec_register(value, &mut flags));
-                        cycles = Cycles::new(4);
+                        let cycles = match reg {
+                            B | C | D | E | H | L | A => {
+                                let reg = reg.to_register();
+
+                                let value = cpu.register(reg);
+                                cpu.set_register(reg, Self::dec_register(value, &mut flags));
+                                Cycles::new(4)
+                            }
+                            IndirectHL => {
+                                let addr = cpu.register_pair(RegisterPair::HL);
+                                let byte = cpu.read_byte(addr);
+                                cpu.write_byte(addr, Self::dec_register(byte, &mut flags));
+                                Cycles::new(12)
+                            }
+                        };
+
+                        cpu.set_flags(flags);
+                        cycles
                     }
-                    InstrRegister::IndirectHL => {
-                        let addr = cpu.register_pair(RegisterPair::HL);
-                        let byte = cpu.read_byte(addr);
-                        cpu.write_byte(addr, Self::dec_register(byte, &mut flags));
-                        cycles = Cycles::new(12);
+                    Registers::Word(pair) => {
+                        // DEC rp[p] | Decrement Register Pair
+                        use RegisterPair::*;
+
+                        match pair {
+                            BC | DE | HL | SP => {
+                                let value = cpu.register_pair(pair);
+                                cpu.set_register_pair(pair, value - 1);
+                            }
+                            _ => unreachable!("There is no \"DEC {:?}\" instruction", pair),
+                        };
+                        Cycles::new(8)
                     }
                 }
-                cpu.set_flags(flags);
-                cycles
             }
             Instruction::RLCA => {
                 // Rotate Register A left
@@ -710,33 +713,25 @@ impl Instruction {
             Instruction::AND(target) => match target {
                 MATHTarget::Register(reg) => {
                     // AND r[z] | Bitwise AND register r[z] and register A, store in register A
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let result;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, result) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            result = a_value & value;
-                            cycles = Cycles::new(4);
+                            (Cycles::new(4), a_value & value)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            result = a_value & value;
-                            cycles = Cycles::new(8);
+                            (Cycles::new(8), a_value & value)
                         }
-                    }
+                    };
 
                     flags.update(result == 0, false, true, false);
-                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
+                    cpu.set_flags(flags);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
@@ -745,8 +740,8 @@ impl Instruction {
                     let result = cpu.register(Register::A) & n;
 
                     flags.update(result == 0, false, true, false);
-                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
+                    cpu.set_flags(flags);
                     Cycles::new(8)
                 }
                 _ => unreachable!("There is no \"AND {:?}\" instruction", target),
@@ -842,22 +837,18 @@ impl Instruction {
             Instruction::CP(target) => match target {
                 MATHTarget::Register(reg) => {
                     // CP r[z] | Same behaviour as SUB, except the result is not stored.
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
 
                     let cycles = match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
                             Cycles::new(4)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
                             Cycles::new(8)
@@ -952,7 +943,9 @@ impl Instruction {
             Instruction::JP(cond, target) => match target {
                 JPTarget::RegisterPair(RegisterPair::HL) => {
                     // JP HL | Load register pair HL into program counter
-                    cpu.set_register_pair(RegisterPair::PC, cpu.register_pair(RegisterPair::HL));
+                    let addr = cpu.register_pair(RegisterPair::HL);
+
+                    cpu.set_register_pair(RegisterPair::PC, addr);
                     Cycles::new(4)
                 }
                 JPTarget::ImmediateWord(nn) => {
@@ -964,30 +957,34 @@ impl Instruction {
                         JumpCondition::NotZero => {
                             if !flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                return Cycles::new(16);
+                                Cycles::new(16)
+                            } else {
+                                Cycles::new(12)
                             }
-                            Cycles::new(12)
                         }
                         JumpCondition::Zero => {
                             if flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                return Cycles::new(16);
+                                Cycles::new(16)
+                            } else {
+                                Cycles::new(12)
                             }
-                            Cycles::new(12)
                         }
                         JumpCondition::NotCarry => {
                             if !flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                return Cycles::new(16);
+                                Cycles::new(16)
+                            } else {
+                                Cycles::new(12)
                             }
-                            Cycles::new(12)
                         }
                         JumpCondition::Carry => {
                             if flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                return Cycles::new(16);
+                                Cycles::new(16)
+                            } else {
+                                Cycles::new(12)
                             }
-                            Cycles::new(12)
                         }
                         JumpCondition::Always => {
                             cpu.set_register_pair(RegisterPair::PC, nn);
@@ -1056,8 +1053,10 @@ impl Instruction {
             }
             Instruction::PUSH(pair) => {
                 // PUSH rp2[p] | Push register pair onto the stack
+                use RegisterPair::*;
+
                 match pair {
-                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
+                    BC | DE | HL | AF => {
                         let value = cpu.register_pair(pair);
                         Self::push(cpu, value);
                     }
@@ -1524,12 +1523,12 @@ impl Instruction {
         (high as u16) << 8 | low as u16
     }
 
-    fn dec_register(reg: u8, flags: &mut Flags) -> u8 {
-        Self::sub_u8s_no_carry(reg, 1, flags)
+    fn dec_register(byte: u8, flags: &mut Flags) -> u8 {
+        Self::sub_u8s_no_carry(byte, 1, flags)
     }
 
-    fn inc_register(reg: u8, flags: &mut Flags) -> u8 {
-        Self::add_u8s_no_carry(reg, 1, flags)
+    fn inc_register(byte: u8, flags: &mut Flags) -> u8 {
+        Self::add_u8s_no_carry(byte, 1, flags)
     }
 
     fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
