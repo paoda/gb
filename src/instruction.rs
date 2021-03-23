@@ -541,7 +541,7 @@ impl Instruction {
                 cpu.set_register(Register::A, rot_a);
                 Cycles::new(4)
             }
-            Instruction::DAA => unimplemented!(),
+            Instruction::DAA => todo!("Implement DAA Instruction"),
             Instruction::CPL => {
                 // Compliment A register (inverse)
                 let mut flags: Flags = *cpu.flags();
@@ -576,7 +576,7 @@ impl Instruction {
                 cpu.set_flags(flags);
                 Cycles::new(4)
             }
-            Instruction::HALT => unimplemented!(),
+            Instruction::HALT => todo!("Implement HALT instruction"),
             Instruction::ADC(target) => match target {
                 MATHTarget::Register(reg) => {
                     // ADC A, r[z] | Add register r[z] plus the Carry flag to A

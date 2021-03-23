@@ -187,7 +187,7 @@ impl MemoryBankController for MBC1 {
                     Value(0xFF)
                 }
             }
-            _ => unimplemented!(),
+            _ => unreachable!("A read from {:#06X} should not be handled by MBC1", addr),
         }
     }
 
@@ -209,7 +209,7 @@ impl MemoryBankController for MBC1 {
                     self.ram[ram_addr as usize] = byte;
                 }
             }
-            _ => unreachable!("{:#06X} should not be handled by MBC1", addr),
+            _ => unreachable!("A write to {:#06X} should not be handled by MBC1", addr),
         }
     }
 }

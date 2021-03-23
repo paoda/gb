@@ -120,7 +120,7 @@ impl Bus {
                 // Sprite Attribute Table
                 unimplemented!("Unable to read {:#06X} in the Sprite Attribute Table", addr);
             }
-            0xFEA0..=0xFEFF => unimplemented!("{:#06X} is not allowed to be used", addr),
+            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be used", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
@@ -204,12 +204,9 @@ impl Bus {
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                unimplemented!(
-                    "Unable to write to {:#06X} in the Sprite Attribute Table",
-                    addr
-                );
+                unimplemented!("Unable to write to {:#06X} in Sprite Attribute Table", addr);
             }
-            0xFEA0..=0xFEFF => unimplemented!("{:#06X} is not allowed to be used", addr),
+            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be used", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
