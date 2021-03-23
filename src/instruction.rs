@@ -198,21 +198,17 @@ impl Instruction {
                 }
                 (LDTarget::Register(reg), LDTarget::ImmediateByte(n)) => {
                     // LD r[y], n | Store n in Register
+                    use InstrRegister::*;
+
                     match reg {
-                        InstrRegister::IndirectHL => {
+                        A | B | C | D | E | H | L => {
+                            cpu.set_register(reg.to_register(), n);
+                            Cycles::new(8)
+                        }
+                        IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, n);
                             Cycles::new(12)
-                        }
-                        InstrRegister::A
-                        | InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L => {
-                            cpu.set_register(reg.to_register(), n);
-                            Cycles::new(8)
                         }
                     }
                 }
@@ -376,11 +372,14 @@ impl Instruction {
                     let (cycles, sum) = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
+
                             let sum = Self::add_u8s(a_value, value, &mut flags);
                             (Cycles::new(4), sum)
                         }
                         IndirectHL => {
-                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
+                            let addr = cpu.register_pair(RegisterPair::HL);
+                            let value = cpu.read_byte(addr);
+
                             let sum = Self::add_u8s(a_value, value, &mut flags);
                             (Cycles::new(8), sum)
                         }
