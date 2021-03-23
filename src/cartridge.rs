@@ -62,7 +62,7 @@ impl Cartridge {
             0x00 => MBCKind::None,
             0x01 => MBCKind::MBC1,
             0x19 => MBCKind::MBC5,
-            _ => panic!("Cartridge uses an unknown Memory Bank Controller"),
+            _ => unimplemented!("{} is the id of an unsupported memory bank controller", id),
         }
     }
 }
@@ -107,7 +107,7 @@ impl MBC1 {
             ThirtyTwo | Sixteen | Eight | Four => 0,
             SixtyFour => (self.ram_bank & 0x01) << 5,
             OneHundredTwentyEight => self.ram_bank << 5,
-            _ => unreachable!("{:#?} is not a valid MBC1 BankCount", self.bank_count),
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
 
@@ -126,12 +126,14 @@ impl MBC1 {
                 num &= !(0x03 << 5);
                 num | ((self.ram_bank) << 5)
             }
-            _ => unreachable!("{:#?} is not a valid MBC1 BankCount", self.bank_count),
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
 
     fn apply_rom_size_bitmask(&self, byte: u8) -> u8 {
         use BankCount::*;
+
+        let err_bc = self.bank_count; // Bank Count, but with a shorter name
 
         match self.bank_count {
             Four => byte & 0b00000011,
@@ -140,7 +142,7 @@ impl MBC1 {
             ThirtyTwo => byte & 0b00011111,
             SixtyFour => byte & 0b00011111,
             OneHundredTwentyEight => byte & 0b00011111,
-            _ => unreachable!("{:#?} does not have a bitmask in MBC1", self.bank_count),
+            _ => unreachable!("{:?} does not have a rom size bitmask in MBC1", err_bc),
         }
     }
 
@@ -292,7 +294,7 @@ impl From<u8> for RamSize {
             0x03 => _32KB,
             0x04 => _128KB,
             0x05 => _64KB,
-            _ => unreachable!("{:#04X} is an invalid value for RAMSize"),
+            _ => unreachable!("{:#04X} is not a valid value for RAMSize", byte),
         }
     }
 }
@@ -358,7 +360,7 @@ impl From<u8> for BankCount {
             0x52 => SeventyTwo,
             0x53 => Eighty,
             0x54 => NinetySix,
-            _ => unreachable!("{:#04X} is an invalid value for BankCount", byte),
+            _ => unreachable!("{:#04X} is not a valid value for BankCount", byte),
         }
     }
 }

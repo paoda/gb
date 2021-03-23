@@ -102,7 +102,7 @@ impl Bus {
             0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
-                None => panic!("Tried to read from the external RAM of a non-existent cartridge"),
+                None => panic!("Tried to read from a non-existent cartridge"),
             },
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
@@ -120,7 +120,7 @@ impl Bus {
                 // Sprite Attribute Table
                 unimplemented!("Unable to read {:#06X} in the Sprite Attribute Table", addr);
             }
-            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be used", addr),
+            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be read from", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
@@ -169,14 +169,14 @@ impl Bus {
                 // 16KB ROM bank 00
                 match self.cartridge.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent Cartridge"),
+                    None => panic!("Tried to write into non-existent cartridge"),
                 }
             }
             0x4000..=0x7FFF => {
                 // 16KB ROM Bank 01 -> NN (switchable via MB)
                 match self.cartridge.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent Cartridge"),
+                    None => panic!("Tried to write into non-existent cartridge"),
                 }
             }
             0x8000..=0x9FFF => {
@@ -187,7 +187,7 @@ impl Bus {
                 // 8KB External RAM
                 match self.cartridge.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent Cartridge"),
+                    None => panic!("Tried to write into non-existent cartridge"),
                 }
             }
             0xC000..=0xCFFF => {
@@ -206,7 +206,7 @@ impl Bus {
                 // Sprite Attribute Table
                 unimplemented!("Unable to write to {:#06X} in Sprite Attribute Table", addr);
             }
-            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be used", addr),
+            0xFEA0..=0xFEFF => unreachable!("{:#06X} is not allowed to be written to", addr),
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {

@@ -137,7 +137,7 @@ impl Instruction {
                         | RegisterPair::DE
                         | RegisterPair::HL
                         | RegisterPair::SP => cpu.set_register_pair(pair, nn),
-                        _ => unreachable!(),
+                        _ => unreachable!("There is no \"LD {:?}, nn\" instruction", pair),
                     }
                     Cycles::new(12)
                 }
@@ -164,7 +164,7 @@ impl Instruction {
 
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!("There is no \"LD ({:?}), A\" instruction", pair),
                     }
                     Cycles::new(8)
                 }
@@ -193,7 +193,7 @@ impl Instruction {
 
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!("There is no \"LD A, ({:?})\" instruction", pair),
                     }
                     Cycles::new(8)
                 }
@@ -294,7 +294,7 @@ impl Instruction {
                     cpu.set_register(Register::A, byte);
                     Cycles::new(16)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"LD {:?}, {:?}\" instruction", lhs, rhs),
             },
             Instruction::STOP => Cycles::new(4),
             Instruction::JR(cond, offset) => {
@@ -356,7 +356,7 @@ impl Instruction {
 
                             cpu.set_register_pair(RegisterPair::HL, sum);
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!("There is no \"ADD HL, {:?}\" instruction", pair),
                     }
                     cpu.set_flags(flags);
                     Cycles::new(8)
@@ -402,7 +402,7 @@ impl Instruction {
                     cpu.set_flags(flags);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"ADD {:?}, {:?}\" instruction", lhs, rhs),
             },
             Instruction::INC(registers) => {
                 match registers {
@@ -445,7 +445,7 @@ impl Instruction {
                                 let value = cpu.register_pair(pair);
                                 cpu.set_register_pair(pair, value + 1);
                             }
-                            _ => unreachable!(),
+                            _ => unreachable!("There is no \"INC {:?}\" instruction", pair),
                         }
                         Cycles::new(8)
                     }
@@ -458,7 +458,7 @@ impl Instruction {
                         let value = cpu.register_pair(pair);
                         cpu.set_register_pair(pair, value - 1);
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("There is no \"DEC {:?}\" instruction", pair),
                 }
                 Cycles::new(8)
             }
@@ -618,7 +618,7 @@ impl Instruction {
                     cpu.set_register(Register::A, sum);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"ADC {:?}\" instruction", target),
             },
             Instruction::SUB(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -660,7 +660,7 @@ impl Instruction {
                     cpu.set_register(Register::A, diff);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"SUB {:?}\" instruction", target),
             },
             Instruction::SBC(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -705,7 +705,7 @@ impl Instruction {
                     cpu.set_register(Register::A, diff);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"SBC {:?}\" instruction", target),
             },
             Instruction::AND(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -749,7 +749,7 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"AND {:?}\" instruction", target),
             },
             Instruction::XOR(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -793,7 +793,7 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"XOR {:?}\" instruction", target),
             },
             Instruction::OR(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -837,7 +837,7 @@ impl Instruction {
                     cpu.set_register(Register::A, result);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"OR {:?}\" instruction", target),
             },
             Instruction::CP(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -875,7 +875,7 @@ impl Instruction {
                     cpu.set_flags(flags);
                     Cycles::new(8)
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"CP {:?}\" instruction", target),
             },
             Instruction::RET(cond) => {
                 // RET cc[y] | Essentially a POP PC, Return from Subroutine
@@ -931,14 +931,14 @@ impl Instruction {
                 Cycles::new(12)
             }
             Instruction::POP(pair) => {
-                // POP rp2[p] | Pop from stack into register pair rp[2]
+                // POP rp2[p] | Pop from stack into register pair rp2[]
                 // Flags are set when we call cpu.set_register_pair(RegisterPair::AF, value);
                 match pair {
                     RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
                         let value = Self::pop(cpu);
                         cpu.set_register_pair(pair, value);
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("There is no \"POP {:?}\" instruction", pair),
                 }
                 Cycles::new(12)
             }
@@ -995,7 +995,7 @@ impl Instruction {
                         }
                     }
                 }
-                _ => unreachable!(),
+                _ => unreachable!("There is no \"JP {:?}\" instruction", target),
             },
             Instruction::DI => {
                 // Disable IME
@@ -1061,7 +1061,7 @@ impl Instruction {
                         let value = cpu.register_pair(pair);
                         Self::push(cpu, value);
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("There is no \"PUSH {:?}\" instruction", pair),
                 }
                 Cycles::new(16)
             }
@@ -1814,22 +1814,22 @@ impl Instruction {
                 JumpCondition::Always,
                 JPTarget::ImmediateWord(cpu.read_imm_word(pc)),
             ),
-            (3, 3, _, 1, _) => unreachable!("This is the 0xCB Prefix"),
-            // (3, 3, _, 2, _) => unreachable!(), ("removed" in documentation)
-            // (3, 3, _, 3, _) => unreachable!(), ("removed" in documentation)
-            // (3, 3, _, 4, _) => unreachable!(), ("removed" in documentation)
-            // (3, 3, _, 5, _) => unreachable!(), ("removed" in documentation)
+            (3, 3, _, 1, _) => unreachable!("0xCB is handled by Instruction::from_prefixed_byte"),
+            // (3, 3, _, 2, _) => unreachable!("\"removed\" in documentation"),
+            // (3, 3, _, 3, _) => unreachable!("\"removed\" in documentation"),
+            // (3, 3, _, 4, _) => unreachable!("\"removed\" in documentation"),
+            // (3, 3, _, 5, _) => unreachable!("\"removed\" in documentation"),
             (3, 3, _, 6, _) => Self::DI,
             (3, 3, _, 7, _) => Self::EI,
             (3, 4, _, 0..=3, _) => Self::CALL(Table::cc(y), cpu.read_imm_word(pc)), // CALL cc[y], nn
-            // (3, 4, _, 4..=7, _) => unreachable!(), ("removed" in documentation)
+            // (3, 4, _, 4..=7, _) => unreachable!("\"removed\" in documentation"),
             (3, 5, 0, _, _) => Self::PUSH(Table::rp2(p)), // PUSH rp2[p]
             (3, 5, 1, _, 0) => Self::CALL(JumpCondition::Always, cpu.read_imm_word(pc)), // CALL nn
-            // (3, 5, 1, _, 1..=3) => unreachable!(), ("removed" in documentation)
+            // (3, 5, 1, _, 1..=3) => unreachable!("\"removed\" in documentation"),
             (3, 6, _, _, _) => Table::x3_alu(y, cpu.read_imm_byte(pc)),
             (3, 7, _, _, _) => Self::RST(y * 8), // RST n
-            _ => panic!(
-                "Unknown Opcode: {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
+            _ => unreachable!(
+                "Unknown Opcode: {:#04X}\n x: {}, z: {}, q: {}, y: {}, p: {}",
                 opcode, x, z, q, y, p
             ),
         }
@@ -1851,8 +1851,8 @@ impl Instruction {
             1 => Self::BIT(y, Table::r(z)), // BIT y, r[z]
             2 => Self::RES(y, Table::r(z)), // RES y, r[z]
             3 => Self::SET(y, Table::r(z)), // SET y, r[z]
-            _ => panic!(
-                "Unknown Prefixed Opcode: 0xCB {:#x?}\n x: {}, z: {}, q: {}, y: {}, p: {}",
+            _ => unreachable!(
+                "Unknown Prefixed Opcode: 0xCB {:#04X}\n x: {}, z: {}, q: {}, y: {}, p: {}",
                 opcode, x, z, q, y, p
             ),
         }
