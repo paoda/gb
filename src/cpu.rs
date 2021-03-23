@@ -132,35 +132,35 @@ impl Cpu {
                 enabled.set_vblank(false);
 
                 // INT 40h
-                Some(0x0040)
+                Some(0x40)
             } else if req.lcd_stat() && enabled.lcd_stat() {
                 // Handle LCD STAT Interrupt
                 req.set_lcd_stat(false);
                 enabled.set_lcd_stat(false);
 
                 // INT 48h
-                Some(0x0048)
+                Some(0x48)
             } else if req.timer() && enabled.timer() {
                 // Handle Timer Interrupt
                 req.set_timer(false);
                 enabled.set_timer(false);
 
                 // INT 50h
-                Some(0x0050)
+                Some(0x50)
             } else if req.serial() && enabled.serial() {
                 // Handle Serial Interrupt
                 req.set_serial(false);
                 enabled.set_serial(false);
 
                 // INT 58h
-                Some(0x0058)
+                Some(0x58)
             } else if req.joypad() && enabled.joypad() {
                 // Handle Joypad Interrupt
                 req.set_joypad(false);
                 enabled.set_joypad(false);
 
                 // INT 60h
-                Some(0x0060)
+                Some(0x60)
             } else {
                 None
             };
@@ -173,7 +173,7 @@ impl Cpu {
 
                     // Disable all future interrupts
                     self.set_ime(false);
-                    self.execute(Instruction::CALL(Always, register))
+                    self.execute(Instruction::RST(register))
                 }
                 None => Cycles::new(0), // NO Interrupts were enabled and / or requested
             };
