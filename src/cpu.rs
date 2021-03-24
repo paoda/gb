@@ -1,5 +1,5 @@
 use super::bus::Bus;
-use super::instruction::{Cycles, Instruction, JumpCondition};
+use super::instruction::{Cycles, Instruction};
 use super::interrupt::{InterruptEnable, InterruptFlag};
 use super::ppu::Ppu;
 use bitfield::bitfield;
@@ -11,6 +11,7 @@ pub struct Cpu {
     reg: Registers,
     flags: Flags,
     ime: bool,
+    halted: Option<HaltState>,
     state: State,
 }
 
@@ -48,6 +49,20 @@ impl Cpu {
         self.ime = enabled;
     }
 
+    pub fn halt(&mut self, state: HaltState) {
+        self.halted = Some(state);
+    }
+
+    fn resume(&mut self) {
+        println!("Game Boy resumed from {:?}", self.halted);
+
+        self.halted = None;
+    }
+
+    pub fn halted(&self) -> Option<HaltState> {
+        self.halted
+    }
+
     pub fn inc_pc(&mut self) {
         self.reg.pc += 1;
     }
@@ -58,11 +73,8 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn fetch(&mut self) -> u8 {
-        let opcode = self.bus.read_byte(self.reg.pc);
-        self.inc_pc();
-
-        opcode
+    pub fn fetch(&self) -> u8 {
+        self.bus.read_byte(self.reg.pc)
     }
 
     pub fn decode(&mut self, opcode: u8) -> Instruction {
@@ -74,7 +86,24 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycles {
+        // if let Some(state) = self.halted() {
+        //     use HaltState::*;
+
+        //     match state {
+        //         ImeSet | NonePending => Cycles::new(4),
+        //         SomePending => {
+        //             todo!("Implement HALT Bug");
+        //         }
+        //     }
+        // };
+
+        if self.reg.pc > 0x100 {
+            self.log_state().unwrap();
+        }
+
         let opcode = self.fetch();
+        self.inc_pc();
+
         let instr = self.decode(opcode);
         let cycles = self.execute(instr);
 
@@ -120,11 +149,25 @@ impl Cpu {
     }
 
     pub fn handle_interrupts(&mut self) {
-        if self.ime() {
-            use JumpCondition::Always;
+        let req = self.read_byte(0xFF0F);
+        let enabled = self.read_byte(0xFFFF);
 
-            let mut req: InterruptFlag = self.read_byte(0xFF0F).into();
-            let mut enabled: InterruptEnable = self.read_byte(0xFFFF).into();
+        if let Some(_) = self.halted() {
+            // When we're here either a HALT with IME set or
+            // a HALT with IME not set and No pending Interrupts was called
+
+            if req & enabled != 0 {
+                // The if self.ime() below correctly follows the "resuming from HALT" behaviour so
+                // nothing actually needs to be added here. This is just documentation
+                // since it's a bit weird why nothing is being done
+
+                self.resume()
+            }
+        }
+
+        if self.ime() {
+            let mut req: InterruptFlag = req.into();
+            let mut enabled: InterruptEnable = enabled.into();
 
             let vector = if req.vblank() && enabled.vblank() {
                 // Handle VBlank Interrupt
@@ -406,4 +449,11 @@ impl From<u8> for Flags {
     fn from(byte: u8) -> Self {
         Self(byte)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum HaltState {
+    ImeSet,
+    NonePending,
+    SomePending,
 }

@@ -1,4 +1,4 @@
-use super::cpu::{Cpu, Flags, Register, RegisterPair};
+use super::cpu::{Cpu, Flags, HaltState, Register, RegisterPair};
 use std::{convert::TryFrom, fmt::Debug};
 
 #[derive(Debug, Copy, Clone)]
@@ -577,7 +577,29 @@ impl Instruction {
                 cpu.set_flags(flags);
                 Cycles::new(4)
             }
-            Instruction::HALT => todo!("Implement HALT instruction"),
+            Instruction::HALT => {
+                // Enter CPU low power consumption mode until interrupt occurs
+                use HaltState::*;
+
+                let req = cpu.read_byte(0xFF0F);
+                let enabled = cpu.read_byte(0xFFFF);
+
+                let halt_state = if cpu.ime() {
+                    ImeSet
+                } else {
+                    if req & enabled != 0 {
+                        SomePending
+                    } else {
+                        NonePending
+                    }
+                };
+
+                println!("Game Boy HALTed in {:?}", halt_state);
+                cpu.halt(halt_state);
+
+                // Though this can actually last forever
+                Cycles::new(4)
+            }
             Instruction::ADC(target) => match target {
                 MATHTarget::Register(reg) => {
                     // ADC A, r[z] | Add register r[z] plus the Carry flag to A

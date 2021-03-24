@@ -146,6 +146,10 @@ impl Bus {
                     0xFF49 => self.ppu.monochrome.obj_palette_1.into(),
                     0xFF4A => self.ppu.pos.window_y,
                     0xFF4B => self.ppu.pos.window_x,
+                    0xFF4D => {
+                        eprintln!("Reading from {:#06X} is available in CGB Mode only", addr);
+                        0x00
+                    }
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -242,6 +246,12 @@ impl Bus {
                     0xFF49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
                     0xFF4A => self.ppu.pos.window_y = byte,
                     0xFF4B => self.ppu.pos.window_x = byte,
+                    0xFF4D => {
+                        eprintln!(
+                            "Writing {:#04X} to {:#06X} is available in CGB Mode only",
+                            byte, addr
+                        );
+                    }
                     0xFF50 => {
                         // Disable Boot ROM
                         if byte != 0 {
