@@ -49,12 +49,9 @@ impl Default for Bus {
 impl Bus {
     pub fn with_boot(path: &str) -> anyhow::Result<Self> {
         let mut file = File::open(path)?;
-        let mut buf = Vec::with_capacity(BOOT_ROM_SIZE);
-        file.read_to_end(&mut buf)?;
+        let mut boot_rom = [0u8; 256];
 
-        let boot_rom: [u8; BOOT_ROM_SIZE] = buf
-            .try_into()
-            .map_err(|_| anyhow!("{} was not {} bytes in size", path, BOOT_ROM_SIZE))?;
+        file.read_exact(&mut boot_rom)?;
 
         Ok(Self {
             boot: Some(boot_rom),
