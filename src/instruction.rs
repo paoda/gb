@@ -150,14 +150,14 @@ impl Instruction {
                             cpu.write_byte(addr, a);
                         }
                         InstrRegisterPair::IncrementHL => {
-                            // LD (HL+), A | Put A into memory address HL, then increment HL
+                            // LD (HL+), A | Put A into byte at address HL, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, a);
 
                             cpu.set_register_pair(RegisterPair::HL, addr + 1);
                         }
                         InstrRegisterPair::DecrementHL => {
-                            // LD (HL-), A | Put A into memory address HL, then decrement HL
+                            // LD (HL-), A | Put A into byte at address HL, then decrement HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, a);
 
@@ -180,8 +180,8 @@ impl Instruction {
                             // LD A, (HL+) | Put value at address HL into A, then increment HL
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let byte = cpu.read_byte(addr);
-                            cpu.set_register(Register::A, byte);
 
+                            cpu.set_register(Register::A, byte);
                             cpu.set_register_pair(RegisterPair::HL, addr + 1);
                         }
                         InstrRegisterPair::DecrementHL => {
@@ -344,13 +344,12 @@ impl Instruction {
             Instruction::ADD(lhs, rhs) => match (lhs, rhs) {
                 (MATHTarget::RegisterPair(RegisterPair::HL), MATHTarget::RegisterPair(pair)) => {
                     // ADD HL, rp[p] | add register pair to HL.
+                    use RegisterPair::*;
+
                     let mut flags: Flags = *cpu.flags();
 
                     match pair {
-                        RegisterPair::BC
-                        | RegisterPair::DE
-                        | RegisterPair::HL
-                        | RegisterPair::SP => {
+                        BC | DE | HL | SP => {
                             let hl_value = cpu.register_pair(RegisterPair::HL);
                             let value = cpu.register_pair(pair);
                             let sum = Self::add_u16s(hl_value, value, &mut flags);
@@ -582,32 +581,27 @@ impl Instruction {
             Instruction::ADC(target) => match target {
                 MATHTarget::Register(reg) => {
                     // ADC A, r[z] | Add register r[z] plus the Carry flag to A
-                    // FIXME: Do I Add register A as well?
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let sum;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, sum) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register()) + (flags.c() as u8);
-                            sum = Self::add_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(4);
+                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            (Cycles::new(4), sum)
                         }
-                        InstrRegister::IndirectHL => {
-                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            sum = Self::add_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(8);
+                        IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL))
+                                + (flags.c() as u8);
+                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            (Cycles::new(8), sum)
                         }
-                    }
-                    cpu.set_flags(flags);
+                    };
+
                     cpu.set_register(Register::A, sum);
+                    cpu.set_flags(flags);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
@@ -625,32 +619,26 @@ impl Instruction {
             Instruction::SUB(target) => match target {
                 MATHTarget::Register(reg) => {
                     // SUB r[z] | Subtract the value in register r[z] from register A, then store in A
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let diff;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, diff) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            diff = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(4);
+                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            (Cycles::new(4), diff)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            diff = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(8);
+                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            (Cycles::new(8), diff)
                         }
-                    }
+                    };
 
-                    cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
+                    cpu.set_flags(flags);
                     cycles
                 }
                 MATHTarget::ImmediateByte(n) => {
@@ -668,29 +656,24 @@ impl Instruction {
                 MATHTarget::Register(reg) => {
                     // SBC A, r[z] | Subtract the value from register r[z] from A, add the Carry flag and then store in A
                     // FIXME: See ADC, is this a correct understanding of this Instruction
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let diff;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, diff) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register()) + (flags.c() as u8);
-                            diff = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(4);
+                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            (Cycles::new(4), diff)
                         }
-                        InstrRegister::IndirectHL => {
-                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            diff = Self::sub_u8s(a_value, value, &mut flags);
-                            cycles = Cycles::new(8);
+                        IndirectHL => {
+                            let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL))
+                                + (flags.c() as u8);
+                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            (Cycles::new(8), diff)
                         }
-                    }
+                    };
 
                     cpu.set_register(Register::A, diff);
                     cpu.set_flags(flags);
@@ -748,29 +731,21 @@ impl Instruction {
             Instruction::XOR(target) => match target {
                 MATHTarget::Register(reg) => {
                     // XOR r[z] | Bitwise XOR register r[z] and register A, store in register A
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let result;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, result) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            result = a_value ^ value;
-                            cycles = Cycles::new(4);
+                            (Cycles::new(4), a_value ^ value)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            result = a_value ^ value;
-                            cycles = Cycles::new(8);
+                            (Cycles::new(8), a_value ^ value)
                         }
-                    }
+                    };
 
                     flags.update(result == 0, false, false, false);
                     cpu.set_flags(flags);
@@ -792,29 +767,21 @@ impl Instruction {
             Instruction::OR(target) => match target {
                 MATHTarget::Register(reg) => {
                     // OR r[z] | Bitwise OR register r[z] and register A, store in register A
+                    use InstrRegister::*;
+
                     let mut flags: Flags = *cpu.flags();
                     let a_value = cpu.register(Register::A);
-                    let cycles: Cycles;
-                    let result;
 
-                    match reg {
-                        InstrRegister::B
-                        | InstrRegister::C
-                        | InstrRegister::D
-                        | InstrRegister::E
-                        | InstrRegister::H
-                        | InstrRegister::L
-                        | InstrRegister::A => {
+                    let (cycles, result) = match reg {
+                        B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            result = a_value | value;
-                            cycles = Cycles::new(4);
+                            (Cycles::new(4), a_value | value)
                         }
-                        InstrRegister::IndirectHL => {
+                        IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            result = a_value | value;
-                            cycles = Cycles::new(8);
+                            (Cycles::new(8), a_value | value)
                         }
-                    }
+                    };
 
                     flags.update(result == 0, false, false, false);
                     cpu.set_flags(flags);
@@ -877,33 +844,37 @@ impl Instruction {
                         if !flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            return Cycles::new(20);
+                            Cycles::new(20)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            return Cycles::new(20);
+                            Cycles::new(20)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            return Cycles::new(20);
+                            Cycles::new(20)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            return Cycles::new(20);
+                            Cycles::new(20)
+                        } else {
+                            Cycles::new(8)
                         }
-                        Cycles::new(8)
                     }
                     JumpCondition::Always => {
                         let addr = Self::pop(cpu);
@@ -917,14 +888,18 @@ impl Instruction {
                 // LD HL, SP + d | Add SP + d to register HL
                 let mut flags: Flags = *cpu.flags();
                 let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
+
                 cpu.set_register_pair(RegisterPair::HL, sum);
+                cpu.set_flags(flags);
                 Cycles::new(12)
             }
             Instruction::POP(pair) => {
                 // POP rp2[p] | Pop from stack into register pair rp2[]
                 // Flags are set when we call cpu.set_register_pair(RegisterPair::AF, value);
+                use RegisterPair::*;
+
                 match pair {
-                    RegisterPair::BC | RegisterPair::DE | RegisterPair::HL | RegisterPair::AF => {
+                    BC | DE | HL | AF => {
                         let value = Self::pop(cpu);
                         cpu.set_register_pair(pair, value);
                     }
@@ -1015,33 +990,37 @@ impl Instruction {
                         if !flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            return Cycles::new(24);
+                            Cycles::new(24)
+                        } else {
+                            Cycles::new(12)
                         }
-                        Cycles::new(12)
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            return Cycles::new(24);
+                            Cycles::new(24)
+                        } else {
+                            Cycles::new(12)
                         }
-                        Cycles::new(12)
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            return Cycles::new(24);
+                            Cycles::new(24)
+                        } else {
+                            Cycles::new(12)
                         }
-                        Cycles::new(12)
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            return Cycles::new(24);
+                            Cycles::new(24)
+                        } else {
+                            Cycles::new(12)
                         }
-                        Cycles::new(12)
                     }
                     JumpCondition::Always => {
                         Self::push(cpu, pc);
@@ -1072,328 +1051,255 @@ impl Instruction {
             }
             Instruction::RLC(reg) => {
                 // RLC r[z] | Rotate register r[z] left
-                let mut flags: Flags = *cpu.flags();
-                let msb;
-                let rot_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, msb, rotated) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
 
                         let value = cpu.register(register);
-                        msb = value >> 7;
-                        rot_reg = value.rotate_left(1);
+                        let rotated = value.rotate_left(1);
 
-                        cpu.set_register(register, rot_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, rotated);
+                        (Cycles::new(8), value >> 7, rotated)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
 
                         let value = cpu.read_byte(addr);
-                        msb = value >> 7;
-                        rot_reg = value.rotate_left(1);
+                        let rotated = value.rotate_left(1);
 
-                        cpu.write_byte(addr, rot_reg);
-                        cycles = Cycles::new(16);
+                        cpu.write_byte(addr, rotated);
+                        (Cycles::new(16), value >> 7, rotated)
                     }
-                }
+                };
 
-                flags.update(rot_reg == 0, false, false, msb == 0x01);
+                flags.update(rotated == 0, false, false, msb == 0x01);
                 cpu.set_flags(flags);
                 cycles
             }
             Instruction::RRC(reg) => {
                 // RRC r[z] | Rotate Register r[z] right
-                let mut flags: Flags = *cpu.flags();
-                let lsb;
-                let rot_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, lsb, rotated) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
 
                         let value = cpu.register(register);
-                        lsb = value & 0x01;
-                        rot_reg = value.rotate_right(1);
+                        let rotated = value.rotate_right(1);
 
-                        cpu.set_register(register, rot_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, rotated);
+                        (Cycles::new(8), value & 0x01, rotated)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
 
                         let value = cpu.read_byte(addr);
-                        lsb = value & 0x01;
-                        rot_reg = value.rotate_right(1);
+                        let rotated = value.rotate_right(1);
 
-                        cpu.write_byte(addr, rot_reg);
-                        cycles = Cycles::new(16);
+                        cpu.write_byte(addr, rotated);
+                        (Cycles::new(16), value & 0x01, rotated)
                     }
-                }
+                };
 
-                flags.update(rot_reg == 0, false, false, lsb == 0x01);
+                flags.update(rotated == 0, false, false, lsb == 0x01);
                 cpu.set_flags(flags);
                 cycles
             }
             Instruction::RL(reg) => {
                 // RL r[z] | Rotate register r[z] left through carry
-                let mut flags: Flags = *cpu.flags();
-                let carry;
-                let rot_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, rotated, carry) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c());
-                        rot_reg = new_reg;
-                        carry = new_carry;
+                        let (rotated, carry) = Self::rl_thru_carry(value, flags.c());
 
-                        cpu.set_register(register, rot_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, rotated);
+                        (Cycles::new(8), rotated, carry)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        let (new_reg, new_carry) = Self::rl_thru_carry(value, flags.c());
-                        rot_reg = new_reg;
-                        carry = new_carry;
+                        let (rotated, carry) = Self::rl_thru_carry(value, flags.c());
 
-                        cpu.write_byte(addr, rot_reg);
-                        cycles = Cycles::new(16);
+                        cpu.write_byte(addr, rotated);
+                        (Cycles::new(16), rotated, carry)
                     }
-                }
+                };
 
-                flags.update(rot_reg == 0, false, false, carry);
+                flags.update(rotated == 0, false, false, carry);
                 cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::RR(reg) => {
                 // RR r[z] | Rotate register r[z] right through carry
-                let mut flags: Flags = *cpu.flags();
-                let carry;
-                let rot_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, rotated, carry) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c());
-                        rot_reg = new_reg;
-                        carry = new_carry;
+                        let (rotated, carry) = Self::rr_thru_carry(value, flags.c());
 
-                        cpu.set_register(register, rot_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, rotated);
+                        (Cycles::new(8), rotated, carry)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        let (new_reg, new_carry) = Self::rr_thru_carry(value, flags.c());
-                        rot_reg = new_reg;
-                        carry = new_carry;
+                        let (rotated, carry) = Self::rr_thru_carry(value, flags.c());
 
-                        cpu.write_byte(addr, rot_reg);
-                        cycles = Cycles::new(16);
+                        cpu.write_byte(addr, rotated);
+                        (Cycles::new(16), rotated, carry)
                     }
-                }
+                };
 
-                flags.update(rot_reg == 0, false, false, carry);
+                flags.update(rotated == 0, false, false, carry);
                 cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SLA(reg) => {
                 // SLA r[z] | Shift left arithmetic register r[z]
-                let mut flags: Flags = *cpu.flags();
-                let shift_reg;
-                let msb;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, msb, shifted) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        msb = (value >> 7) & 0x01;
-                        shift_reg = value << 1;
+                        let shifted = value << 1;
 
-                        cpu.set_register(register, shift_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, shifted);
+                        (Cycles::new(8), (value >> 7) & 0x01, shifted)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        msb = (value >> 7) & 0x01;
-                        shift_reg = value << 1;
+                        let shifted = value << 1;
 
                         cpu.write_byte(addr, value);
-                        cycles = Cycles::new(16);
+                        (Cycles::new(16), (value >> 7) & 0x01, shifted)
                     }
-                }
+                };
 
-                flags.update(shift_reg == 0, false, false, msb == 0x01);
+                flags.update(shifted == 0, false, false, msb == 0x01);
                 cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SRA(reg) => {
                 // SRA r[z] | Shift right arithmetic register r[z]
-                let mut flags: Flags = *cpu.flags();
-                let shift_reg;
-                let lsb;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, lsb, shifted) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        lsb = value & 0x01;
                         let msb = (value >> 7) & 0x01;
-                        shift_reg = (value >> 1) | (msb << 7); // msb is duplicated in this op
+                        let shifted = msb << 7 | value >> 1;
 
-                        cpu.set_register(register, shift_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, shifted);
+                        (Cycles::new(8), value & 0x01, shifted)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        lsb = value & 0x01;
                         let msb = (value >> 7) & 0x01;
-                        shift_reg = (value >> 1) | (msb << 7); // msb is duplicated in this op
+                        let shifted = msb << 7 | value >> 1;
 
                         cpu.write_byte(addr, value);
-                        cycles = Cycles::new(16);
+                        (Cycles::new(16), value & 0x01, shifted)
                     }
-                }
+                };
 
-                flags.update(shift_reg == 0, false, false, lsb == 0x01);
+                flags.update(shifted == 0, false, false, lsb == 0x01);
                 cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SWAP(reg) => {
                 // SWAP r[z] | Swap the 4 highest and lowest bits in a byte
-                let mut flags: Flags = *cpu.flags();
-                let swap_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, swapped) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        swap_reg = Self::swap_bits(value);
+                        let swapped = Self::swap_bits(value);
 
-                        cpu.set_register(register, swap_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, swapped);
+                        (Cycles::new(8), swapped)
                     }
 
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        swap_reg = Self::swap_bits(value);
+                        let swapped = Self::swap_bits(value);
 
-                        cpu.write_byte(addr, swap_reg);
-                        cycles = Cycles::new(16)
+                        cpu.write_byte(addr, swapped);
+                        (Cycles::new(16), swapped)
                     }
-                }
+                };
 
-                flags.update(swap_reg == 0, false, false, false);
+                flags.update(swapped == 0, false, false, false);
                 cpu.set_flags(flags);
 
                 cycles
             }
             Instruction::SRL(reg) => {
                 // SRL r[z] | Shift right logic register r[z]
-                let mut flags: Flags = *cpu.flags();
-                let lsb;
-                let shift_reg;
-                let cycles: Cycles;
+                use InstrRegister::*;
 
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                let mut flags: Flags = *cpu.flags();
+
+                let (cycles, lsb, shift_reg) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        lsb = value & 0x01;
-                        shift_reg = value >> 1;
+                        let shifted = value >> 1;
 
-                        cpu.set_register(register, shift_reg);
-                        cycles = Cycles::new(8);
+                        cpu.set_register(register, shifted);
+                        (Cycles::new(8), value & 0x01, shifted)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        lsb = value & 0x01;
-                        shift_reg = value >> 1;
+                        let shifted = value >> 1;
 
-                        cpu.write_byte(addr, shift_reg);
-                        cycles = Cycles::new(16);
+                        cpu.write_byte(addr, shifted);
+                        (Cycles::new(16), value & 0x01, shifted)
                     }
-                }
+                };
 
                 flags.update(shift_reg == 0, false, false, lsb == 0x01);
                 cpu.set_flags(flags);
@@ -1402,31 +1308,26 @@ impl Instruction {
             }
             Instruction::BIT(y, reg) => {
                 // BIT y, r[z] | Test y is in register r[z]
+                use InstrRegister::*;
+
                 let mut flags: Flags = *cpu.flags();
-                let is_bit_set;
-                let cycles: Cycles;
-                match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+
+                let (cycles, is_bit_set) = match reg {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
-                        is_bit_set = ((value >> y) & 0x01) == 0x01;
-                        cycles = Cycles::new(8);
+                        let is_bit_set = ((value >> y) & 0x01) == 0x01;
+                        (Cycles::new(8), is_bit_set)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
-                        is_bit_set = ((value >> y) & 0x01) == 0x01;
-                        cycles = Cycles::new(12);
+                        let is_bit_set = ((value >> y) & 0x01) == 0x01;
+                        (Cycles::new(12), is_bit_set)
                     }
-                }
+                };
 
                 flags.update(!is_bit_set, false, true, flags.c());
                 cpu.set_flags(flags);
@@ -1439,21 +1340,17 @@ impl Instruction {
                 // 00000001 << 3 = 00001000
                 // ~00001000 = 11110111
                 // value & 11110111 means that only a specific bit will be reset
+                use InstrRegister::*;
+
                 match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value & !(1u8 << y));
                         Cycles::new(8)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
@@ -1467,21 +1364,17 @@ impl Instruction {
                 //
                 // 00000001 << 3 = 00001000
                 // value | 00001000 means that only a specific bit will be set
+                use InstrRegister::*;
+
                 match reg {
-                    InstrRegister::B
-                    | InstrRegister::C
-                    | InstrRegister::D
-                    | InstrRegister::E
-                    | InstrRegister::H
-                    | InstrRegister::L
-                    | InstrRegister::A => {
+                    B | C | D | E | H | L | A => {
                         let register = reg.to_register();
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value | (1u8 << y));
                         Cycles::new(8)
                     }
-                    InstrRegister::IndirectHL => {
+                    IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
@@ -1559,12 +1452,9 @@ impl Instruction {
     fn add_u16_i8(left: u16, right: i8, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right as u16);
 
-        flags.update(
-            false,
-            false,
-            Self::add_u16_half_carry(left, right as u16),
-            did_overflow,
-        );
+        // FIXME: Is this more correct?
+        let half_carry = Self::add_u8_half_carry((left >> 8) as u8, right as u8);
+        flags.update(false, false, half_carry, did_overflow);
         sum
     }
 
@@ -1623,7 +1513,7 @@ impl Instruction {
 
     fn rr_thru_carry(byte: u8, carry: bool) -> (u8, bool) {
         let carry_flag = byte & 0x01; // get the LSB of the u8 (which will rotate into the carry bit)
-        let new_byte = (byte >> 1) | ((carry as u8) << 7); // shift the bit right, and then OR the carry bit in.
+        let new_byte = ((carry as u8) << 7) | (byte >> 1); // shift the bit right, and then OR the carry bit in.
 
         (new_byte, carry_flag == 0x01)
     }
