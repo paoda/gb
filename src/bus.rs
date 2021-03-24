@@ -79,7 +79,7 @@ impl Bus {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
-                if addr < 0x00FF {
+                if addr < 0x100 {
                     if let Some(boot) = self.boot {
                         return boot[addr as usize];
                     }
