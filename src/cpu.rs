@@ -441,13 +441,13 @@ impl Display for Flags {
 
 impl From<Flags> for u8 {
     fn from(flags: Flags) -> Self {
-        flags.0
+        flags.0 & 0xF0
     }
 }
 
 impl From<u8> for Flags {
     fn from(byte: u8) -> Self {
-        Self(byte)
+        Self(byte & 0xF0)
     }
 }
 
