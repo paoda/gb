@@ -8,8 +8,7 @@ use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
 use super::work_ram::{VariableWorkRam, WorkRam};
-use anyhow::anyhow;
-use std::{convert::TryInto, fs::File, io::Read};
+use std::{fs::File, io::Read};
 
 const BOOT_ROM_SIZE: usize = 256;
 
@@ -124,7 +123,7 @@ impl Bus {
                     0xFF00 => self.joypad.status.into(),
                     0xFF01 => self.serial.next,
                     0xFF02 => self.serial.control.into(),
-                    0xFF04 => self.timer.divider,
+                    0xFF04 => (self.timer.divider >> 8) as u8,
                     0xFF05 => self.timer.counter,
                     0xFF06 => self.timer.modulo,
                     0xFF07 => self.timer.control.into(),

@@ -594,7 +594,6 @@ impl Instruction {
                     }
                 };
 
-                println!("Game Boy HALTed in {:?}", halt_state);
                 cpu.halt(halt_state);
 
                 // Though this can actually last forever

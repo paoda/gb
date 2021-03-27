@@ -86,28 +86,31 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycles {
-        // if let Some(state) = self.halted() {
-        //     use HaltState::*;
-
-        //     match state {
-        //         ImeSet | NonePending => Cycles::new(4),
-        //         SomePending => {
-        //             todo!("Implement HALT Bug");
-        //         }
-        //     }
-        // };
-
         if self.reg.pc > 0x100 {
             self.log_state().unwrap();
         }
 
-        let opcode = self.fetch();
-        self.inc_pc();
+        let cycles = match self.halted() {
+            Some(state) => {
+                use HaltState::*;
 
-        let instr = self.decode(opcode);
-        let cycles = self.execute(instr);
+                match state {
+                    ImeSet | NonePending => Cycles::new(4),
+                    SomePending => todo!("Implement HALT bug"),
+                }
+            }
+            None => {
+                let opcode = self.fetch();
+                self.inc_pc();
 
-        self.bus.step(cycles);
+                let instr = self.decode(opcode);
+                let cycles = self.execute(instr);
+
+                self.bus.step(cycles);
+                cycles
+            }
+        };
+
         self.handle_interrupts();
 
         cycles
@@ -167,40 +170,35 @@ impl Cpu {
 
         if self.ime() {
             let mut req: InterruptFlag = req.into();
-            let mut enabled: InterruptEnable = enabled.into();
+            let enabled: InterruptEnable = enabled.into();
 
             let vector = if req.vblank() && enabled.vblank() {
                 // Handle VBlank Interrupt
                 req.set_vblank(false);
-                enabled.set_vblank(false);
 
                 // INT 40h
                 Some(0x40)
             } else if req.lcd_stat() && enabled.lcd_stat() {
                 // Handle LCD STAT Interrupt
                 req.set_lcd_stat(false);
-                enabled.set_lcd_stat(false);
 
                 // INT 48h
                 Some(0x48)
             } else if req.timer() && enabled.timer() {
                 // Handle Timer Interrupt
                 req.set_timer(false);
-                enabled.set_timer(false);
 
                 // INT 50h
                 Some(0x50)
             } else if req.serial() && enabled.serial() {
                 // Handle Serial Interrupt
                 req.set_serial(false);
-                enabled.set_serial(false);
 
                 // INT 58h
                 Some(0x58)
             } else if req.joypad() && enabled.joypad() {
                 // Handle Joypad Interrupt
                 req.set_joypad(false);
-                enabled.set_joypad(false);
 
                 // INT 60h
                 Some(0x60)
@@ -212,7 +210,6 @@ impl Cpu {
                 Some(register) => {
                     //  Write the Changes to 0xFF0F and 0xFFFF registers
                     self.write_byte(0xFF0F, req.into());
-                    self.write_byte(0xFFFF, enabled.into());
 
                     // Disable all future interrupts
                     self.set_ime(false);

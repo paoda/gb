@@ -1,61 +1,56 @@
 use crate::Cycles;
-use crate::LR35902_CLOCK_SPEED;
 use bitfield::bitfield;
 
-const DIVIDER_REGISTER_HZ: u32 = 16384;
+// const DIVIDER_REGISTER_HZ: u32 = 16384;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Timer {
     pub control: TimerControl,
     pub counter: u8,
     pub modulo: u8,
-    pub divider: u8,
-    divider_cycles: Cycles,
-    timer_cycles: Cycles,
+    pub divider: u16,
+    prev_and_result: Option<u8>,
     interrupt: bool,
 }
 
 impl Timer {
     pub fn step(&mut self, cycles: Cycles) {
-        self.timer_cycles += cycles;
-        self.divider_cycles += cycles;
+        use TimerSpeed::*;
 
-        // Divider Register
-        let divider_wait = Cycles::new(LR35902_CLOCK_SPEED / DIVIDER_REGISTER_HZ);
-        let timer_wait = self.timer_cycles();
-
-        if self.divider_cycles >= divider_wait {
-            // The Divider Timer has ticked
-            self.divider_cycles %= divider_wait;
-
+        for _ in 0..cycles.into() {
             self.divider = self.divider.wrapping_add(1);
-        }
 
-        if self.control.enabled() {
-            if self.timer_cycles >= timer_wait {
-                // The Timer has ticked
-                self.timer_cycles %= timer_wait;
+            // Get Bit Position
+            let pos = match self.control.speed() {
+                Hz4096 => 9,
+                Hz262144 => 3,
+                Hz65536 => 5,
+                Hz16384 => 7,
+            };
 
-                let (result, did_overflow) = self.counter.overflowing_add(1);
-                self.counter = if did_overflow {
-                    self.interrupt = true;
-                    self.modulo
-                } else {
-                    result
-                };
+            let bit = (self.divider >> pos) as u8 & 0x01;
+            let timer_enable = self.control.enabled() as u8;
+            let and_result = bit & timer_enable;
+
+            if let Some(previous) = self.prev_and_result {
+                if previous == 0x01 && and_result == 0x00 {
+                    // Falling Edge, increase TIMA Regiser
+                    self.increment_tima();
+                }
             }
+            self.prev_and_result = Some(and_result);
         }
     }
 
-    fn timer_cycles(&self) -> Cycles {
-        let difference = match self.control.speed() {
-            TimerSpeed::Hz4096 => LR35902_CLOCK_SPEED / 4096,
-            TimerSpeed::Hz262144 => LR35902_CLOCK_SPEED / 262144,
-            TimerSpeed::Hz65536 => LR35902_CLOCK_SPEED / 65536,
-            TimerSpeed::Hz16384 => LR35902_CLOCK_SPEED / 16384,
-        };
+    fn increment_tima(&mut self) {
+        let (result, did_overflow) = self.counter.overflowing_add(1);
 
-        Cycles::new(difference)
+        self.counter = if did_overflow {
+            self.interrupt = true;
+            self.modulo
+        } else {
+            result
+        }
     }
 
     pub fn interrupt(&self) -> bool {
@@ -71,12 +66,11 @@ impl Default for Timer {
     fn default() -> Self {
         Self {
             control: Default::default(),
-            timer_cycles: Default::default(),
-            divider_cycles: Default::default(),
             counter: 0,
             modulo: 0,
             divider: 0,
             interrupt: false,
+            prev_and_result: None,
         }
     }
 }
