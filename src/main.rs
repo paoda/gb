@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::LR35902_CLOCK_SPEED;
-use gb::{Cycles, LR35902};
+use gb::{Cycle, LR35902};
 use pixels::{Pixels, SurfaceTexture};
 use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
@@ -16,7 +16,7 @@ const GB_HEIGHT: u32 = 144;
 const SCALE: f64 = 5.0;
 
 const LR35902_CYCLE_TIME: f64 = 1.0f64 / LR35902_CLOCK_SPEED as f64;
-const CYCLES_IN_FRAME: Cycles = Cycles::new(70224);
+const CYCLES_IN_FRAME: Cycle = Cycle::new(70224);
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())
@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     let mut pixels = create_pixels(&window)?;
 
     let mut now = Instant::now();
-    let mut cycles_in_frame = Cycles::default();
+    let mut cycles_in_frame = Cycle::default();
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
             if pixels
@@ -93,9 +93,9 @@ fn main() -> Result<()> {
             now = Instant::now();
 
             let cycle_time = Duration::from_secs_f64(LR35902_CYCLE_TIME).subsec_nanos();
-            let pending_cycles = Cycles::new(delta / cycle_time);
+            let pending_cycles = Cycle::new(delta / cycle_time);
 
-            let mut elapsed_cycles = Cycles::default();
+            let mut elapsed_cycles = Cycle::default();
             while elapsed_cycles <= pending_cycles {
                 elapsed_cycles += game_boy.step();
             }
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
                 ppu.copy_to_gui(frame);
                 window.request_redraw();
 
-                cycles_in_frame = Cycles::default()
+                cycles_in_frame = Cycle::default()
             }
         }
     });

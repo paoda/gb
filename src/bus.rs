@@ -1,6 +1,6 @@
 use super::cartridge::Cartridge;
 use super::high_ram::HighRam;
-use super::instruction::Cycles;
+use super::instruction::Cycle;
 use super::interrupt::{Interrupt, InterruptFlag};
 use super::joypad::Joypad;
 use super::ppu::Ppu;
@@ -63,7 +63,7 @@ impl Bus {
         Ok(())
     }
 
-    pub fn step(&mut self, cycles: Cycles) {
+    pub fn step(&mut self, cycles: Cycle) {
         self.timer.step(cycles);
         self.sound.step(cycles);
         self.ppu.step(cycles);

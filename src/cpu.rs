@@ -1,5 +1,5 @@
 use super::bus::Bus;
-use super::instruction::{Cycles, Instruction};
+use super::instruction::{Cycle, Instruction};
 use super::interrupt::{InterruptEnable, InterruptFlag};
 use super::ppu::Ppu;
 use bitfield::bitfield;
@@ -81,11 +81,11 @@ impl Cpu {
         Instruction::from_byte(self, opcode)
     }
 
-    pub fn execute(&mut self, instruction: Instruction) -> Cycles {
+    pub fn execute(&mut self, instruction: Instruction) -> Cycle {
         Instruction::execute(self, instruction)
     }
 
-    pub fn step(&mut self) -> Cycles {
+    pub fn step(&mut self) -> Cycle {
         if self.reg.pc > 0x100 {
             self.log_state().unwrap();
         }
@@ -95,7 +95,7 @@ impl Cpu {
                 use HaltState::*;
 
                 match state {
-                    ImeSet | NonePending => Cycles::new(4),
+                    ImeSet | NonePending => Cycle::new(4),
                     SomePending => todo!("Implement HALT bug"),
                 }
             }
@@ -215,7 +215,7 @@ impl Cpu {
                     self.set_ime(false);
                     self.execute(Instruction::RST(register))
                 }
-                None => Cycles::new(0), // NO Interrupts were enabled and / or requested
+                None => Cycle::new(0), // NO Interrupts were enabled and / or requested
             };
         }
     }

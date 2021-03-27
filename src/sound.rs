@@ -1,4 +1,4 @@
-use crate::instruction::Cycles;
+use crate::instruction::Cycle;
 use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Sound {
@@ -7,7 +7,7 @@ pub struct Sound {
 }
 
 impl Sound {
-    pub fn step(&mut self, _cycles: Cycles) {
+    pub fn step(&mut self, _cycles: Cycle) {
         //
     }
 }

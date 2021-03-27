@@ -118,17 +118,17 @@ pub enum JumpCondition {
 struct Table;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct Cycles(u32);
+pub struct Cycle(u32);
 
 impl Instruction {
-    pub fn execute(cpu: &mut Cpu, instruction: Self) -> Cycles {
+    pub fn execute(cpu: &mut Cpu, instruction: Self) -> Cycle {
         match instruction {
-            Instruction::NOP => Cycles::new(4),
+            Instruction::NOP => Cycle::new(4),
             Instruction::LD(lhs, rhs) => match (lhs, rhs) {
                 (LDTarget::ByteAtAddress(nn), LDTarget::RegisterPair(RegisterPair::SP)) => {
                     // LD (nn), SP | Put Stack Pointer at address nn
                     cpu.write_word(nn, cpu.register_pair(RegisterPair::SP));
-                    Cycles::new(20)
+                    Cycle::new(20)
                 }
                 (LDTarget::RegisterPair(pair), LDTarget::ImmediateWord(nn)) => {
                     // LD rp[p], nn | Put value nn into register pair
@@ -138,7 +138,7 @@ impl Instruction {
                         BC | DE | HL | SP => cpu.set_register_pair(pair, nn),
                         _ => unreachable!("There is no \"LD {:?}, nn\" instruction", pair),
                     }
-                    Cycles::new(12)
+                    Cycle::new(12)
                 }
                 (LDTarget::IndirectRegister(pair), LDTarget::Register(InstrRegister::A)) => {
                     let a = cpu.register(Register::A);
@@ -165,7 +165,7 @@ impl Instruction {
                         }
                         _ => unreachable!("There is no \"LD ({:?}), A\" instruction", pair),
                     }
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::IndirectRegister(pair)) => {
                     match pair {
@@ -194,7 +194,7 @@ impl Instruction {
                         }
                         _ => unreachable!("There is no \"LD A, ({:?})\" instruction", pair),
                     }
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (LDTarget::Register(reg), LDTarget::ImmediateByte(n)) => {
                     // LD r[y], n | Store n in Register
@@ -203,12 +203,12 @@ impl Instruction {
                     match reg {
                         A | B | C | D | E | H | L => {
                             cpu.set_register(reg.to_register(), n);
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             cpu.write_byte(addr, n);
-                            Cycles::new(12)
+                            Cycle::new(12)
                         }
                     }
                 }
@@ -216,13 +216,13 @@ impl Instruction {
                     // LD (0xFF00 + C), A | Store value of register A at address 0xFF00 + C
                     let addr = 0xFF00 + cpu.register(Register::C) as u16;
                     cpu.write_byte(addr, cpu.register(Register::A));
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::IndirectC) => {
                     let addr = 0xFF00 + cpu.register(Register::C) as u16;
                     let byte = cpu.read_byte(addr);
                     cpu.set_register(Register::A, byte);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (LDTarget::Register(lhs), LDTarget::Register(rhs)) => {
                     // LD r[y], r[z] | Store value of RHS Register in LHS Register
@@ -235,12 +235,12 @@ impl Instruction {
                             match lhs {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(lhs.to_register(), right);
-                                    Cycles::new(4)
+                                    Cycle::new(4)
                                 }
                                 IndirectHL => {
                                     let addr = cpu.register_pair(RegisterPair::HL);
                                     cpu.write_byte(addr, right);
-                                    Cycles::new(8)
+                                    Cycle::new(8)
                                 }
                             }
                         }
@@ -251,7 +251,7 @@ impl Instruction {
                             match lhs {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(lhs.to_register(), right);
-                                    Cycles::new(8)
+                                    Cycle::new(8)
                                 }
                                 IndirectHL => {
                                     unreachable!(
@@ -266,13 +266,13 @@ impl Instruction {
                 (LDTarget::ByteAtAddressWithOffset(n), LDTarget::Register(InstrRegister::A)) => {
                     // LD (0xFF00 + n), A | Store register A at address (0xFF00 + n)
                     cpu.write_byte(0xFF00 + (n as u16), cpu.register(Register::A));
-                    Cycles::new(12)
+                    Cycle::new(12)
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddressWithOffset(n)) => {
                     // LD A, (0xFF00 + n) | Store value at address (0xFF00 + n) in register A
                     let byte = cpu.read_byte(0xFF00 + (n as u16));
                     cpu.set_register(Register::A, byte);
-                    Cycles::new(12)
+                    Cycle::new(12)
                 }
                 (
                     LDTarget::RegisterPair(RegisterPair::SP),
@@ -280,20 +280,20 @@ impl Instruction {
                 ) => {
                     // LD SP, HL | Load Register HL into Register SP
                     cpu.set_register_pair(RegisterPair::SP, cpu.register_pair(RegisterPair::HL));
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (LDTarget::ByteAtAddress(nn), LDTarget::Register(InstrRegister::A)) => {
                     cpu.write_byte(nn, cpu.register(Register::A));
-                    Cycles::new(16)
+                    Cycle::new(16)
                 }
                 (LDTarget::Register(InstrRegister::A), LDTarget::ByteAtAddress(nn)) => {
                     let byte = cpu.read_byte(nn);
                     cpu.set_register(Register::A, byte);
-                    Cycles::new(16)
+                    Cycle::new(16)
                 }
                 _ => unreachable!("There is no \"LD {:?}, {:?}\" instruction", lhs, rhs),
             },
-            Instruction::STOP => Cycles::new(4),
+            Instruction::STOP => Cycle::new(4),
             Instruction::JR(cond, offset) => {
                 // JR cc[y - 4], d | If condition is true, then add d to current address and jump
                 // JR d | Add d to current address and jump
@@ -305,38 +305,38 @@ impl Instruction {
                 match cond {
                     JumpCondition::Always => {
                         cpu.set_register_pair(RegisterPair::PC, addr);
-                        Cycles::new(12)
+                        Cycle::new(12)
                     }
                     JumpCondition::NotZero => {
                         if !flags.z() {
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(12)
+                            Cycle::new(12)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(12)
+                            Cycle::new(12)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(12)
+                            Cycle::new(12)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(12)
+                            Cycle::new(12)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                 }
@@ -359,7 +359,7 @@ impl Instruction {
                         _ => unreachable!("There is no \"ADD HL, {:?}\" instruction", pair),
                     }
                     cpu.set_flags(flags);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::Register(reg)) => {
                     // ADD A, r[z] | Add (A + r[z]) to register A
@@ -373,14 +373,14 @@ impl Instruction {
                             let value = cpu.register(reg.to_register());
 
                             let sum = Self::add_u8s(a_value, value, &mut flags);
-                            (Cycles::new(4), sum)
+                            (Cycle::new(4), sum)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let value = cpu.read_byte(addr);
 
                             let sum = Self::add_u8s(a_value, value, &mut flags);
-                            (Cycles::new(8), sum)
+                            (Cycle::new(8), sum)
                         }
                     };
 
@@ -394,7 +394,7 @@ impl Instruction {
                     let d = d as i8;
                     let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
                     cpu.set_register_pair(RegisterPair::SP, sum);
-                    Cycles::new(16)
+                    Cycle::new(16)
                 }
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::ImmediateByte(n)) => {
                     // ADD A, n | Add n to register A
@@ -403,7 +403,7 @@ impl Instruction {
 
                     cpu.set_register(Register::A, sum);
                     cpu.set_flags(flags);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"ADD {:?}, {:?}\" instruction", lhs, rhs),
             },
@@ -421,13 +421,13 @@ impl Instruction {
 
                                 let value = cpu.register(reg);
                                 cpu.set_register(reg, Self::inc_register(value, &mut flags));
-                                Cycles::new(4)
+                                Cycle::new(4)
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let byte = Self::inc_register(cpu.read_byte(addr), &mut flags);
                                 cpu.write_byte(addr, byte);
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         };
 
@@ -446,7 +446,7 @@ impl Instruction {
                             }
                             _ => unreachable!("There is no \"INC {:?}\" instruction", pair),
                         }
-                        Cycles::new(8)
+                        Cycle::new(8)
                     }
                 }
             }
@@ -464,13 +464,13 @@ impl Instruction {
 
                                 let value = cpu.register(reg);
                                 cpu.set_register(reg, Self::dec_register(value, &mut flags));
-                                Cycles::new(4)
+                                Cycle::new(4)
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let byte = cpu.read_byte(addr);
                                 cpu.write_byte(addr, Self::dec_register(byte, &mut flags));
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         };
 
@@ -488,7 +488,7 @@ impl Instruction {
                             }
                             _ => unreachable!("There is no \"DEC {:?}\" instruction", pair),
                         };
-                        Cycles::new(8)
+                        Cycle::new(8)
                     }
                 }
             }
@@ -503,7 +503,7 @@ impl Instruction {
                 flags.update(false, false, false, msb == 0x01);
                 cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::RRCA => {
                 // Rotate Register A right
@@ -516,7 +516,7 @@ impl Instruction {
                 flags.update(false, false, false, lsb == 0x01);
                 cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::RLA => {
                 // Rotate register A left through carry
@@ -528,7 +528,7 @@ impl Instruction {
                 flags.update(false, false, false, carry);
                 cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::RRA => {
                 // Rotate register A right through carry
@@ -540,7 +540,7 @@ impl Instruction {
                 flags.update(false, false, false, carry);
                 cpu.set_flags(flags);
                 cpu.set_register(Register::A, rot_a);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::DAA => todo!("Implement DAA Instruction"),
             Instruction::CPL => {
@@ -553,7 +553,7 @@ impl Instruction {
 
                 cpu.set_flags(flags);
                 cpu.set_register(Register::A, !a); // Bitwise not is ! instead of ~
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::SCF => {
                 // Set Carry Flag
@@ -564,7 +564,7 @@ impl Instruction {
                 flags.set_c(true);
 
                 cpu.set_flags(flags);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::CCF => {
                 // Compliment Carry Flag (inverse)
@@ -575,7 +575,7 @@ impl Instruction {
                 flags.set_c(!flags.c());
 
                 cpu.set_flags(flags);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::HALT => {
                 // Enter CPU low power consumption mode until interrupt occurs
@@ -597,7 +597,7 @@ impl Instruction {
                 cpu.halt(halt_state);
 
                 // Though this can actually last forever
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::ADC(target) => match target {
                 MATHTarget::Register(reg) => {
@@ -611,13 +611,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register()) + (flags.c() as u8);
                             let sum = Self::add_u8s(a_value, value, &mut flags);
-                            (Cycles::new(4), sum)
+                            (Cycle::new(4), sum)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL))
                                 + (flags.c() as u8);
                             let sum = Self::add_u8s(a_value, value, &mut flags);
-                            (Cycles::new(8), sum)
+                            (Cycle::new(8), sum)
                         }
                     };
 
@@ -633,7 +633,7 @@ impl Instruction {
 
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, sum);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"ADC {:?}\" instruction", target),
             },
@@ -649,12 +649,12 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
                             let diff = Self::sub_u8s(a_value, value, &mut flags);
-                            (Cycles::new(4), diff)
+                            (Cycle::new(4), diff)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
                             let diff = Self::sub_u8s(a_value, value, &mut flags);
-                            (Cycles::new(8), diff)
+                            (Cycle::new(8), diff)
                         }
                     };
 
@@ -669,7 +669,7 @@ impl Instruction {
 
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"SUB {:?}\" instruction", target),
             },
@@ -686,13 +686,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register()) + (flags.c() as u8);
                             let diff = Self::sub_u8s(a_value, value, &mut flags);
-                            (Cycles::new(4), diff)
+                            (Cycle::new(4), diff)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL))
                                 + (flags.c() as u8);
                             let diff = Self::sub_u8s(a_value, value, &mut flags);
-                            (Cycles::new(8), diff)
+                            (Cycle::new(8), diff)
                         }
                     };
 
@@ -709,7 +709,7 @@ impl Instruction {
 
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"SBC {:?}\" instruction", target),
             },
@@ -724,11 +724,11 @@ impl Instruction {
                     let (cycles, result) = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            (Cycles::new(4), a_value & value)
+                            (Cycle::new(4), a_value & value)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            (Cycles::new(8), a_value & value)
+                            (Cycle::new(8), a_value & value)
                         }
                     };
 
@@ -745,7 +745,7 @@ impl Instruction {
                     flags.update(result == 0, false, true, false);
                     cpu.set_register(Register::A, result);
                     cpu.set_flags(flags);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"AND {:?}\" instruction", target),
             },
@@ -760,11 +760,11 @@ impl Instruction {
                     let (cycles, result) = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            (Cycles::new(4), a_value ^ value)
+                            (Cycle::new(4), a_value ^ value)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            (Cycles::new(8), a_value ^ value)
+                            (Cycle::new(8), a_value ^ value)
                         }
                     };
 
@@ -781,7 +781,7 @@ impl Instruction {
                     flags.update(result == 0, false, false, false);
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"XOR {:?}\" instruction", target),
             },
@@ -796,11 +796,11 @@ impl Instruction {
                     let (cycles, result) = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            (Cycles::new(4), a_value | value)
+                            (Cycle::new(4), a_value | value)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            (Cycles::new(8), a_value | value)
+                            (Cycle::new(8), a_value | value)
                         }
                     };
 
@@ -817,7 +817,7 @@ impl Instruction {
                     flags.update(result == 0, false, false, false);
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, result);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"OR {:?}\" instruction", target),
             },
@@ -833,12 +833,12 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
-                            Cycles::new(4)
+                            Cycle::new(4)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
                             let _ = Self::sub_u8s(a_value, value, &mut flags);
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     };
 
@@ -851,7 +851,7 @@ impl Instruction {
                     let _ = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
 
                     cpu.set_flags(flags);
-                    Cycles::new(8)
+                    Cycle::new(8)
                 }
                 _ => unreachable!("There is no \"CP {:?}\" instruction", target),
             },
@@ -865,42 +865,42 @@ impl Instruction {
                         if !flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(20)
+                            Cycle::new(20)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(20)
+                            Cycle::new(20)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(20)
+                            Cycle::new(20)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             let addr = Self::pop(cpu);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycles::new(20)
+                            Cycle::new(20)
                         } else {
-                            Cycles::new(8)
+                            Cycle::new(8)
                         }
                     }
                     JumpCondition::Always => {
                         let addr = Self::pop(cpu);
                         cpu.set_register_pair(RegisterPair::PC, addr);
-                        Cycles::new(16)
+                        Cycle::new(16)
                     }
                 }
             }
@@ -912,7 +912,7 @@ impl Instruction {
 
                 cpu.set_register_pair(RegisterPair::HL, sum);
                 cpu.set_flags(flags);
-                Cycles::new(12)
+                Cycle::new(12)
             }
             Instruction::POP(pair) => {
                 // POP rp2[p] | Pop from stack into register pair rp2[]
@@ -926,14 +926,14 @@ impl Instruction {
                     }
                     _ => unreachable!("There is no \"POP {:?}\" instruction", pair),
                 }
-                Cycles::new(12)
+                Cycle::new(12)
             }
             Instruction::RETI => {
                 // Same as RET, after which interrupts are enabled.
                 let addr = Self::pop(cpu);
                 cpu.set_register_pair(RegisterPair::PC, addr);
                 cpu.set_ime(true);
-                Cycles::new(16)
+                Cycle::new(16)
             }
             Instruction::JP(cond, target) => match target {
                 JPTarget::RegisterPair(RegisterPair::HL) => {
@@ -941,7 +941,7 @@ impl Instruction {
                     let addr = cpu.register_pair(RegisterPair::HL);
 
                     cpu.set_register_pair(RegisterPair::PC, addr);
-                    Cycles::new(4)
+                    Cycle::new(4)
                 }
                 JPTarget::ImmediateWord(nn) => {
                     // JP cc[y], nn | Store Immediate Word in the Program Counter if cond is met
@@ -952,38 +952,38 @@ impl Instruction {
                         JumpCondition::NotZero => {
                             if !flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                Cycles::new(16)
+                                Cycle::new(16)
                             } else {
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         }
                         JumpCondition::Zero => {
                             if flags.z() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                Cycles::new(16)
+                                Cycle::new(16)
                             } else {
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         }
                         JumpCondition::NotCarry => {
                             if !flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                Cycles::new(16)
+                                Cycle::new(16)
                             } else {
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         }
                         JumpCondition::Carry => {
                             if flags.c() {
                                 cpu.set_register_pair(RegisterPair::PC, nn);
-                                Cycles::new(16)
+                                Cycle::new(16)
                             } else {
-                                Cycles::new(12)
+                                Cycle::new(12)
                             }
                         }
                         JumpCondition::Always => {
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            Cycles::new(16)
+                            Cycle::new(16)
                         }
                     }
                 }
@@ -992,13 +992,13 @@ impl Instruction {
             Instruction::DI => {
                 // Disable IME
                 cpu.set_ime(false);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::EI => {
                 // Enable IME (After the next instruction)
                 // FIXME: IME is set after the next instruction, this currently is not represented in this emulator.
                 cpu.set_ime(true);
-                Cycles::new(4)
+                Cycle::new(4)
             }
             Instruction::CALL(cond, nn) => {
                 // CALL cc[y], nn | Store pc on the stack, then store nn in the program counter if cond is met
@@ -1011,42 +1011,42 @@ impl Instruction {
                         if !flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            Cycles::new(24)
+                            Cycle::new(24)
                         } else {
-                            Cycles::new(12)
+                            Cycle::new(12)
                         }
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            Cycles::new(24)
+                            Cycle::new(24)
                         } else {
-                            Cycles::new(12)
+                            Cycle::new(12)
                         }
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            Cycles::new(24)
+                            Cycle::new(24)
                         } else {
-                            Cycles::new(12)
+                            Cycle::new(12)
                         }
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             Self::push(cpu, pc);
                             cpu.set_register_pair(RegisterPair::PC, nn);
-                            Cycles::new(24)
+                            Cycle::new(24)
                         } else {
-                            Cycles::new(12)
+                            Cycle::new(12)
                         }
                     }
                     JumpCondition::Always => {
                         Self::push(cpu, pc);
                         cpu.set_register_pair(RegisterPair::PC, nn);
-                        Cycles::new(24)
+                        Cycle::new(24)
                     }
                 }
             }
@@ -1061,14 +1061,14 @@ impl Instruction {
                     }
                     _ => unreachable!("There is no \"PUSH {:?}\" instruction", pair),
                 }
-                Cycles::new(16)
+                Cycle::new(16)
             }
             Instruction::RST(n) => {
                 // RST n | Push current address onto the stack, jump to 0x0000 + n
                 let addr = cpu.register_pair(RegisterPair::PC);
                 Self::push(cpu, addr);
                 cpu.set_register_pair(RegisterPair::PC, n as u16);
-                Cycles::new(16)
+                Cycle::new(16)
             }
             Instruction::RLC(reg) => {
                 // RLC r[z] | Rotate register r[z] left
@@ -1084,7 +1084,7 @@ impl Instruction {
                         let rotated = value.rotate_left(1);
 
                         cpu.set_register(register, rotated);
-                        (Cycles::new(8), value >> 7, rotated)
+                        (Cycle::new(8), value >> 7, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1093,7 +1093,7 @@ impl Instruction {
                         let rotated = value.rotate_left(1);
 
                         cpu.write_byte(addr, rotated);
-                        (Cycles::new(16), value >> 7, rotated)
+                        (Cycle::new(16), value >> 7, rotated)
                     }
                 };
 
@@ -1115,7 +1115,7 @@ impl Instruction {
                         let rotated = value.rotate_right(1);
 
                         cpu.set_register(register, rotated);
-                        (Cycles::new(8), value & 0x01, rotated)
+                        (Cycle::new(8), value & 0x01, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1124,7 +1124,7 @@ impl Instruction {
                         let rotated = value.rotate_right(1);
 
                         cpu.write_byte(addr, rotated);
-                        (Cycles::new(16), value & 0x01, rotated)
+                        (Cycle::new(16), value & 0x01, rotated)
                     }
                 };
 
@@ -1146,7 +1146,7 @@ impl Instruction {
                         let (rotated, carry) = Self::rl_thru_carry(value, flags.c());
 
                         cpu.set_register(register, rotated);
-                        (Cycles::new(8), rotated, carry)
+                        (Cycle::new(8), rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1155,7 +1155,7 @@ impl Instruction {
                         let (rotated, carry) = Self::rl_thru_carry(value, flags.c());
 
                         cpu.write_byte(addr, rotated);
-                        (Cycles::new(16), rotated, carry)
+                        (Cycle::new(16), rotated, carry)
                     }
                 };
 
@@ -1178,7 +1178,7 @@ impl Instruction {
                         let (rotated, carry) = Self::rr_thru_carry(value, flags.c());
 
                         cpu.set_register(register, rotated);
-                        (Cycles::new(8), rotated, carry)
+                        (Cycle::new(8), rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1187,7 +1187,7 @@ impl Instruction {
                         let (rotated, carry) = Self::rr_thru_carry(value, flags.c());
 
                         cpu.write_byte(addr, rotated);
-                        (Cycles::new(16), rotated, carry)
+                        (Cycle::new(16), rotated, carry)
                     }
                 };
 
@@ -1210,7 +1210,7 @@ impl Instruction {
                         let shifted = value << 1;
 
                         cpu.set_register(register, shifted);
-                        (Cycles::new(8), (value >> 7) & 0x01, shifted)
+                        (Cycle::new(8), (value >> 7) & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1219,7 +1219,7 @@ impl Instruction {
                         let shifted = value << 1;
 
                         cpu.write_byte(addr, value);
-                        (Cycles::new(16), (value >> 7) & 0x01, shifted)
+                        (Cycle::new(16), (value >> 7) & 0x01, shifted)
                     }
                 };
 
@@ -1243,7 +1243,7 @@ impl Instruction {
                         let shifted = msb << 7 | value >> 1;
 
                         cpu.set_register(register, shifted);
-                        (Cycles::new(8), value & 0x01, shifted)
+                        (Cycle::new(8), value & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1253,7 +1253,7 @@ impl Instruction {
                         let shifted = msb << 7 | value >> 1;
 
                         cpu.write_byte(addr, value);
-                        (Cycles::new(16), value & 0x01, shifted)
+                        (Cycle::new(16), value & 0x01, shifted)
                     }
                 };
 
@@ -1276,7 +1276,7 @@ impl Instruction {
                         let swapped = Self::swap_bits(value);
 
                         cpu.set_register(register, swapped);
-                        (Cycles::new(8), swapped)
+                        (Cycle::new(8), swapped)
                     }
 
                     IndirectHL => {
@@ -1286,7 +1286,7 @@ impl Instruction {
                         let swapped = Self::swap_bits(value);
 
                         cpu.write_byte(addr, swapped);
-                        (Cycles::new(16), swapped)
+                        (Cycle::new(16), swapped)
                     }
                 };
 
@@ -1309,7 +1309,7 @@ impl Instruction {
                         let shifted = value >> 1;
 
                         cpu.set_register(register, shifted);
-                        (Cycles::new(8), value & 0x01, shifted)
+                        (Cycle::new(8), value & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
@@ -1318,7 +1318,7 @@ impl Instruction {
                         let shifted = value >> 1;
 
                         cpu.write_byte(addr, shifted);
-                        (Cycles::new(16), value & 0x01, shifted)
+                        (Cycle::new(16), value & 0x01, shifted)
                     }
                 };
 
@@ -1339,14 +1339,14 @@ impl Instruction {
                         let value = cpu.register(register);
 
                         let is_bit_set = ((value >> y) & 0x01) == 0x01;
-                        (Cycles::new(8), is_bit_set)
+                        (Cycle::new(8), is_bit_set)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
                         let is_bit_set = ((value >> y) & 0x01) == 0x01;
-                        (Cycles::new(12), is_bit_set)
+                        (Cycle::new(12), is_bit_set)
                     }
                 };
 
@@ -1369,14 +1369,14 @@ impl Instruction {
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value & !(1u8 << y));
-                        Cycles::new(8)
+                        Cycle::new(8)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
                         cpu.write_byte(addr, value & !(1u8 << y));
-                        Cycles::new(16)
+                        Cycle::new(16)
                     }
                 }
             }
@@ -1393,14 +1393,14 @@ impl Instruction {
                         let value = cpu.register(register);
 
                         cpu.set_register(register, value | (1u8 << y));
-                        Cycles::new(8)
+                        Cycle::new(8)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let value = cpu.read_byte(addr);
 
                         cpu.write_byte(addr, value | (1u8 << y));
-                        Cycles::new(16)
+                        Cycle::new(16)
                     }
                 }
             }
@@ -1992,13 +1992,13 @@ impl std::fmt::Debug for Registers {
     }
 }
 
-impl Cycles {
+impl Cycle {
     pub const fn new(num: u32) -> Self {
         Self(num)
     }
 }
 
-impl std::ops::Add for Cycles {
+impl std::ops::Add for Cycle {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -2006,7 +2006,7 @@ impl std::ops::Add for Cycles {
     }
 }
 
-impl std::ops::Add<u32> for Cycles {
+impl std::ops::Add<u32> for Cycle {
     type Output = Self;
 
     fn add(self, rhs: u32) -> Self::Output {
@@ -2014,19 +2014,19 @@ impl std::ops::Add<u32> for Cycles {
     }
 }
 
-impl std::ops::AddAssign for Cycles {
+impl std::ops::AddAssign for Cycle {
     fn add_assign(&mut self, rhs: Self) {
         *self = Self(self.0 + rhs.0);
     }
 }
 
-impl std::ops::AddAssign<u32> for Cycles {
+impl std::ops::AddAssign<u32> for Cycle {
     fn add_assign(&mut self, rhs: u32) {
         *self = Self(self.0 + rhs);
     }
 }
 
-impl std::ops::Rem for Cycles {
+impl std::ops::Rem for Cycle {
     type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
@@ -2034,7 +2034,7 @@ impl std::ops::Rem for Cycles {
     }
 }
 
-impl std::ops::Rem<u32> for Cycles {
+impl std::ops::Rem<u32> for Cycle {
     type Output = Self;
 
     fn rem(self, rhs: u32) -> Self::Output {
@@ -2042,54 +2042,54 @@ impl std::ops::Rem<u32> for Cycles {
     }
 }
 
-impl std::ops::RemAssign for Cycles {
+impl std::ops::RemAssign for Cycle {
     fn rem_assign(&mut self, rhs: Self) {
         *self = Self(self.0 % rhs.0);
     }
 }
 
-impl std::ops::RemAssign<u32> for Cycles {
+impl std::ops::RemAssign<u32> for Cycle {
     fn rem_assign(&mut self, rhs: u32) {
         *self = Self(self.0 % rhs);
     }
 }
 
-impl std::ops::Sub for Cycles {
-    type Output = Cycles;
+impl std::ops::Sub for Cycle {
+    type Output = Cycle;
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self(self.0 - rhs.0)
     }
 }
 
-impl std::ops::Sub<u32> for Cycles {
-    type Output = Cycles;
+impl std::ops::Sub<u32> for Cycle {
+    type Output = Cycle;
 
     fn sub(self, rhs: u32) -> Self::Output {
         Self(self.0 - rhs)
     }
 }
 
-impl std::ops::SubAssign for Cycles {
+impl std::ops::SubAssign for Cycle {
     fn sub_assign(&mut self, rhs: Self) {
         *self = Self(self.0 - rhs.0);
     }
 }
 
-impl std::ops::SubAssign<u32> for Cycles {
+impl std::ops::SubAssign<u32> for Cycle {
     fn sub_assign(&mut self, rhs: u32) {
         *self = Self(self.0 - rhs);
     }
 }
 
-impl From<u32> for Cycles {
+impl From<u32> for Cycle {
     fn from(num: u32) -> Self {
         Self(num)
     }
 }
 
-impl From<Cycles> for u32 {
-    fn from(cycles: Cycles) -> Self {
+impl From<Cycle> for u32 {
+    fn from(cycles: Cycle) -> Self {
         cycles.0
     }
 }
@@ -2108,21 +2108,21 @@ impl InstrRegister {
 
 #[cfg(test)]
 mod tests {
-    use super::Cycles;
+    use super::Cycle;
 
     #[test]
     fn cycle_add_works() {
-        let lhs: Cycles = Cycles::new(5);
-        let rhs: Cycles = Cycles::new(4);
+        let lhs: Cycle = Cycle::new(5);
+        let rhs: Cycle = Cycle::new(4);
 
-        assert_eq!(Cycles::new(9), rhs + lhs);
+        assert_eq!(Cycle::new(9), rhs + lhs);
     }
 
     #[test]
     fn cycle_add_assign_works() {
-        let mut cycles: Cycles = Cycles::new(5);
+        let mut cycles: Cycle = Cycle::new(5);
         cycles += 5;
 
-        assert_eq!(Cycles::new(10), cycles);
+        assert_eq!(Cycle::new(10), cycles);
     }
 }

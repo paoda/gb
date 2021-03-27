@@ -1,5 +1,5 @@
 pub use cpu::Cpu as LR35902;
-pub use instruction::Cycles;
+pub use instruction::Cycle;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;

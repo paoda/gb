@@ -1,4 +1,4 @@
-use crate::Cycles;
+use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use bitfield::bitfield;
@@ -22,7 +22,7 @@ pub struct Ppu {
     pub oam: Box<[u8; OAM_SIZE]>,
     frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     pub stat: LCDStatus,
-    cycles: Cycles,
+    cycles: Cycle,
 }
 
 impl Ppu {
@@ -36,7 +36,7 @@ impl Ppu {
 }
 
 impl Ppu {
-    pub fn step(&mut self, cycles: Cycles) {
+    pub fn step(&mut self, cycles: Cycle) {
         self.cycles += cycles;
 
         match self.stat.mode() {

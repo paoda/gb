@@ -1,4 +1,4 @@
-use crate::Cycles;
+use crate::Cycle;
 use bitfield::bitfield;
 
 // const DIVIDER_REGISTER_HZ: u32 = 16384;
@@ -14,7 +14,7 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub fn step(&mut self, cycles: Cycles) {
+    pub fn step(&mut self, cycles: Cycle) {
         use TimerSpeed::*;
 
         for _ in 0..cycles.into() {
