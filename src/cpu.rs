@@ -86,7 +86,7 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
-        if self.reg.pc > 0x100 {
+        if !self.bus.boot_enabled() {
             self.log_state().unwrap();
         }
 

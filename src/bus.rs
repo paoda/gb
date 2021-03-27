@@ -323,4 +323,8 @@ impl Bus {
         // Update the Timer's instance of the following interrupts
         self.timer.set_interrupt(timer);
     }
+
+    pub fn boot_enabled(&self) -> bool {
+        self.boot.is_some()
+    }
 }
