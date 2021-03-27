@@ -114,18 +114,12 @@ impl MBC1 {
     fn calc_high_bank_number(&self) -> u8 {
         use BankCount::*;
 
+        let less_than_mb = self.apply_rom_size_bitmask(self.rom_bank);
+
         match self.bank_count {
-            None | Four | Eight | Sixteen | ThirtyTwo => self.apply_rom_size_bitmask(self.rom_bank),
-            SixtyFour => {
-                let mut num = self.apply_rom_size_bitmask(self.rom_bank);
-                num &= !(0x01 << 5);
-                num | ((self.ram_bank & 0x01) << 5)
-            }
-            OneHundredTwentyEight => {
-                let mut num = self.apply_rom_size_bitmask(self.rom_bank);
-                num &= !(0x03 << 5);
-                num | ((self.ram_bank) << 5)
-            }
+            None | Four | Eight | Sixteen | ThirtyTwo => less_than_mb,
+            SixtyFour => (less_than_mb & !(0x01 << 5)) | (self.ram_bank & 0x01) << 5,
+            OneHundredTwentyEight => (less_than_mb & !(0b11 << 5)) | (self.ram_bank & 0b11) << 5,
             _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
@@ -135,7 +129,8 @@ impl MBC1 {
 
         let err_bc = self.bank_count; // Bank Count, but with a shorter name
 
-        match self.bank_count {
+        let result = match self.bank_count {
+            None => byte, // FIXME: I don't think this is the correct behaviour
             Four => byte & 0b00000011,
             Eight => byte & 0b00000111,
             Sixteen => byte & 0b00001111,
@@ -143,7 +138,12 @@ impl MBC1 {
             SixtyFour => byte & 0b00011111,
             OneHundredTwentyEight => byte & 0b00011111,
             _ => unreachable!("{:?} does not have a rom size bitmask in MBC1", err_bc),
+        };
+
+        if result == 0 {
+            return 1;
         }
+        result
     }
 
     fn calc_ram_address(&self, addr: u16) -> u16 {
@@ -198,10 +198,6 @@ impl MemoryBankController for MBC1 {
             0x0000..=0x1FFF => self.ram_enabled = (byte & 0x0F) == 0x0A,
             0x2000..=0x3FFF => {
                 self.rom_bank = self.apply_rom_size_bitmask(byte);
-
-                if self.rom_bank == 0 {
-                    self.rom_bank = 1;
-                }
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0b11,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
@@ -323,10 +319,10 @@ impl Default for BankCount {
 
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    pub fn to_rom_size(&self) -> u32 {
+    pub fn to_byte_count(self) -> u32 {
         use BankCount::*;
 
-        match *self {
+        match self {
             None => 32_768,
             Four => 65_536,
             Eight => 131_072,
