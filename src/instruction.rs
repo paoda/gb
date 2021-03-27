@@ -1504,12 +1504,10 @@ impl Instruction {
     fn add_u16s(left: u16, right: u16, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right);
 
-        flags.update(
-            false,
-            Self::add_u16_half_carry(left, right),
-            flags.h(),
-            did_overflow,
-        );
+        flags.set_n(false);
+        flags.set_h(Self::add_u16_half_carry(left, right));
+        flags.set_c(did_overflow);
+
         sum
     }
 
