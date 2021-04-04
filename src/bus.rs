@@ -20,7 +20,7 @@ pub struct Bus {
     wram: WorkRam,
     vwram: VariableWorkRam,
     timer: Timer,
-    interrupt: Interrupt,
+    int: Interrupt,
     sound: Sound,
     hram: HighRam,
     serial: Serial,
@@ -36,7 +36,7 @@ impl Default for Bus {
             wram: Default::default(),
             vwram: Default::default(),
             timer: Default::default(),
-            interrupt: Default::default(),
+            int: Default::default(),
             sound: Default::default(),
             hram: Default::default(),
             serial: Default::default(),
@@ -64,9 +64,9 @@ impl Bus {
     }
 
     pub fn step(&mut self, cycles: Cycle) {
+        self.ppu.step(cycles);
         self.timer.step(cycles);
         self.sound.step(cycles);
-        self.ppu.step(cycles);
     }
 }
 
@@ -158,7 +158,7 @@ impl Bus {
             }
             0xFFFF => {
                 // Interrupts Enable Register
-                self.interrupt.enable.into()
+                self.int.enable.into()
             }
         }
     }
@@ -266,7 +266,7 @@ impl Bus {
             }
             0xFFFF => {
                 // Interrupts Enable Register
-                self.interrupt.enable = byte.into();
+                self.int.enable = byte.into();
             }
         }
     }
@@ -284,8 +284,8 @@ impl Bus {
 impl Bus {
     fn interrupt_flag(&self) -> InterruptFlag {
         // Read the current interrupt information from the PPU
-        let vblank = self.ppu.interrupt.vblank();
-        let lcd_stat = self.ppu.interrupt.lcd_stat();
+        let vblank = self.ppu.int.vblank();
+        let lcd_stat = self.ppu.int.lcd_stat();
 
         // Read the current interrupt information from the Joypad
         let joypad = self.joypad.interrupt();
@@ -294,7 +294,7 @@ impl Bus {
         let timer = self.timer.interrupt();
 
         // Copy the Interrupt Flag register 0xFF0F
-        let mut flag = self.interrupt.flag;
+        let mut flag = self.int.flag;
 
         // Update the flag to have the most accurate information
         flag.set_vblank(vblank);
@@ -306,16 +306,16 @@ impl Bus {
 
     fn set_interrupt_flag(&mut self, byte: u8) {
         // Update the Interrupt register 0xFF0F
-        self.interrupt.flag = byte.into();
+        self.int.flag = byte.into();
 
-        let vblank = self.interrupt.flag.vblank();
-        let lcd_stat = self.interrupt.flag.lcd_stat();
-        let joypad = self.interrupt.flag.joypad();
-        let timer = self.interrupt.flag.timer();
+        let vblank = self.int.flag.vblank();
+        let lcd_stat = self.int.flag.lcd_stat();
+        let joypad = self.int.flag.joypad();
+        let timer = self.int.flag.timer();
 
         // Update the PPU's instance of the following interrupts
-        self.ppu.interrupt.set_vblank(vblank);
-        self.ppu.interrupt.set_lcd_stat(lcd_stat);
+        self.ppu.int.set_vblank(vblank);
+        self.ppu.int.set_lcd_stat(lcd_stat);
 
         // Update the Joypad's instance of the following interrupts
         self.joypad.set_interrupt(joypad);

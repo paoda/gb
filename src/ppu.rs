@@ -14,7 +14,7 @@ const BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
 
 #[derive(Debug, Clone)]
 pub struct Ppu {
-    pub interrupt: Interrupt,
+    pub int: Interrupt,
     pub lcd_control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
@@ -57,7 +57,7 @@ impl Ppu {
                     self.cycles %= 172;
 
                     if self.stat.hblank_int() {
-                        self.interrupt.set_lcd_stat(true);
+                        self.int.set_lcd_stat(true);
                     }
 
                     self.stat.set_mode(Mode::HBlank);
@@ -71,16 +71,16 @@ impl Ppu {
                     self.pos.line_y += 1;
 
                     let next_mode = if self.pos.line_y >= 144 {
-                        self.interrupt.set_vblank(true);
+                        self.int.set_vblank(true);
 
                         if self.stat.vblank_int() {
-                            self.interrupt.set_lcd_stat(true);
+                            self.int.set_lcd_stat(true);
                         }
 
                         Mode::VBlank
                     } else {
                         if self.stat.oam_int() {
-                            self.interrupt.set_lcd_stat(true);
+                            self.int.set_lcd_stat(true);
                         }
 
                         Mode::OamScan
@@ -105,7 +105,7 @@ impl Ppu {
                         self.pos.line_y = 0;
 
                         if self.stat.oam_int() {
-                            self.interrupt.set_lcd_stat(true);
+                            self.int.set_lcd_stat(true);
                         }
 
                         self.stat.set_mode(Mode::OamScan);
@@ -179,7 +179,7 @@ impl Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
-            interrupt: Interrupt::default(),
+            int: Interrupt::default(),
             lcd_control: Default::default(),
             monochrome: Default::default(),
             pos: Default::default(),
