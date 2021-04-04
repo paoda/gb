@@ -68,7 +68,7 @@ impl Cpu {
     }
 
     pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
-        Ok(self.bus.load_cartridge(path)?)
+        self.bus.load_cartridge(path)
     }
 }
 
@@ -155,7 +155,7 @@ impl Cpu {
         let req = self.read_byte(0xFF0F);
         let enabled = self.read_byte(0xFFFF);
 
-        if let Some(_) = self.halted() {
+        if self.halted.is_some() {
             // When we're here either a HALT with IME set or
             // a HALT with IME not set and No pending Interrupts was called
 
@@ -335,7 +335,7 @@ impl Cpu {
         write!(handle, "({:02X} ", self.read_byte(self.reg.pc))?;
         write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
         write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
-        write!(handle, "{:02X})\n", self.read_byte(self.reg.pc + 3))?;
+        writeln!(handle, "{:02X})", self.read_byte(self.reg.pc + 3))?;
         handle.flush()?;
 
         Ok(())

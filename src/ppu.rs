@@ -144,7 +144,7 @@ impl Ppu {
             let tile_number = self.read_byte(tile_addr);
 
             let tile_data_addr = match self.lcd_control.tile_data_addr() {
-                TileDataAddress::X8800 => (0x9000 as i32 + (tile_number as i32 * 16)) as u16,
+                TileDataAddress::X8800 => (0x9000_i32 + (tile_number as i32 * 16)) as u16,
                 TileDataAddress::X8000 => 0x8000 + (tile_number as u16 * 16),
             };
 
@@ -554,8 +554,8 @@ impl Pixels {
     }
 
     pub fn pixel(&self, bit: usize) -> u8 {
-        let higher = &self.0[0] >> bit;
-        let lower = &self.0[1] >> bit;
+        let higher = self.0[0] >> bit;
+        let lower = self.0[1] >> bit;
 
         (higher & 0x01) << 1 | lower & 0x01
     }

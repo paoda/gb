@@ -613,12 +613,10 @@ impl Instruction {
 
                 let halt_state = if cpu.ime() {
                     ImeSet
+                } else if req & enabled != 0 {
+                    SomePending
                 } else {
-                    if req & enabled != 0 {
-                        SomePending
-                    } else {
-                        NonePending
-                    }
+                    NonePending
                 };
 
                 cpu.halt(halt_state);
@@ -1583,6 +1581,7 @@ impl Instruction {
 
     fn from_unprefixed_byte(cpu: &mut Cpu, opcode: u8) -> Self {
         // https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+        #![allow(clippy::many_single_char_names)]
 
         let x = (opcode >> 6) & 0x03;
         let y = (opcode >> 3) & 0x07;
@@ -1770,6 +1769,8 @@ impl Instruction {
     }
 
     fn from_prefixed_byte(cpu: &mut Cpu) -> Self {
+        #![allow(clippy::many_single_char_names)]
+
         let pc = cpu.register_pair(RegisterPair::PC);
         let opcode = cpu.read_imm_byte(pc); // FIXME: Should the PC be incremented here?
 
