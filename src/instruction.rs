@@ -542,7 +542,34 @@ impl Instruction {
                 cpu.set_register(Register::A, rot_a);
                 Cycle::new(4)
             }
-            Instruction::DAA => todo!("Implement DAA Instruction"),
+            Instruction::DAA => {
+                // source: https://ehaskins.com/2018-01-30%20Z80%20DAA/
+                // TODO: Maybe i16 isn't the right choice here?
+
+                let mut correction: i16 = 0;
+                let mut value = cpu.register(Register::A) as i16;
+                let mut flags = *cpu.flags();
+
+                if flags.h() || (!flags.n() && (value & 0xF) > 9) {
+                    correction |= 0x06;
+                }
+
+                if flags.c() || (!flags.n() && value > 0x99) {
+                    correction |= 0x60;
+                    flags.set_c(true);
+                }
+
+                value += if flags.n() { -correction } else { correction };
+                let result = value as u8;
+
+                flags.set_z(result == 0);
+                flags.set_h(false);
+
+                cpu.set_flags(flags);
+                cpu.set_register(Register::A, value as u8);
+
+                Cycle::new(4)
+            }
             Instruction::CPL => {
                 // Compliment A register (inverse)
                 let mut flags: Flags = *cpu.flags();
