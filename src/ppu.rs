@@ -56,7 +56,7 @@ impl Ppu {
                 if self.cycles >= 172.into() {
                     self.cycles %= 172;
 
-                    if self.stat.hblank_intr() {
+                    if self.stat.hblank_int() {
                         self.interrupt.set_lcd_stat(true);
                     }
 
@@ -73,13 +73,13 @@ impl Ppu {
                     let next_mode = if self.pos.line_y >= 144 {
                         self.interrupt.set_vblank(true);
 
-                        if self.stat.vblank_intr() {
+                        if self.stat.vblank_int() {
                             self.interrupt.set_lcd_stat(true);
                         }
 
                         Mode::VBlank
                     } else {
-                        if self.stat.oam_intr() {
+                        if self.stat.oam_int() {
                             self.interrupt.set_lcd_stat(true);
                         }
 
@@ -88,7 +88,7 @@ impl Ppu {
 
                     self.stat.set_mode(next_mode);
 
-                    if self.stat.coincidence_intr() {
+                    if self.stat.coincidence_int() {
                         let are_equal = self.pos.line_y == self.pos.ly_compare;
                         self.stat.set_coincidence(are_equal);
                     }
@@ -106,7 +106,7 @@ impl Ppu {
                         self.pos.line_y = 0;
                     }
 
-                    if self.stat.coincidence_intr() {
+                    if self.stat.coincidence_int() {
                         let are_equal = self.pos.line_y == self.pos.ly_compare;
                         self.stat.set_coincidence(are_equal);
                     }
@@ -214,10 +214,10 @@ impl Interrupt {
 bitfield! {
     pub struct LCDStatus(u8);
     impl Debug;
-    pub coincidence_intr, set_coincidence_intr: 6;
-    pub oam_intr, set_oam_intr: 5;
-    pub vblank_intr, set_vblank_intr: 4;
-    pub hblank_intr, set_hblank_intr: 3;
+    pub coincidence_int, set_coincidence_int: 6;
+    pub oam_int, set_oam_int: 5;
+    pub vblank_int, set_vblank_int: 4;
+    pub hblank_int, set_hblank_int: 3;
     pub coincidence, set_coincidence: 2; // LYC == LY Flag
     from into Mode, _mode, set_mode: 1, 0;
 }

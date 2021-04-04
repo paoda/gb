@@ -21,23 +21,24 @@ impl Timer {
             self.divider = self.divider.wrapping_add(1);
 
             // Get Bit Position
-            let pos = match self.control.speed() {
+            let bit = match self.control.speed() {
                 Hz4096 => 9,
                 Hz262144 => 3,
                 Hz65536 => 5,
                 Hz16384 => 7,
             };
 
-            let bit = (self.divider >> pos) as u8 & 0x01;
+            let bit = (self.divider >> bit) as u8 & 0x01;
             let timer_enable = self.control.enabled() as u8;
             let and_result = bit & timer_enable;
 
             if let Some(previous) = self.prev_and_result {
                 if previous == 0x01 && and_result == 0x00 {
-                    // Falling Edge, increase TIMA Regiser
+                    // Falling Edge, increase TIMA Register
                     self.increment_tima();
                 }
             }
+
             self.prev_and_result = Some(and_result);
         }
     }

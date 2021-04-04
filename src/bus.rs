@@ -235,7 +235,7 @@ impl Bus {
                         self.ppu.pos.ly_compare = byte;
 
                         // Update Coincidence Flag
-                        if self.ppu.stat.coincidence_intr() {
+                        if self.ppu.stat.coincidence_int() {
                             let are_equal = self.ppu.pos.line_y == byte;
                             self.ppu.stat.set_coincidence(are_equal);
                         }
