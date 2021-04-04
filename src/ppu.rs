@@ -102,8 +102,13 @@ impl Ppu {
                     self.pos.line_y += 1;
 
                     if self.pos.line_y == 154 {
-                        self.stat.set_mode(Mode::OamScan);
                         self.pos.line_y = 0;
+
+                        if self.stat.oam_int() {
+                            self.interrupt.set_lcd_stat(true);
+                        }
+
+                        self.stat.set_mode(Mode::OamScan);
                     }
 
                     if self.stat.coincidence_int() {
