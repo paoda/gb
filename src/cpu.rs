@@ -105,12 +105,12 @@ impl Cpu {
                 let cycles = self.execute(instr);
 
                 self.check_ime();
-                self.bus.step(cycles);
 
                 cycles
             }
         };
 
+        self.bus.step(cycles);
         self.handle_interrupts();
 
         cycles
