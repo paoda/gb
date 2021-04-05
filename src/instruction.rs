@@ -1022,7 +1022,7 @@ impl Instruction {
             Instruction::EI => {
                 // Enable IME (After the next instruction)
                 // FIXME: IME is set after the next instruction, this currently is not represented in this emulator.
-                cpu.set_ime(ImeState::EnablePending(0));
+                cpu.set_ime(ImeState::Pending);
                 Cycle::new(4)
             }
             Instruction::CALL(cond, nn) => {

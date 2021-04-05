@@ -4,7 +4,6 @@ use super::interrupt::{InterruptEnable, InterruptFlag};
 use super::ppu::Ppu;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::ops::Add;
 
 #[derive(Debug, Clone, Default)]
 pub struct Cpu {
@@ -155,13 +154,18 @@ impl Cpu {
     }
 
     fn check_ime(&mut self) {
-        if let ImeState::EnablePending(count) = self.ime {
-            self.ime = if count < 2 {
-                self.ime.wait()
-            } else {
-                ImeState::Enabled
+        match self.ime {
+            ImeState::Pending => {
+                // This is within the context of the EI instruction, we need to not update EI until the end of the
+                // next executed Instruction
+                self.ime = ImeState::PendingEnd;
             }
-        };
+            ImeState::PendingEnd => {
+                // The Instruction after EI has now been executed, so we want to enable the IME flag here
+                self.ime = ImeState::Enabled;
+            }
+            ImeState::Disabled | ImeState::Enabled => {} // Do Nothing
+        }
     }
 
     fn handle_interrupts(&mut self) {
@@ -478,21 +482,13 @@ pub enum HaltState {
 #[derive(Debug, Clone, Copy)]
 pub enum ImeState {
     Disabled,
+    Pending,
+    PendingEnd,
     Enabled,
-    EnablePending(u8),
 }
 
 impl Default for ImeState {
     fn default() -> Self {
         Self::Disabled
-    }
-}
-
-impl ImeState {
-    pub fn wait(self) -> Self {
-        match self {
-            Self::EnablePending(count) => Self::EnablePending(count + 1),
-            _ => panic!("IME is {:?}, however wait() was called", self),
-        }
     }
 }
