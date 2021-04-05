@@ -31,14 +31,14 @@ impl Cartridge {
         let ram_byte_count = ram_size.to_byte_count();
 
         let mbc = match mbc_kind {
-            MBCKind::None => todo!("Handle no MBC Situation"),
-            MBCKind::MBC1 => MBC1 {
+            MbcKind::None => todo!("Handle no MBC Situation"),
+            MbcKind::MBC1 => Mbc1 {
                 ram_size,
                 ram: vec![0; ram_byte_count as usize],
                 bank_count,
                 ..Default::default()
             },
-            MBCKind::MBC5 => todo!("Implement MBC5"),
+            MbcKind::MBC5 => todo!("Implement MBC5"),
         };
 
         Box::new(mbc)
@@ -54,14 +54,14 @@ impl Cartridge {
         id.into()
     }
 
-    fn find_mbc(memory: &[u8]) -> MBCKind {
+    fn find_mbc(memory: &[u8]) -> MbcKind {
         let id = memory[MBC_TYPE_ADDRESS];
 
         // TODO: Refactor this to match the other enums in this module
         match id {
-            0x00 => MBCKind::None,
-            0x01 => MBCKind::MBC1,
-            0x19 => MBCKind::MBC5,
+            0x00 => MbcKind::None,
+            0x01 => MbcKind::MBC1,
+            0x19 => MbcKind::MBC5,
             _ => unimplemented!("{} is the id of an unsupported memory bank controller", id),
         }
     }
@@ -70,8 +70,8 @@ impl Cartridge {
 impl Cartridge {
     pub fn read_byte(&self, addr: u16) -> u8 {
         match self.mbc.handle_read(addr) {
-            MBCResult::Address(addr) => self.memory[addr as usize],
-            MBCResult::Value(byte) => byte,
+            MbcResult::Address(addr) => self.memory[addr as usize],
+            MbcResult::Value(byte) => byte,
         }
     }
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
@@ -89,7 +89,7 @@ impl Cartridge {
 }
 
 #[derive(Debug, Clone, Default)]
-struct MBC1 {
+struct Mbc1 {
     rom_bank: u8, // 5-bit Number
     ram_bank: u8, // 2-bit number
     mode: bool,
@@ -99,7 +99,7 @@ struct MBC1 {
     ram_enabled: bool,
 }
 
-impl MBC1 {
+impl Mbc1 {
     fn calc_zero_bank_number(&self) -> u8 {
         use BankCount::*;
 
@@ -164,9 +164,9 @@ impl MBC1 {
     }
 }
 
-impl MemoryBankController for MBC1 {
-    fn handle_read(&self, addr: u16) -> MBCResult {
-        use MBCResult::*;
+impl MemoryBankController for Mbc1 {
+    fn handle_read(&self, addr: u16) -> MbcResult {
+        use MbcResult::*;
 
         match addr {
             0x0000..=0x3FFF => {
@@ -212,16 +212,16 @@ impl MemoryBankController for MBC1 {
     }
 }
 
-trait MemoryBankController: CloneMBC {
-    fn handle_read(&self, addr: u16) -> MBCResult;
+trait MemoryBankController: CloneMbc {
+    fn handle_read(&self, addr: u16) -> MbcResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
 
-trait CloneMBC {
+trait CloneMbc {
     fn clone_mbc(&self) -> Box<dyn MemoryBankController>;
 }
 
-impl<T> CloneMBC for T
+impl<T> CloneMbc for T
 where
     T: MemoryBankController + Clone + 'static,
 {
@@ -230,19 +230,19 @@ where
     }
 }
 
-enum MBCResult {
+enum MbcResult {
     Address(u16),
     Value(u8),
 }
 
 #[derive(Debug, Clone, Copy)]
-enum MBCKind {
+enum MbcKind {
     None,
     MBC1,
     MBC5,
 }
 
-impl Default for MBCKind {
+impl Default for MbcKind {
     fn default() -> Self {
         Self::None
     }
@@ -375,6 +375,6 @@ impl std::clone::Clone for Box<dyn MemoryBankController> {
 
 impl std::default::Default for Box<dyn MemoryBankController> {
     fn default() -> Self {
-        Box::new(MBC1::default())
+        Box::new(Mbc1::default())
     }
 }
