@@ -1,4 +1,4 @@
-use super::cpu::{Cpu, Flags, HaltState, Register, RegisterPair};
+use super::cpu::{Cpu, Flags, HaltState, ImeState, Register, RegisterPair};
 use std::{convert::TryFrom, fmt::Debug};
 
 #[derive(Debug, Copy, Clone)]
@@ -611,7 +611,7 @@ impl Instruction {
                 let req = cpu.read_byte(0xFF0F);
                 let enabled = cpu.read_byte(0xFFFF);
 
-                let halt_state = if cpu.ime() {
+                let halt_state = if let ImeState::Enabled = cpu.ime() {
                     ImeSet
                 } else if req & enabled != 0 {
                     SomePending
@@ -957,7 +957,7 @@ impl Instruction {
                 // Same as RET, after which interrupts are enabled.
                 let addr = Self::pop(cpu);
                 cpu.set_register_pair(RegisterPair::PC, addr);
-                cpu.set_ime(true);
+                cpu.set_ime(ImeState::Enabled);
                 Cycle::new(16)
             }
             Instruction::JP(cond, target) => match target {
@@ -1016,13 +1016,13 @@ impl Instruction {
             },
             Instruction::DI => {
                 // Disable IME
-                cpu.set_ime(false);
+                cpu.set_ime(ImeState::Disabled);
                 Cycle::new(4)
             }
             Instruction::EI => {
                 // Enable IME (After the next instruction)
                 // FIXME: IME is set after the next instruction, this currently is not represented in this emulator.
-                cpu.set_ime(true);
+                cpu.set_ime(ImeState::EnablePending(0));
                 Cycle::new(4)
             }
             Instruction::CALL(cond, nn) => {

@@ -4,13 +4,14 @@ use super::interrupt::{InterruptEnable, InterruptFlag};
 use super::ppu::Ppu;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::ops::Add;
 
 #[derive(Debug, Clone, Default)]
 pub struct Cpu {
     pub bus: Bus,
     reg: Registers,
     flags: Flags,
-    ime: bool,
+    ime: ImeState,
     halted: Option<HaltState>,
     state: State,
 }
@@ -41,12 +42,12 @@ impl Cpu {
         })
     }
 
-    pub fn ime(&self) -> bool {
+    pub fn ime(&self) -> ImeState {
         self.ime
     }
 
-    pub fn set_ime(&mut self, enabled: bool) {
-        self.ime = enabled;
+    pub fn set_ime(&mut self, state: ImeState) {
+        self.ime = state;
     }
 
     pub fn halt(&mut self, state: HaltState) {
@@ -86,9 +87,9 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
-        if !self.bus.boot_enabled() {
-            self.log_state().unwrap();
-        }
+        // if !self.bus.boot_enabled() {
+        //     self.log_state().unwrap();
+        // }
 
         let cycles = match self.halted() {
             Some(state) => {
@@ -106,7 +107,9 @@ impl Cpu {
                 let instr = self.decode(opcode);
                 let cycles = self.execute(instr);
 
+                self.check_ime();
                 self.bus.step(cycles);
+
                 cycles
             }
         };
@@ -151,7 +154,17 @@ impl Cpu {
         &mut self.bus.ppu
     }
 
-    pub fn handle_interrupts(&mut self) {
+    fn check_ime(&mut self) {
+        if let ImeState::EnablePending(count) = self.ime {
+            self.ime = if count < 2 {
+                self.ime.wait()
+            } else {
+                ImeState::Enabled
+            }
+        };
+    }
+
+    fn handle_interrupts(&mut self) {
         let req = self.read_byte(0xFF0F);
         let enabled = self.read_byte(0xFFFF);
 
@@ -168,7 +181,14 @@ impl Cpu {
             }
         }
 
-        if self.ime() {
+        if let ImeState::Enabled = self.ime() {
+            println!(
+                "req & enabled: {:#010b} | Halted: {:?} | PC: {:#06X}",
+                req & enabled,
+                self.halted,
+                self.reg.pc,
+            );
+
             let mut req: InterruptFlag = req.into();
             let enabled: InterruptEnable = enabled.into();
 
@@ -212,7 +232,7 @@ impl Cpu {
                     self.write_byte(0xFF0F, req.into());
 
                     // Disable all future interrupts
-                    self.set_ime(false);
+                    self.set_ime(ImeState::Disabled);
                     self.execute(Instruction::RST(register))
                 }
                 None => Cycle::new(0), // NO Interrupts were enabled and / or requested
@@ -453,4 +473,26 @@ pub enum HaltState {
     ImeSet,
     NonePending,
     SomePending,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ImeState {
+    Disabled,
+    Enabled,
+    EnablePending(u8),
+}
+
+impl Default for ImeState {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
+impl ImeState {
+    pub fn wait(self) -> Self {
+        match self {
+            Self::EnablePending(count) => Self::EnablePending(count + 1),
+            _ => panic!("IME is {:?}, however wait() was called", self),
+        }
+    }
 }
