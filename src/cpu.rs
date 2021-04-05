@@ -96,7 +96,7 @@ impl Cpu {
                 use HaltState::*;
 
                 match state {
-                    ImeSet | NonePending => Cycle::new(4),
+                    ImeEnabled | NonePending => Cycle::new(4),
                     SomePending => todo!("Implement HALT bug"),
                 }
             }
@@ -470,7 +470,7 @@ impl From<u8> for Flags {
 
 #[derive(Debug, Clone, Copy)]
 pub enum HaltState {
-    ImeSet,
+    ImeEnabled,
     NonePending,
     SomePending,
 }

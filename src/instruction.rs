@@ -612,7 +612,7 @@ impl Instruction {
                 let enabled = cpu.read_byte(0xFFFF);
 
                 let halt_state = if let ImeState::Enabled = cpu.ime() {
-                    ImeSet
+                    ImeEnabled
                 } else if req & enabled != 0 {
                     SomePending
                 } else {
