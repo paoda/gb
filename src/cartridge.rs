@@ -30,18 +30,20 @@ impl Cartridge {
         let mbc_kind = Self::find_mbc(&memory);
         let ram_byte_count = ram_size.to_byte_count();
 
-        let mbc = match mbc_kind {
-            MbcKind::None => todo!("Handle no MBC Situation"),
-            MbcKind::MBC1 => Mbc1 {
-                ram_size,
-                ram: vec![0; ram_byte_count as usize],
-                bank_count,
-                ..Default::default()
-            },
-            MbcKind::MBC5 => todo!("Implement MBC5"),
-        };
+        match mbc_kind {
+            MbcKind::None => Box::new(NoMbc {}),
+            MbcKind::Mbc1 => {
+                let mbc = Mbc1 {
+                    ram_size,
+                    ram: vec![0; ram_byte_count as usize],
+                    bank_count,
+                    ..Default::default()
+                };
 
-        Box::new(mbc)
+                Box::new(mbc)
+            }
+            MbcKind::Mbc5 => todo!("Implement MBC5"),
+        }
     }
 
     fn find_ram_size(memory: &[u8]) -> RamSize {
@@ -60,8 +62,8 @@ impl Cartridge {
         // TODO: Refactor this to match the other enums in this module
         match id {
             0x00 => MbcKind::None,
-            0x01 => MbcKind::MBC1,
-            0x19 => MbcKind::MBC5,
+            0x01 => MbcKind::Mbc1,
+            0x19 => MbcKind::Mbc5,
             _ => unimplemented!("{} is the id of an unsupported memory bank controller", id),
         }
     }
@@ -211,6 +213,18 @@ impl MemoryBankController for Mbc1 {
         }
     }
 }
+#[derive(Debug, Clone, Copy)]
+struct NoMbc {}
+
+impl MemoryBankController for NoMbc {
+    fn handle_read(&self, addr: u16) -> MbcResult {
+        MbcResult::Address(addr)
+    }
+
+    fn handle_write(&mut self, _addr: u16, _byte: u8) {
+        panic!("A MBC-less cartridge is read only")
+    }
+}
 
 trait MemoryBankController: CloneMbc {
     fn handle_read(&self, addr: u16) -> MbcResult;
@@ -238,8 +252,8 @@ enum MbcResult {
 #[derive(Debug, Clone, Copy)]
 enum MbcKind {
     None,
-    MBC1,
-    MBC5,
+    Mbc1,
+    Mbc5,
 }
 
 impl Default for MbcKind {
