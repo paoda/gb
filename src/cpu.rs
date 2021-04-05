@@ -54,8 +54,6 @@ impl Cpu {
     }
 
     fn resume(&mut self) {
-        println!("Game Boy resumed from {:?}", self.halted);
-
         self.halted = None;
     }
 
@@ -186,13 +184,6 @@ impl Cpu {
         }
 
         if let ImeState::Enabled = self.ime() {
-            println!(
-                "req & enabled: {:#010b} | Halted: {:?} | PC: {:#06X}",
-                req & enabled,
-                self.halted,
-                self.reg.pc,
-            );
-
             let mut req: InterruptFlag = req.into();
             let enabled: InterruptEnable = enabled.into();
 
