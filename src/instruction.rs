@@ -392,7 +392,10 @@ impl Instruction {
                     // ADD SP, d | Add d (is signed) to register pair SP.
                     let mut flags: Flags = *cpu.flags();
                     let d = d as i8;
+
                     let sum = Self::add_u16_i8(cpu.register_pair(RegisterPair::SP), d, &mut flags);
+
+                    cpu.set_flags(flags);
                     cpu.set_register_pair(RegisterPair::SP, sum);
                     Cycle::new(16)
                 }
@@ -442,7 +445,7 @@ impl Instruction {
                         match pair {
                             BC | DE | HL | SP => {
                                 let value = cpu.register_pair(pair);
-                                cpu.set_register_pair(pair, value + 1);
+                                cpu.set_register_pair(pair, value.wrapping_add(1));
                             }
                             _ => unreachable!("There is no \"INC {:?}\" instruction", pair),
                         }
@@ -484,7 +487,7 @@ impl Instruction {
                         match pair {
                             BC | DE | HL | SP => {
                                 let value = cpu.register_pair(pair);
-                                cpu.set_register_pair(pair, value - 1);
+                                cpu.set_register_pair(pair, value.wrapping_sub(1));
                             }
                             _ => unreachable!("There is no \"DEC {:?}\" instruction", pair),
                         };
@@ -1474,7 +1477,7 @@ impl Instruction {
 
         flags.set_z(diff == 0);
         flags.set_n(true);
-        flags.set_h(Self::sub_u8_half_carry(left, right));
+        flags.set_h(Self::bit_4_borrow(left, right));
 
         diff
     }
@@ -1485,21 +1488,25 @@ impl Instruction {
         flags.update(
             diff == 0,
             true,
-            Self::sub_u8_half_carry(left, right),
+            Self::bit_4_borrow(left, right),
             did_overflow,
         );
         diff
     }
 
     fn add_u16_i8_no_flags(left: u16, right: i8) -> u16 {
-        (left as i16 + right as i16) as u16
+        if right < 0 {
+            left.wrapping_sub((!right + 1) as u16)
+        } else {
+            left.wrapping_add(right as u16)
+        }
     }
 
     fn add_u16_i8(left: u16, right: i8, flags: &mut Flags) -> u16 {
-        let (sum, did_overflow) = left.overflowing_add(right as u16);
+        let (_, did_overflow) = (left as u8).overflowing_add(right as u8);
+        let sum = Self::add_u16_i8_no_flags(left, right);
 
-        // FIXME: Is this more correct?
-        let half_carry = Self::add_u8_half_carry((left >> 8) as u8, right as u8);
+        let half_carry = Self::bit_3_overflow(left as u8, right as u8);
         flags.update(false, false, half_carry, did_overflow);
         sum
     }
@@ -1509,7 +1516,7 @@ impl Instruction {
 
         flags.set_z(sum == 0);
         flags.set_n(false);
-        flags.set_h(Self::add_u8_half_carry(left, right));
+        flags.set_h(Self::bit_3_overflow(left, right));
         sum
     }
 
@@ -1519,7 +1526,7 @@ impl Instruction {
         flags.update(
             sum == 0,
             false,
-            Self::add_u8_half_carry(left, right),
+            Self::bit_3_overflow(left, right),
             did_overflow,
         );
         sum
@@ -1529,23 +1536,22 @@ impl Instruction {
         let (sum, did_overflow) = left.overflowing_add(right);
 
         flags.set_n(false);
-        flags.set_h(Self::add_u16_half_carry(left, right));
+        flags.set_h(Self::bit_11_overflow(left, right));
         flags.set_c(did_overflow);
 
         sum
     }
 
-    fn add_u16_half_carry(left: u16, right: u16) -> bool {
-        Self::add_u8_half_carry((left >> 8) as u8, (right >> 8) as u8)
-        // left + right > 0xFFF // Thanks @Nectar Boy#1003
+    fn bit_11_overflow(left: u16, right: u16) -> bool {
+        (((left & 0x0FFF) + (right & 0x0FFF)) & 0x1000) == 0x1000
     }
 
-    fn add_u8_half_carry(left: u8, right: u8) -> bool {
+    fn bit_3_overflow(left: u8, right: u8) -> bool {
         (((left & 0xF) + (right & 0xF)) & 0x10) == 0x10
     }
 
-    fn sub_u8_half_carry(left: u8, right: u8) -> bool {
-        (left & 0xF) < (right & 0xF)
+    fn bit_4_borrow(left: u8, right: u8) -> bool {
+        (left & 0x0F) < (right & 0x0F)
     }
 
     fn rl_thru_carry(byte: u8, carry: bool) -> (u8, bool) {

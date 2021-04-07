@@ -84,9 +84,9 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
-        // if !self.bus.boot_enabled() {
-        //     self.log_state().unwrap();
-        // }
+        if !self.bus.boot_enabled() {
+            self.log_state().unwrap();
+        }
 
         let cycles = match self.halted() {
             Some(state) => {
