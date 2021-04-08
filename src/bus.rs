@@ -110,7 +110,19 @@ impl Bus {
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
-                unimplemented!("Unable to read {:#06X} in Restricted Mirror", addr);
+                // ECHO RAM
+
+                match addr {
+                    0xE000..=0xEFFF => {
+                        // 4KB Work RAM Bank 0
+                        self.wram.read_byte(addr)
+                    }
+                    0xF000..=0xFDFF => {
+                        // 4KB Work RAM Bank 1 -> N
+                        self.vwram.read_byte(addr)
+                    }
+                    _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
+                }
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
@@ -200,7 +212,19 @@ impl Bus {
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
-                unimplemented!("Unable to write to {:#06X} in Restricted Mirror", addr);
+                // ECHO RAM
+
+                match addr {
+                    0xE000..=0xEFFF => {
+                        // 4KB Work RAM Bank 0
+                        self.wram.write_byte(addr, byte);
+                    }
+                    0xF000..=0xFDFF => {
+                        // 4KB Work RAM Bank 1 -> N
+                        self.vwram.write_byte(addr, byte);
+                    }
+                    _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
+                }
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
