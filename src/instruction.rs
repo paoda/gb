@@ -1092,10 +1092,10 @@ impl Instruction {
             }
             Instruction::RST(n) => {
                 // RST n | Push current address onto the stack, jump to 0x0000 + n
-                let addr = cpu.register_pair(RegisterPair::PC);
-                Self::push(cpu, addr);
-                cpu.set_register_pair(RegisterPair::PC, n as u16);
-                Cycle::new(16)
+
+                // The same behaviour will occur when handling an interrupt so this code
+                // is relegated to a method
+                Self::reset(cpu, n)
             }
             Instruction::RLC(reg) => {
                 // RLC r[z] | Rotate register r[z] left
@@ -1613,6 +1613,13 @@ impl Instruction {
         let lower = byte & 0x0F;
 
         (lower << 4) | upper
+    }
+
+    pub fn reset(cpu: &mut Cpu, vector: u8) -> Cycle {
+        let addr = cpu.register_pair(RegisterPair::PC);
+        Self::push(cpu, addr);
+        cpu.set_register_pair(RegisterPair::PC, vector as u16);
+        Cycle::new(16)
     }
 }
 

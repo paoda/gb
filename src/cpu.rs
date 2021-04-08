@@ -222,13 +222,13 @@ impl Cpu {
             };
 
             let _ = match vector {
-                Some(register) => {
+                Some(address) => {
                     //  Write the Changes to 0xFF0F and 0xFFFF registers
                     self.write_byte(0xFF0F, req.into());
 
                     // Disable all future interrupts
                     self.set_ime(ImeState::Disabled);
-                    self.execute(Instruction::RST(register))
+                    Instruction::reset(self, address)
                 }
                 None => Cycle::new(0), // NO Interrupts were enabled and / or requested
             };
