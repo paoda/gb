@@ -123,29 +123,47 @@ impl Ppu {
     fn draw_scanline(&mut self) {
         let mut scanline: [u8; GB_WIDTH * 4] = [0; GB_WIDTH * 4];
 
-        let tile_map_addr = match self.lcd_control.bg_tile_map_addr() {
-            TileMapAddress::X9800 => 0x9800,
-            TileMapAddress::X9C00 => 0x9C00,
+        let window_x = self.pos.window_x.wrapping_sub(7);
+
+        // True if a window is supposed to be drawn on this scanline
+        let window_present =
+            self.lcd_control.window_enabled() && self.pos.window_y <= self.pos.line_y;
+
+        let tile_map = if window_present {
+            self.lcd_control.win_tile_map_addr()
+        } else {
+            self.lcd_control.bg_tile_map_addr()
         };
 
-        let y_pos = self.pos.line_y as u16 + self.pos.scroll_y as u16;
-        // let y_pos = self.pos.line_y as u16;
+        let tile_map_addr = tile_map.into_address();
+
+        let pos_y = if window_present {
+            self.pos.line_y.wrapping_sub(self.pos.window_y)
+        } else {
+            self.pos.line_y.wrapping_add(self.pos.scroll_y)
+        };
 
         // There are always 20 rows of tiles in the LCD Viewport
         // 160 / 20 = 8, so we can figure out the row of a tile with the following
-        let tile_row: u16 = y_pos as u16 / 8;
+        let tile_row = pos_y / 8;
 
-        for (line_x, chunk) in scanline.chunks_mut(4).enumerate() {
-            let x_pos = line_x as u16 + self.pos.scroll_x as u16;
-            // let x_pos = line_x as u16;
+        for (i, chunk) in scanline.chunks_mut(4).enumerate() {
+            let line_x = i as u8;
+            let mut pos_x = line_x.wrapping_add(self.pos.scroll_x);
+
+            if window_present {
+                if line_x >= window_x {
+                    pos_x = line_x.wrapping_sub(window_x);
+                }
+            }
 
             // There are always 18 columns of tiles in the LCD Viewport
             // 144 / 18 = 8, so we can figure out the column of a tile with the following
-            let tile_column = x_pos / 8;
+            let tile_column = pos_x / 8;
 
             // A tile is 8 x 8, and any given pixel in a tile comes from two bytes
             // so the size of a tile is (8 + 8) * 2 which is 32
-            let tile_addr = tile_map_addr + (tile_row * 32) as u16 + tile_column as u16;
+            let tile_addr = tile_map_addr + (tile_row as u16) * 32 + tile_column as u16;
             let tile_number = self.read_byte(tile_addr);
 
             let tile_data_addr = match self.lcd_control.tile_data_addr() {
@@ -154,13 +172,13 @@ impl Ppu {
             };
 
             // Find the correct vertical line we're on
-            let line = (y_pos % 8) * 2; // *2 since each vertical line takes up 2 bytes
+            let line = (pos_y % 8) * 2; // *2 since each vertical line takes up 2 bytes
 
             let higher = self.read_byte(tile_data_addr + line as u16);
             let lower = self.read_byte(tile_data_addr + line as u16 + 1);
             let pixels = Pixels::from_bytes(higher, lower);
 
-            let bit = x_pos as usize % 8;
+            let bit = pos_x as usize % 8;
             let palette = self.monochrome.bg_palette;
             let shade = palette.colour(pixels.pixel(7 - bit)); // Flip Horizontally
 
@@ -342,6 +360,15 @@ impl From<LCDControl> for u8 {
 enum TileMapAddress {
     X9800 = 0,
     X9C00 = 1,
+}
+
+impl TileMapAddress {
+    pub fn into_address(self) -> u16 {
+        match self {
+            TileMapAddress::X9800 => 0x9800,
+            TileMapAddress::X9C00 => 0x9C00,
+        }
+    }
 }
 
 impl From<u8> for TileMapAddress {
