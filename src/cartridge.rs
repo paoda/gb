@@ -221,8 +221,8 @@ impl MemoryBankController for NoMbc {
         MbcResult::Address(addr)
     }
 
-    fn handle_write(&mut self, _addr: u16, _byte: u8) {
-        panic!("A MBC-less cartridge is read only")
+    fn handle_write(&mut self, _addr: u16, byte: u8) {
+        eprintln!("Tried to write {:#04X} to a read-only cartridge", byte);
     }
 }
 
