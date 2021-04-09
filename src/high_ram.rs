@@ -1,4 +1,4 @@
-const HIGH_RAM_SIZE: usize = 127;
+const HIGH_RAM_SIZE: usize = 0x7F;
 const HIGH_RAM_START_ADDRESS: usize = 0xFF80;
 
 #[derive(Debug, Clone)]

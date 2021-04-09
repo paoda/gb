@@ -10,7 +10,7 @@ use super::timer::Timer;
 use super::work_ram::{VariableWorkRam, WorkRam};
 use std::{fs::File, io::Read};
 
-const BOOT_ROM_SIZE: usize = 256;
+const BOOT_ROM_SIZE: usize = 0x100;
 
 #[derive(Debug, Clone)]
 pub struct Bus {

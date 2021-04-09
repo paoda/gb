@@ -1,8 +1,6 @@
 use crate::Cycle;
 use bitfield::bitfield;
 
-// const DIVIDER_REGISTER_HZ: u32 = 16384;
-
 #[derive(Debug, Clone, Copy)]
 pub struct Timer {
     pub control: TimerControl,

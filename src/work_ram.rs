@@ -1,4 +1,4 @@
-const WORK_RAM_SIZE: usize = 4096;
+const WORK_RAM_SIZE: usize = 0x1000;
 const VARIABLE_WORK_RAM_SIZE: usize = WORK_RAM_SIZE;
 const WORK_RAM_START_ADDRESS: usize = 0xC000;
 const VARIABLE_WORK_RAM_START_ADDRESS: usize = 0xD000;
