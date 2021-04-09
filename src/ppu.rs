@@ -1,10 +1,12 @@
+use std::convert::TryInto;
+
 use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use bitfield::bitfield;
 
-const VRAM_SIZE: usize = 8192;
-const OAM_SIZE: usize = 160;
+const VRAM_SIZE: usize = 0x2000;
+const OAM_SIZE: usize = 0xA0;
 const PPU_START_ADDRESS: usize = 0x8000;
 
 const WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
@@ -19,9 +21,9 @@ pub struct Ppu {
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
     pub vram: Box<[u8; VRAM_SIZE]>,
-    pub oam: Box<[u8; OAM_SIZE]>,
-    frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     pub stat: LCDStatus,
+    pub oam: SpriteAttributeTable,
+    frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
     cycles: Cycle,
 }
 
@@ -203,7 +205,7 @@ impl Default for Ppu {
             pos: Default::default(),
             stat: Default::default(),
             vram: Box::new([0u8; VRAM_SIZE]),
-            oam: Box::new([0u8; OAM_SIZE]),
+            oam: Default::default(),
             cycles: 0.into(),
             frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
         }
@@ -590,5 +592,136 @@ impl Pixels {
         let lower = self.0[1] >> bit;
 
         (higher & 0x01) << 1 | lower & 0x01
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SpriteAttributeTable {
+    buf: Box<[u8; OAM_SIZE]>,
+}
+
+impl SpriteAttributeTable {
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        let index = (addr - 0xFE00) as usize;
+        self.buf[index]
+    }
+
+    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+        let index = (addr - 0xFE00) as usize;
+        self.buf[index] = byte;
+    }
+}
+
+impl SpriteAttributeTable {
+    pub fn read_attribute(&self, addr: u16) -> SpriteAttribute {
+        let buf_index = (addr - 0xFE00) as usize;
+        self.attribute(buf_index)
+    }
+
+    pub fn attribute(&self, index: usize) -> SpriteAttribute {
+        let bytes: [u8; 4] = self.buf[index..(index + 4)]
+            .try_into()
+            .expect("Byte slice was not four bytes in length");
+
+        bytes.into()
+    }
+}
+
+impl Default for SpriteAttributeTable {
+    fn default() -> Self {
+        Self {
+            buf: Box::new([0; OAM_SIZE]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SpriteAttribute {
+    x: u8,
+    y: u8,
+    tile_index: u8,
+    attributes: SpriteFlag,
+}
+
+impl From<[u8; 4]> for SpriteAttribute {
+    fn from(bytes: [u8; 4]) -> Self {
+        Self {
+            x: bytes[0],
+            y: bytes[1],
+            tile_index: bytes[2],
+            attributes: bytes[3].into(),
+        }
+    }
+}
+
+bitfield! {
+    pub struct SpriteFlag(u8);
+    impl Debug;
+
+    bg_window_over_obj, set_bg_window_over_obj: 7;
+    from into SpriteFlip, y_flip, set_y_flip: 6, 6;
+    from into SpriteFlip, x_flit, set_x_flip: 5, 5;
+    from into BgPaletteNumber, palette, set_palette: 4, 4;
+}
+
+impl Copy for SpriteFlag {}
+impl Clone for SpriteFlag {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl From<u8> for SpriteFlag {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+impl From<SpriteFlag> for u8 {
+    fn from(flags: SpriteFlag) -> Self {
+        flags.0
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub enum SpriteFlip {
+    Normal = 0,
+    HorizontalMirror = 1,
+}
+
+impl From<u8> for SpriteFlip {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => SpriteFlip::Normal,
+            0b01 => SpriteFlip::HorizontalMirror,
+            _ => unreachable!("{:#04X} is not a valid value for SpriteFlip", byte),
+        }
+    }
+}
+
+impl From<SpriteFlip> for u8 {
+    fn from(flip: SpriteFlip) -> Self {
+        flip as u8
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BgPaletteNumber {
+    BgPalette0 = 0,
+    BgPalette1 = 1,
+}
+
+impl From<u8> for BgPaletteNumber {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => BgPaletteNumber::BgPalette0,
+            0b01 => BgPaletteNumber::BgPalette1,
+            _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
+        }
+    }
+}
+
+impl From<BgPaletteNumber> for u8 {
+    fn from(flip: BgPaletteNumber) -> Self {
+        flip as u8
     }
 }

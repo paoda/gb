@@ -126,7 +126,7 @@ impl Bus {
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                unimplemented!("Unable to read {:#06X} in the Sprite Attribute Table", addr);
+                self.ppu.oam.read_byte(addr)
             }
             0xFEA0..=0xFEFF => {
                 eprintln!("Read from {:#06X}, which is prohibited", addr);
@@ -161,10 +161,8 @@ impl Bus {
                     0xFF49 => self.ppu.monochrome.obj_palette_1.into(),
                     0xFF4A => self.ppu.pos.window_y,
                     0xFF4B => self.ppu.pos.window_x,
-                    0xFF4D => {
-                        // Reading from this address is useful on the CGB only
-                        0x00
-                    }
+                    0xFF4D => 0x00, // Reading from this address is useful on the CGB only
+                    0xFF7F => 0x00, // Don't think this address is used for anything
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -232,7 +230,7 @@ impl Bus {
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                unimplemented!("Unable to write to {:#06X} in Sprite Attribute Table", addr);
+                self.ppu.oam.write_byte(addr, byte);
             }
             0xFEA0..=0xFEFF => {
                 eprintln!("Wrote {:#04X} to {:#06X}, which is prohibited", byte, addr);
@@ -276,15 +274,14 @@ impl Bus {
                     0xFF49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
                     0xFF4A => self.ppu.pos.window_y = byte,
                     0xFF4B => self.ppu.pos.window_x = byte,
-                    0xFF4D => {
-                        // Writing to this address is useful on the CGB only
-                    }
+                    0xFF4D => {} // Writing to this address is useful on the CGB only
                     0xFF50 => {
                         // Disable Boot ROM
                         if byte != 0 {
                             self.boot = None;
                         }
                     }
+                    0xFF7F => {} // Don't think this address is used for anything
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
