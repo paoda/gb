@@ -17,7 +17,7 @@ const BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
 #[derive(Debug, Clone)]
 pub struct Ppu {
     pub int: Interrupt,
-    pub lcd_control: LCDControl,
+    pub control: LCDControl,
     pub monochrome: Monochrome,
     pub pos: ScreenPosition,
     pub vram: Box<[u8; VRAM_SIZE]>,
@@ -125,16 +125,28 @@ impl Ppu {
     fn draw_scanline(&mut self) {
         let mut scanline: [u8; GB_WIDTH * 4] = [0; GB_WIDTH * 4];
 
+        if self.control.lcd_enabled() {
+            self.draw_background(&mut scanline);
+        }
+
+        if self.control.obj_enabled() {
+            self.draw_sprites(&mut scanline);
+        }
+
+        let i = (GB_WIDTH * 4) * self.pos.line_y as usize;
+        self.frame_buf[i..(i + scanline.len())].copy_from_slice(&scanline);
+    }
+
+    fn draw_background(&mut self, scanline: &mut [u8; GB_WIDTH * 4]) {
         let window_x = self.pos.window_x.wrapping_sub(7);
 
         // True if a window is supposed to be drawn on this scanline
-        let window_present =
-            self.lcd_control.window_enabled() && self.pos.window_y <= self.pos.line_y;
+        let window_present = self.control.window_enabled() && self.pos.window_y <= self.pos.line_y;
 
         let tile_map = if window_present {
-            self.lcd_control.win_tile_map_addr()
+            self.control.win_tile_map_addr()
         } else {
-            self.lcd_control.bg_tile_map_addr()
+            self.control.bg_tile_map_addr()
         };
 
         let tile_map_addr = tile_map.into_address();
@@ -149,7 +161,7 @@ impl Ppu {
         // 160 / 20 = 8, so we can figure out the row of a tile with the following
         let tile_row = pos_y / 8;
 
-        for (i, chunk) in scanline.chunks_mut(4).enumerate() {
+        for (i, pixel) in scanline.chunks_mut(4).enumerate() {
             let line_x = i as u8;
             let mut pos_x = line_x.wrapping_add(self.pos.scroll_x);
 
@@ -168,13 +180,13 @@ impl Ppu {
             let tile_addr = tile_map_addr + (tile_row as u16) * 32 + tile_column as u16;
             let tile_number = self.read_byte(tile_addr);
 
-            let tile_data_addr = match self.lcd_control.tile_data_addr() {
+            let tile_data_addr = match self.control.tile_data_addr() {
                 TileDataAddress::X8800 => (0x9000_i32 + (tile_number as i32 * 16)) as u16,
                 TileDataAddress::X8000 => 0x8000 + (tile_number as u16 * 16),
             };
 
             // Find the correct vertical line we're on
-            let line = (pos_y % 8) * 2; // *2 since each vertical line takes up 2 bytes
+            let line = (pos_y % 8) * 2; // * 2 since each vertical line takes up 2 bytes
 
             let higher = self.read_byte(tile_data_addr + line as u16);
             let lower = self.read_byte(tile_data_addr + line as u16 + 1);
@@ -184,11 +196,95 @@ impl Ppu {
             let palette = self.monochrome.bg_palette;
             let shade = palette.colour(pixels.pixel(7 - bit)); // Flip Horizontally
 
-            chunk.copy_from_slice(&shade.into_rgba());
+            pixel.copy_from_slice(&shade.into_rgba());
         }
+    }
 
-        let i = (GB_WIDTH * 4) * self.pos.line_y as usize;
-        self.frame_buf[i..(i + scanline.len())].copy_from_slice(&scanline);
+    fn draw_sprites(&mut self, scanline: &mut [u8; GB_WIDTH * 4]) {
+        let sprite_y_size = match self.control.obj_size() {
+            ObjectSize::EightByEight => 8,
+            ObjectSize::EightBySixteen => 16,
+        };
+
+        let mut sprite_count = 0;
+
+        for attr_slice in self.oam.buf.chunks(4) {
+            // Get the Sprite Attribute information for the current Sprite we're checking
+            let attr_bytes: [u8; 4] = attr_slice
+                .try_into()
+                .expect("Unable to interpret &[u8] as [u8; 4]");
+            let attr: SpriteAttribute = attr_bytes.into();
+
+            // attr.y is the sprite's vertical position + 16
+            let pos_y = attr.y.wrapping_sub(16);
+            // attr.x is the sprite's horizontal position + 8
+            let pos_x = attr.x.wrapping_sub(8);
+            let line_y = self.pos.line_y;
+
+            // Do we draw the sprite?
+            if line_y >= pos_y && line_y < (pos_y + sprite_y_size) {
+                // Increase the sprite count
+                if sprite_count == 10 {
+                    // Don't render any more
+                    break;
+                }
+
+                sprite_count += 1;
+
+                // * 2 since each vertical line takes up 2 bytes
+                let line = if attr.flags.y_flip() {
+                    (sprite_y_size - (line_y - pos_y)) * 2
+                } else {
+                    (line_y - pos_y) * 2
+                };
+
+                let sprite_data_addr = 0x8000 + attr.tile_index as u16 * 16;
+
+                let higher = self.read_byte(sprite_data_addr + line as u16);
+                let lower = self.read_byte(sprite_data_addr + line as u16 + 1);
+                let pixels = Pixels::from_bytes(higher, lower);
+
+                let palette = match attr.flags.palette() {
+                    SpritePaletteNumber::SpritePalette0 => self.monochrome.obj_palette_0,
+                    SpritePaletteNumber::SpritePalette1 => self.monochrome.obj_palette_1,
+                };
+
+                let start = pos_x as usize * 4; // R, G, B, and A channels
+                let slice = scanline[start..(start + (4 * 8))].as_mut();
+                // 4 bytes per pixel, a pixel is in 2BPP so there's 8 pixels we want to write to
+
+                for (line_x, pixel) in slice.chunks_mut(4).enumerate() {
+                    let bit = line_x as usize % 8;
+
+                    let id = if attr.flags.x_flip() {
+                        pixels.pixel(bit)
+                    } else {
+                        pixels.pixel(7 - bit)
+                    };
+
+                    let maybe_shade = palette.colour(id);
+
+                    match attr.flags.priority() {
+                        RenderPriority::Sprite => {
+                            if let Some(shade) = maybe_shade {
+                                pixel.copy_from_slice(&shade.into_rgba());
+                            }
+                        }
+                        RenderPriority::BackgroundAndWindow => {
+                            if let Some(shade) = maybe_shade {
+                                // If the colour is 1, 2 or 3 we draw over the background
+                                match GrayShade::from_rgba(pixel) {
+                                    GrayShade::White => {
+                                        pixel.copy_from_slice(&shade.into_rgba());
+                                    }
+                                    _ => {} // We Don't draw over the Background
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn copy_to_gui(&self, frame: &mut [u8]) {
@@ -200,7 +296,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             int: Interrupt::default(),
-            lcd_control: Default::default(),
+            control: Default::default(),
             monochrome: Default::default(),
             pos: Default::default(),
             stat: Default::default(),
@@ -328,7 +424,7 @@ bitfield! {
     window_enabled, set_window_enabled: 5;
     from into TileDataAddress, tile_data_addr, set_tile_data_addr: 4, 4;
     from into TileMapAddress, bg_tile_map_addr, set_bg_tile_map_addr: 3, 3;
-    from into ObjectSize, obg_size, set_obj_size: 2, 2;
+    from into ObjectSize, obj_size, set_obj_size: 2, 2;
     obj_enabled, set_obj_enabled: 1;
     bg_win_enabled, set_bg_win_enabled: 0;
 }
@@ -468,6 +564,20 @@ impl GrayShade {
             GrayShade::Black => BLACK,
         }
     }
+
+    pub fn from_rgba(slice: &[u8]) -> Self {
+        let rgba: [u8; 4] = slice
+            .try_into()
+            .expect("Unable to interpret &[u8] as [u8; 4]");
+
+        match rgba {
+            WHITE => GrayShade::White,
+            LIGHT_GRAY => GrayShade::LightGray,
+            DARK_GRAY => GrayShade::DarkGray,
+            BLACK => GrayShade::Black,
+            _ => panic!("{:#04X?} is not a colour the DMG-01 supports", rgba),
+        }
+    }
 }
 
 impl Default for GrayShade {
@@ -517,7 +627,7 @@ impl BackgroundPalette {
             0b01 => self.i1_colour(),
             0b10 => self.i2_colour(),
             0b11 => self.i3_colour(),
-            _ => unreachable!("{:#04X} is not a valid colour id", id),
+            _ => unreachable!("{:#04X} is not a valid BG colour id", id),
         }
     }
 }
@@ -553,6 +663,18 @@ bitfield! {
     pub from into GrayShade, i3_colour, set_i3_colour: 7, 6;
     pub from into GrayShade, i2_colour, set_i2_colour: 5, 4;
     pub from into GrayShade, i1_colour, set_i1_colour: 3, 2;
+}
+
+impl ObjectPalette {
+    pub fn colour(&self, id: u8) -> Option<GrayShade> {
+        match id {
+            0b00 => None,
+            0b01 => Some(self.i1_colour()),
+            0b10 => Some(self.i2_colour()),
+            0b11 => Some(self.i3_colour()),
+            _ => unreachable!("{:#04X} is not a valid OBJ colour id", id),
+        }
+    }
 }
 
 impl Copy for ObjectPalette {}
@@ -612,21 +734,6 @@ impl SpriteAttributeTable {
     }
 }
 
-impl SpriteAttributeTable {
-    pub fn read_attribute(&self, addr: u16) -> SpriteAttribute {
-        let buf_index = (addr - 0xFE00) as usize;
-        self.attribute(buf_index)
-    }
-
-    pub fn attribute(&self, index: usize) -> SpriteAttribute {
-        let bytes: [u8; 4] = self.buf[index..(index + 4)]
-            .try_into()
-            .expect("Byte slice was not four bytes in length");
-
-        bytes.into()
-    }
-}
-
 impl Default for SpriteAttributeTable {
     fn default() -> Self {
         Self {
@@ -637,19 +744,19 @@ impl Default for SpriteAttributeTable {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SpriteAttribute {
-    x: u8,
     y: u8,
+    x: u8,
     tile_index: u8,
-    attributes: SpriteFlag,
+    flags: SpriteFlag,
 }
 
 impl From<[u8; 4]> for SpriteAttribute {
     fn from(bytes: [u8; 4]) -> Self {
         Self {
-            x: bytes[0],
-            y: bytes[1],
+            y: bytes[0],
+            x: bytes[1],
             tile_index: bytes[2],
-            attributes: bytes[3].into(),
+            flags: bytes[3].into(),
         }
     }
 }
@@ -658,10 +765,10 @@ bitfield! {
     pub struct SpriteFlag(u8);
     impl Debug;
 
-    bg_window_over_obj, set_bg_window_over_obj: 7;
-    from into SpriteFlip, y_flip, set_y_flip: 6, 6;
-    from into SpriteFlip, x_flit, set_x_flip: 5, 5;
-    from into BgPaletteNumber, palette, set_palette: 4, 4;
+    from into RenderPriority, priority, set_priority: 7, 7;
+    y_flip, set_y_flip: 6;
+    x_flip, set_x_flip: 5;
+    from into SpritePaletteNumber, palette, set_palette: 4, 4;
 }
 
 impl Copy for SpriteFlag {}
@@ -682,46 +789,47 @@ impl From<SpriteFlag> for u8 {
         flags.0
     }
 }
+
 #[derive(Debug, Clone, Copy)]
-pub enum SpriteFlip {
-    Normal = 0,
-    HorizontalMirror = 1,
+pub enum RenderPriority {
+    Sprite = 0,
+    BackgroundAndWindow = 1,
 }
 
-impl From<u8> for SpriteFlip {
+impl From<u8> for RenderPriority {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => SpriteFlip::Normal,
-            0b01 => SpriteFlip::HorizontalMirror,
-            _ => unreachable!("{:#04X} is not a valid value for SpriteFlip", byte),
+            0b00 => Self::Sprite,
+            0b01 => Self::BackgroundAndWindow,
+            _ => unreachable!("{:#04X} is not a valid value for RenderPriority", byte),
         }
     }
 }
 
-impl From<SpriteFlip> for u8 {
-    fn from(flip: SpriteFlip) -> Self {
-        flip as u8
+impl From<RenderPriority> for u8 {
+    fn from(priority: RenderPriority) -> Self {
+        priority as u8
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BgPaletteNumber {
-    BgPalette0 = 0,
-    BgPalette1 = 1,
+pub enum SpritePaletteNumber {
+    SpritePalette0 = 0,
+    SpritePalette1 = 1,
 }
 
-impl From<u8> for BgPaletteNumber {
+impl From<u8> for SpritePaletteNumber {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => BgPaletteNumber::BgPalette0,
-            0b01 => BgPaletteNumber::BgPalette1,
+            0b00 => SpritePaletteNumber::SpritePalette0,
+            0b01 => SpritePaletteNumber::SpritePalette1,
             _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
         }
     }
 }
 
-impl From<BgPaletteNumber> for u8 {
-    fn from(flip: BgPaletteNumber) -> Self {
+impl From<SpritePaletteNumber> for u8 {
+    fn from(flip: SpritePaletteNumber) -> Self {
         flip as u8
     }
 }

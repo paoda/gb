@@ -150,7 +150,7 @@ impl Bus {
                     0xFF24 => self.sound.control.channel.into(),
                     0xFF25 => self.sound.control.output.into(),
                     0xFF26 => self.sound.control.status.into(),
-                    0xFF40 => self.ppu.lcd_control.into(),
+                    0xFF40 => self.ppu.control.into(),
                     0xFF41 => self.ppu.stat.into(),
                     0xFF42 => self.ppu.pos.scroll_y,
                     0xFF43 => self.ppu.pos.scroll_x,
@@ -254,7 +254,7 @@ impl Bus {
                     0xFF24 => self.sound.control.channel = byte.into(),
                     0xFF25 => self.sound.control.output = byte.into(),
                     0xFF26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
-                    0xFF40 => self.ppu.lcd_control = byte.into(),
+                    0xFF40 => self.ppu.control = byte.into(),
                     0xFF41 => self.ppu.stat = byte.into(),
                     0xFF42 => self.ppu.pos.scroll_y = byte,
                     0xFF43 => self.ppu.pos.scroll_x = byte,
