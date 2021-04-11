@@ -1,13 +1,16 @@
-use std::convert::TryInto;
-
 use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use bitfield::bitfield;
+use std::collections::VecDeque;
+use std::convert::TryInto;
 
 const VRAM_SIZE: usize = 0x2000;
 const OAM_SIZE: usize = 0xA0;
 const PPU_START_ADDRESS: usize = 0x8000;
+
+// OAM Scan
+const SPRITE_BUFFER_LIMIT: usize = 10;
 
 const WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 const LIGHT_GRAY: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xFF];
@@ -23,7 +26,11 @@ pub struct Ppu {
     pub vram: Box<[u8; VRAM_SIZE]>,
     pub stat: LCDStatus,
     pub oam: SpriteAttributeTable,
+    fetcher: PixelFetcher,
+    fifo: FifoRenderer,
+    sprite_buffer: SpriteBuffer,
     frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
+    x_pos: u8,
     cycles: Cycle,
 }
 
@@ -39,251 +46,270 @@ impl Ppu {
 
 impl Ppu {
     pub fn step(&mut self, cycles: Cycle) {
-        self.cycles += cycles;
+        let start: u32 = self.cycles.into();
+        let end: u32 = cycles.into();
 
-        match self.stat.mode() {
-            Mode::OamScan => {
-                if self.cycles >= 80.into() {
-                    self.cycles %= 80;
-                    self.stat.set_mode(Mode::Drawing);
-                }
-            }
-            Mode::Drawing => {
-                // This mode can take from 172 -> 289 Cycles
-                // Remember: There's no guarantee that we start this mode
-                // with self.cycles == 80, since we aren't going for an accurate
-                // emulator
+        for cycle in start..(start + end).into() {
+            self.cycles += 1;
 
-                // TODO: This 172 needs to be variable somehow?
-                if self.cycles >= 172.into() {
-                    self.cycles %= 172;
-
-                    if self.stat.hblank_int() {
-                        self.int.set_lcd_stat(true);
+            match self.stat.mode() {
+                Mode::OamScan => {
+                    if self.cycles >= 80.into() {
+                        self.stat.set_mode(Mode::Drawing);
                     }
 
-                    self.stat.set_mode(Mode::HBlank);
-                    self.draw_scanline();
+                    self.scan_oam(self.cycles.into());
                 }
-            }
-            Mode::HBlank => {
-                // We've reached the end of a scanline
-                if self.cycles >= 200.into() {
-                    self.cycles %= 200;
-                    self.pos.line_y += 1;
-
-                    let next_mode = if self.pos.line_y >= 144 {
-                        self.int.set_vblank(true);
-
-                        if self.stat.vblank_int() {
+                Mode::Drawing => {
+                    if self.x_pos >= 160 {
+                        if self.stat.hblank_int() {
+                            // Enable HBlank LCDStat Interrupt
                             self.int.set_lcd_stat(true);
                         }
 
-                        Mode::VBlank
+                        // Done with rendering this frame,
+                        // we can reset the ppu x_pos and fetcher state now
+                        self.x_pos = 0;
+                        self.fetcher.hblank_reset();
+
+                        self.stat.set_mode(Mode::HBlank);
                     } else {
-                        if self.stat.oam_int() {
-                            self.int.set_lcd_stat(true);
-                        }
-
-                        Mode::OamScan
-                    };
-
-                    self.stat.set_mode(next_mode);
-
-                    if self.stat.coincidence_int() {
-                        let are_equal = self.pos.line_y == self.pos.ly_compare;
-                        self.stat.set_coincidence(are_equal);
+                        self.draw(self.cycles.into());
                     }
                 }
-            }
-            Mode::VBlank => {
-                // We've reached the end of the screen
+                Mode::HBlank => {
+                    // This mode will always end at 456 cycles
 
-                if self.cycles >= 456.into() {
-                    self.cycles %= 456;
-                    self.pos.line_y += 1;
+                    if self.cycles >= 456.into() {
+                        self.cycles %= 456;
+                        self.pos.line_y += 1;
 
-                    if self.pos.line_y == 154 {
-                        self.pos.line_y = 0;
-
-                        if self.stat.oam_int() {
-                            self.int.set_lcd_stat(true);
+                        // New Scanline is next, check for LYC=LY
+                        if self.stat.coincidence_int() {
+                            let are_equal = self.pos.line_y == self.pos.ly_compare;
+                            self.stat.set_coincidence(are_equal);
                         }
 
-                        self.stat.set_mode(Mode::OamScan);
-                    }
+                        let next_mode = if self.pos.line_y >= 144 {
+                            // Request VBlank Interrupt
+                            self.int.set_vblank(true);
 
-                    if self.stat.coincidence_int() {
-                        let are_equal = self.pos.line_y == self.pos.ly_compare;
-                        self.stat.set_coincidence(are_equal);
+                            // Reset Window Line Counter in Fetcher
+                            self.fetcher.vblank_reset();
+
+                            if self.stat.vblank_int() {
+                                // Enable Vblank LCDStat Interrupt
+                                self.int.set_lcd_stat(true);
+                            }
+
+                            Mode::VBlank
+                        } else {
+                            if self.stat.oam_int() {
+                                // Enable OAM LCDStat Interrupt
+                                self.int.set_lcd_stat(true);
+                            }
+
+                            Mode::OamScan
+                        };
+
+                        self.stat.set_mode(next_mode);
+                    }
+                }
+                Mode::VBlank => {
+                    if self.cycles > 456.into() {
+                        self.cycles %= 456;
+                        self.pos.line_y += 1;
+
+                        // New Scanline is next, check for LYC=LY
+                        if self.stat.coincidence_int() {
+                            let are_equal = self.pos.line_y == self.pos.ly_compare;
+                            self.stat.set_coincidence(are_equal);
+                        }
+
+                        if self.pos.line_y == 154 {
+                            self.pos.line_y = 0;
+
+                            if self.stat.oam_int() {
+                                // Enable OAM LCDStat Interrupt
+                                self.int.set_lcd_stat(true);
+                            }
+
+                            self.stat.set_mode(Mode::OamScan);
+                        }
                     }
                 }
             }
         }
     }
 
-    fn draw_scanline(&mut self) {
-        let mut scanline: [u8; GB_WIDTH * 4] = [0; GB_WIDTH * 4];
+    fn scan_oam(&mut self, cycle: u32) {
+        if cycle % 2 != 0 {
+            // This is run 50% of the time, or 40 times
+            // which is the number of sprites in OAM
 
-        if self.control.lcd_enabled() {
-            self.draw_background(&mut scanline);
-        }
-
-        if self.control.obj_enabled() {
-            self.draw_sprites(&mut scanline);
-        }
-
-        let i = (GB_WIDTH * 4) * self.pos.line_y as usize;
-        self.frame_buf[i..(i + scanline.len())].copy_from_slice(&scanline);
-    }
-
-    fn draw_background(&mut self, scanline: &mut [u8; GB_WIDTH * 4]) {
-        let window_x = self.pos.window_x.wrapping_sub(7);
-
-        // True if a window is supposed to be drawn on this scanline
-        let window_present = self.control.window_enabled() && self.pos.window_y <= self.pos.line_y;
-
-        let tile_map = if window_present {
-            self.control.win_tile_map_addr()
-        } else {
-            self.control.bg_tile_map_addr()
-        };
-
-        let tile_map_addr = tile_map.into_address();
-
-        let pos_y = if window_present {
-            self.pos.line_y.wrapping_sub(self.pos.window_y)
-        } else {
-            self.pos.line_y.wrapping_add(self.pos.scroll_y)
-        };
-
-        // There are always 20 rows of tiles in the LCD Viewport
-        // 160 / 20 = 8, so we can figure out the row of a tile with the following
-        let tile_row = pos_y / 8;
-
-        for (i, pixel) in scanline.chunks_mut(4).enumerate() {
-            let line_x = i as u8;
-            let mut pos_x = line_x.wrapping_add(self.pos.scroll_x);
-
-            if window_present {
-                if line_x >= window_x {
-                    pos_x = line_x.wrapping_sub(window_x);
-                }
-            }
-
-            // There are always 18 columns of tiles in the LCD Viewport
-            // 144 / 18 = 8, so we can figure out the column of a tile with the following
-            let tile_column = pos_x / 8;
-
-            // A tile is 8 x 8, and any given pixel in a tile comes from two bytes
-            // so the size of a tile is (8 + 8) * 2 which is 32
-            let tile_addr = tile_map_addr + (tile_row as u16) * 32 + tile_column as u16;
-            let tile_number = self.read_byte(tile_addr);
-
-            let tile_data_addr = match self.control.tile_data_addr() {
-                TileDataAddress::X8800 => (0x9000_i32 + (tile_number as i32 * 16)) as u16,
-                TileDataAddress::X8000 => 0x8000 + (tile_number as u16 * 16),
+            let sprite_height = match self.control.obj_size() {
+                ObjectSize::EightByEight => 8,
+                ObjectSize::EightBySixteen => 16,
             };
 
-            // Find the correct vertical line we're on
-            let line = (pos_y % 8) * 2; // * 2 since each vertical line takes up 2 bytes
+            let attr = self.oam.attribute((cycle / 2) as usize);
+            let line_y = self.pos.line_y + 16;
 
-            let higher = self.read_byte(tile_data_addr + line as u16);
-            let lower = self.read_byte(tile_data_addr + line as u16 + 1);
-            let pixels = Pixels::from_bytes(higher, lower);
-
-            let bit = pos_x as usize % 8;
-            let palette = self.monochrome.bg_palette;
-            let shade = palette.colour(pixels.pixel(7 - bit)); // Flip Horizontally
-
-            pixel.copy_from_slice(&shade.into_rgba());
+            if attr.x > 0 && line_y >= attr.y && line_y < (attr.y + sprite_height) {
+                if !self.sprite_buffer.full() {
+                    self.sprite_buffer.add(attr);
+                }
+            }
         }
     }
 
-    fn draw_sprites(&mut self, scanline: &mut [u8; GB_WIDTH * 4]) {
-        let sprite_y_size = match self.control.obj_size() {
-            ObjectSize::EightByEight => 8,
-            ObjectSize::EightBySixteen => 16,
-        };
+    fn draw(&mut self, cycle: u32) {
+        use FetcherState::*;
 
-        let mut sprite_count = 0;
-
-        for attr_slice in self.oam.buf.chunks(4) {
-            // Get the Sprite Attribute information for the current Sprite we're checking
-            let attr_bytes: [u8; 4] = attr_slice
-                .try_into()
-                .expect("Unable to interpret &[u8] as [u8; 4]");
-            let attr: SpriteAttribute = attr_bytes.into();
-
-            // attr.y is the sprite's vertical position + 16
-            let pos_y = attr.y.wrapping_sub(16);
-            // attr.x is the sprite's horizontal position + 8
-            let pos_x = attr.x.wrapping_sub(8);
+        // By only running on odd cycles, we can ensure that we draw every two T cycles
+        if cycle % 2 != 0 {
             let line_y = self.pos.line_y;
+            let scroll_y = self.pos.scroll_y;
+            let window_y = self.pos.window_y;
+            let window_present = self.control.window_enabled() && window_y <= line_y;
 
-            // Do we draw the sprite?
-            if line_y >= pos_y && line_y < (pos_y + sprite_y_size) {
-                // Increase the sprite count
-                if sprite_count == 10 {
-                    // Don't render any more
-                    break;
-                }
+            match self.fetcher.state {
+                TileNumber => {
+                    let scroll_x = self.pos.scroll_x;
 
-                sprite_count += 1;
+                    // Increment Window line counter if scanline had any window pixels on it
+                    // only increment once per scanline though
+                    if window_present && !self.fetcher.window_line.already_checked() {
+                        self.fetcher.window_line.increment();
+                    }
 
-                // * 2 since each vertical line takes up 2 bytes
-                let line = if attr.flags.y_flip() {
-                    (sprite_y_size - (line_y - pos_y)) * 2
-                } else {
-                    (line_y - pos_y) * 2
-                };
-
-                let sprite_data_addr = 0x8000 + attr.tile_index as u16 * 16;
-
-                let higher = self.read_byte(sprite_data_addr + line as u16);
-                let lower = self.read_byte(sprite_data_addr + line as u16 + 1);
-                let pixels = Pixels::from_bytes(higher, lower);
-
-                let palette = match attr.flags.palette() {
-                    SpritePaletteNumber::SpritePalette0 => self.monochrome.obj_palette_0,
-                    SpritePaletteNumber::SpritePalette1 => self.monochrome.obj_palette_1,
-                };
-
-                let start = pos_x as usize * 4; // R, G, B, and A channels
-                let slice = scanline[start..(start + (4 * 8))].as_mut();
-                // 4 bytes per pixel, a pixel is in 2BPP so there's 8 pixels we want to write to
-
-                for (line_x, pixel) in slice.chunks_mut(4).enumerate() {
-                    let bit = line_x as usize % 8;
-
-                    let id = if attr.flags.x_flip() {
-                        pixels.pixel(bit)
+                    // Determine which tile map is being used
+                    let tile_map = if window_present {
+                        self.control.win_tile_map_addr()
                     } else {
-                        pixels.pixel(7 - bit)
+                        self.control.bg_tile_map_addr()
+                    };
+                    let tile_map_addr = tile_map.into_address();
+
+                    // Both Offsets are used to offset the tile map address we found above
+                    // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
+                    // TODO: Is this necessary / important in other fetcher modes?
+                    let x_offset = (self.fetcher.x_pos + scroll_x) as u16 & 0x03FF;
+                    let y_offset = (line_y.wrapping_add(scroll_y)) as u16 & 0x03FF;
+
+                    // Scroll X Offset is only used when we're rendering the background;
+                    let scx_offset = if window_present { 0 } else { scroll_x / 8 } & 0x1F;
+
+                    let offset = if window_present {
+                        32 * (self.fetcher.window_line.value() as u16 / 8)
+                    } else {
+                        32 * (((y_offset) & 0x00FF) / 8)
                     };
 
-                    let maybe_shade = palette.colour(id);
+                    let addr = tile_map_addr + offset + x_offset + scx_offset as u16;
 
-                    match attr.flags.priority() {
-                        RenderPriority::Sprite => {
-                            if let Some(shade) = maybe_shade {
-                                pixel.copy_from_slice(&shade.into_rgba());
-                            }
-                        }
-                        RenderPriority::BackgroundAndWindow => {
-                            if let Some(shade) = maybe_shade {
-                                // If the colour is 1, 2 or 3 we draw over the background
-                                match GrayShade::from_rgba(pixel) {
-                                    GrayShade::White => {
-                                        pixel.copy_from_slice(&shade.into_rgba());
-                                    }
-                                    _ => {} // We Don't draw over the Background
+                    let id = self.read_byte(addr);
+                    self.fetcher.builder.with_id(id);
+
+                    // Move on to the Next state in 2 T-cycles
+                    self.fetcher.state = TileDataLow;
+                }
+                TileDataLow => {
+                    let id = self
+                        .fetcher
+                        .builder
+                        .id
+                        .expect("Tile Number unexpectedly missing");
+
+                    let tile_data_addr = match self.control.tile_data_addr() {
+                        TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
+                        TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
+                    };
+
+                    let offset = if window_present {
+                        2 * (self.fetcher.window_line.value() % 8)
+                    } else {
+                        2 * ((line_y + scroll_y) % 8)
+                    };
+
+                    let addr = tile_data_addr + offset as u16;
+                    let low = self.read_byte(addr);
+                    self.fetcher.builder.with_data_low(low);
+
+                    self.fetcher.state = TileDataHigh;
+                }
+                TileDataHigh => {
+                    let id = self
+                        .fetcher
+                        .builder
+                        .id
+                        .expect("Tile Number unexpectedly missing");
+
+                    let tile_data_addr = match self.control.tile_data_addr() {
+                        TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
+                        TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
+                    };
+
+                    let offset = if window_present {
+                        2 * (self.fetcher.window_line.value() % 8)
+                    } else {
+                        2 * ((line_y + scroll_y) % 8)
+                    };
+
+                    let addr = tile_data_addr + offset as u16;
+                    let high = self.read_byte(addr + 1);
+                    self.fetcher.builder.with_data_high(high);
+
+                    self.fetcher.state = SendToFifo;
+                }
+                SendToFifo => {
+                    if let Some(low) = self.fetcher.builder.low {
+                        if let Some(high) = self.fetcher.builder.high {
+                            let pixel = Pixels::from_bytes(high, low);
+                            let palette = self.monochrome.bg_palette;
+
+                            if self.fifo.background.is_empty() {
+                                for i in 0..8 {
+                                    // Horizontally flip pixels
+                                    let bit = 7 - i;
+
+                                    let shade = palette.colour(pixel.pixel(bit));
+
+                                    let fifo_pixel = FifoPixel {
+                                        kind: FifoPixelKind::Background,
+                                        shade,
+                                        palette: None,
+                                        priority: None,
+                                    };
+
+                                    self.fifo.background.push_back(fifo_pixel);
                                 }
                             }
+
+                            self.fetcher.state = TileNumber;
+                            self.fetcher.x_pos += 1;
                         }
                     }
                 }
             }
+        }
+
+        // Handle Pixel and Sprite FIFO
+        if let Some(bg_pixel) = self.fifo.background.pop_front() {
+            if let Some(_sprite_pixel) = self.fifo.sprite.pop_front() {
+                todo!("Mix the pixels or whatever I'm supposed todo here");
+            } else {
+                // Only Background Pixels will be rendered
+
+                let y = self.pos.line_y as usize;
+                let x = self.x_pos as usize;
+                let rgba = bg_pixel.shade.into_rgba();
+
+                let i = (GB_WIDTH * 4) * y + (x * 4);
+                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
+            }
+
+            self.x_pos += 1;
         }
     }
 
@@ -295,15 +321,19 @@ impl Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
-            int: Interrupt::default(),
+            vram: Box::new([0u8; VRAM_SIZE]),
+            cycles: 0.into(),
+            frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
+            int: Default::default(),
             control: Default::default(),
             monochrome: Default::default(),
             pos: Default::default(),
             stat: Default::default(),
-            vram: Box::new([0u8; VRAM_SIZE]),
             oam: Default::default(),
-            cycles: 0.into(),
-            frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
+            fetcher: Default::default(),
+            fifo: Default::default(),
+            sprite_buffer: Default::default(),
+            x_pos: Default::default(),
         }
     }
 }
@@ -702,16 +732,16 @@ impl From<ObjectPalette> for u8 {
     }
 }
 
-struct Pixels([u8; 2]);
+struct Pixels(u8, u8);
 
 impl Pixels {
     pub fn from_bytes(higher: u8, lower: u8) -> Self {
-        Self([higher, lower])
+        Self(higher, lower)
     }
 
     pub fn pixel(&self, bit: usize) -> u8 {
-        let higher = self.0[0] >> bit;
-        let lower = self.0[1] >> bit;
+        let higher = self.0 >> bit;
+        let lower = self.1 >> bit;
 
         (higher & 0x01) << 1 | lower & 0x01
     }
@@ -732,6 +762,14 @@ impl SpriteAttributeTable {
         let index = (addr - 0xFE00) as usize;
         self.buf[index] = byte;
     }
+
+    pub fn attribute(&self, index: usize) -> SpriteAttribute {
+        let slice: &[u8; 4] = self.buf[index..(index + 4)]
+            .try_into()
+            .expect("Could not interpret &[u8] as a &[u8; 4]");
+
+        slice.into()
+    }
 }
 
 impl Default for SpriteAttributeTable {
@@ -742,7 +780,7 @@ impl Default for SpriteAttributeTable {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SpriteAttribute {
     y: u8,
     x: u8,
@@ -752,6 +790,17 @@ pub struct SpriteAttribute {
 
 impl From<[u8; 4]> for SpriteAttribute {
     fn from(bytes: [u8; 4]) -> Self {
+        Self {
+            y: bytes[0],
+            x: bytes[1],
+            tile_index: bytes[2],
+            flags: bytes[3].into(),
+        }
+    }
+}
+
+impl<'a> From<&'a [u8; 4]> for SpriteAttribute {
+    fn from(bytes: &'a [u8; 4]) -> Self {
         Self {
             y: bytes[0],
             x: bytes[1],
@@ -790,6 +839,12 @@ impl From<SpriteFlag> for u8 {
     }
 }
 
+impl Default for SpriteFlag {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum RenderPriority {
     Sprite = 0,
@@ -812,6 +867,12 @@ impl From<RenderPriority> for u8 {
     }
 }
 
+impl Default for RenderPriority {
+    fn default() -> Self {
+        Self::Sprite
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SpritePaletteNumber {
     SpritePalette0 = 0,
@@ -831,5 +892,160 @@ impl From<u8> for SpritePaletteNumber {
 impl From<SpritePaletteNumber> for u8 {
     fn from(flip: SpritePaletteNumber) -> Self {
         flip as u8
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SpriteBuffer {
+    buf: [SpriteAttribute; 10],
+    len: usize,
+}
+
+impl SpriteBuffer {
+    pub fn full(&self) -> bool {
+        self.len == self.buf.len()
+    }
+
+    pub fn _clear(&mut self) {
+        self.buf = [Default::default(); 10];
+        self.len = 0;
+    }
+
+    pub fn add(&mut self, attr: SpriteAttribute) {
+        self.buf[self.len] = attr;
+        self.len += 1;
+    }
+}
+
+impl Default for SpriteBuffer {
+    fn default() -> Self {
+        Self {
+            buf: [Default::default(); SPRITE_BUFFER_LIMIT],
+            len: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct PixelFetcher {
+    state: FetcherState,
+    x_pos: u8,
+    window_line: WindowLineCounter,
+    builder: TileBuilder,
+}
+
+impl PixelFetcher {
+    pub fn hblank_reset(&mut self) {
+        self.window_line.hblank_reset();
+
+        self.builder = Default::default();
+        self.state = Default::default();
+        self.x_pos = 0;
+    }
+
+    pub fn vblank_reset(&mut self) {
+        self.window_line.vblank_reset();
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct WindowLineCounter {
+    value: u8,
+    already_checked: bool,
+}
+
+impl WindowLineCounter {
+    pub fn already_checked(&self) -> bool {
+        self.already_checked
+    }
+
+    pub fn increment(&mut self) {
+        self.value += 1;
+        self.already_checked = true;
+    }
+
+    pub fn hblank_reset(&mut self) {
+        self.already_checked = false;
+    }
+
+    pub fn vblank_reset(&mut self) {
+        self.value = 0;
+        self.already_checked = false;
+    }
+
+    pub fn value(&self) -> u8 {
+        self.value
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FetcherState {
+    TileNumber,
+    TileDataLow,
+    TileDataHigh,
+    SendToFifo,
+}
+
+impl Default for FetcherState {
+    fn default() -> Self {
+        Self::TileNumber
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FifoPixelKind {
+    Background,
+    Sprite,
+}
+
+impl Default for FifoPixelKind {
+    fn default() -> Self {
+        Self::Background
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct FifoPixel {
+    kind: FifoPixelKind,
+    shade: GrayShade,
+    palette: Option<ObjectPalette>,
+    priority: Option<RenderPriority>,
+}
+
+// FIXME: Fifo Registers have a known size. Are heap allocations
+// really necessary here?
+#[derive(Debug, Clone)]
+struct FifoRenderer {
+    background: VecDeque<FifoPixel>,
+    sprite: VecDeque<FifoPixel>,
+}
+
+impl Default for FifoRenderer {
+    fn default() -> Self {
+        Self {
+            background: VecDeque::with_capacity(8),
+            sprite: VecDeque::with_capacity(8),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct TileBuilder {
+    id: Option<u8>,
+    low: Option<u8>,
+    high: Option<u8>,
+}
+
+impl TileBuilder {
+    pub fn with_id(&mut self, id: u8) {
+        self.id = Some(id);
+    }
+
+    pub fn with_data_low(&mut self, data: u8) {
+        self.low = Some(data);
+    }
+
+    pub fn with_data_high(&mut self, data: u8) {
+        self.high = Some(data);
     }
 }
