@@ -387,7 +387,7 @@ impl std::clone::Clone for Box<dyn MemoryBankController> {
     }
 }
 
-impl std::default::Default for Box<dyn MemoryBankController> {
+impl Default for Box<dyn MemoryBankController> {
     fn default() -> Self {
         Box::new(Mbc1::default())
     }

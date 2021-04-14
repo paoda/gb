@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     let mut pixels = create_pixels(&window)?;
 
     let mut now = Instant::now();
-    let mut cycles_in_frame = Cycle::default();
+    let mut cycles_in_frame: Cycle = Default::default();
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
             if pixels
@@ -95,7 +95,7 @@ fn main() -> Result<()> {
             let cycle_time = Duration::from_secs_f64(LR35902_CYCLE_TIME).subsec_nanos();
             let pending_cycles = Cycle::new(delta / cycle_time);
 
-            let mut elapsed_cycles = Cycle::default();
+            let mut elapsed_cycles: Cycle = Default::default();
             while elapsed_cycles <= pending_cycles {
                 elapsed_cycles += game_boy.step();
             }
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
                 ppu.copy_to_gui(frame);
                 window.request_redraw();
 
-                cycles_in_frame = Cycle::default()
+                cycles_in_frame = Default::default()
             }
         }
     });
