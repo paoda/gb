@@ -29,7 +29,7 @@ pub struct Ppu {
     fetcher: PixelFetcher,
     fifo: FifoRenderer,
     sprite_buffer: SpriteBuffer,
-    frame_buf: [u8; GB_WIDTH * GB_HEIGHT * 4],
+    frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     x_pos: u8,
     cycles: Cycle,
 }
@@ -314,7 +314,7 @@ impl Ppu {
     }
 
     pub fn copy_to_gui(&self, frame: &mut [u8]) {
-        frame.copy_from_slice(&self.frame_buf);
+        frame.copy_from_slice(self.frame_buf.as_ref());
     }
 }
 
@@ -323,7 +323,7 @@ impl Default for Ppu {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
             cycles: 0.into(),
-            frame_buf: [0; GB_WIDTH * GB_HEIGHT * 4],
+            frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
             control: Default::default(),
             monochrome: Default::default(),
