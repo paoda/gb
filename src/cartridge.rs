@@ -9,6 +9,7 @@ const MBC_TYPE_ADDRESS: usize = 0x0147;
 #[derive(Debug, Clone, Default)]
 pub struct Cartridge {
     memory: Vec<u8>,
+    title: Option<String>,
     mbc: Box<dyn MemoryBankController>,
 }
 
@@ -20,6 +21,7 @@ impl Cartridge {
 
         Ok(Self {
             mbc: Self::detect_mbc(&memory),
+            title: Self::find_title(&memory),
             memory,
         })
     }
@@ -44,6 +46,21 @@ impl Cartridge {
             }
             MbcKind::Mbc5 => todo!("Implement MBC5"),
         }
+    }
+
+    fn find_title(memory: &[u8]) -> Option<String> {
+        // FIXME: Get rid of magic values and handle cases
+        // where 0x134..0x143 reads past the length of the
+        // string
+
+        let slice = &memory[0x134..0x143];
+
+        let str_with_nulls = std::str::from_utf8(slice).ok();
+        str_with_nulls.map(|s| s.trim_matches('\0').to_string())
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
     }
 
     fn find_ram_size(memory: &[u8]) -> RamSize {

@@ -63,6 +63,10 @@ impl Bus {
         Ok(())
     }
 
+    pub fn rom_title(&self) -> Option<&str> {
+        self.cartridge.as_ref()?.title()
+    }
+
     pub fn step(&mut self, cycles: Cycle) {
         self.ppu.step(cycles);
         self.timer.step(cycles);

@@ -31,7 +31,7 @@ fn main() -> Result<()> {
                 .takes_value(true)
                 .required(true)
                 .index(1)
-                .help("The ROM that the emulator will run"),
+                .help("Path to the Game ROM"),
         )
         .arg(
             Arg::with_name("boot")
@@ -58,10 +58,13 @@ fn main() -> Result<()> {
         .load_cartridge(rom_path)
         .expect("Failed to load ROM");
 
+    let default_title = "DMG-01 Emulator";
+    let cartridge_title = game_boy.rom_title().unwrap_or(&default_title);
+
     // Initialize GUI
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
-    let window = create_window(&event_loop)?;
+    let window = create_window(&event_loop, cartridge_title)?;
     let mut pixels = create_pixels(&window)?;
 
     let mut now = Instant::now();
@@ -114,10 +117,10 @@ fn main() -> Result<()> {
     });
 }
 
-fn create_window(event_loop: &EventLoop<()>) -> Result<Window> {
+fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
     let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
     Ok(WindowBuilder::new()
-        .with_title("DMG-1 Emulator")
+        .with_title(title)
         .with_inner_size(size)
         .with_min_inner_size(size)
         .build(&event_loop)?)

@@ -49,7 +49,7 @@ impl Ppu {
         let start: u32 = self.cycles.into();
         let end: u32 = cycles.into();
 
-        for cycle in start..(start + end).into() {
+        for _ in start..(start + end) {
             self.cycles += 1;
 
             match self.stat.mode() {
@@ -155,10 +155,12 @@ impl Ppu {
             let attr = self.oam.attribute((cycle / 2) as usize);
             let line_y = self.pos.line_y + 16;
 
-            if attr.x > 0 && line_y >= attr.y && line_y < (attr.y + sprite_height) {
-                if !self.sprite_buffer.full() {
-                    self.sprite_buffer.add(attr);
-                }
+            if attr.x > 0
+                && line_y >= attr.y
+                && line_y < (attr.y + sprite_height)
+                && !self.sprite_buffer.full()
+            {
+                self.sprite_buffer.add(attr);
             }
         }
     }

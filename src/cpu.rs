@@ -68,6 +68,10 @@ impl Cpu {
     pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
         self.bus.load_cartridge(path)
     }
+
+    pub fn rom_title(&self) -> Option<&str> {
+        self.bus.rom_title()
+    }
 }
 
 impl Cpu {
