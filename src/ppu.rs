@@ -10,7 +10,7 @@ const OAM_SIZE: usize = 0xA0;
 const PPU_START_ADDRESS: usize = 0x8000;
 
 // OAM Scan
-const SPRITE_BUFFER_LIMIT: usize = 10;
+const OBJECT_LIMIT: usize = 10;
 
 const WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 const LIGHT_GRAY: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xFF];
@@ -25,10 +25,10 @@ pub struct Ppu {
     pub pos: ScreenPosition,
     pub vram: Box<[u8; VRAM_SIZE]>,
     pub stat: LCDStatus,
-    pub oam: SpriteAttributeTable,
+    pub oam: ObjectAttributeTable,
     fetcher: PixelFetcher,
     fifo: FifoRenderer,
-    sprite_buffer: SpriteBuffer,
+    obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     x_pos: u8,
     cycles: Cycle,
@@ -158,9 +158,9 @@ impl Ppu {
             if attr.x > 0
                 && line_y >= attr.y
                 && line_y < (attr.y + sprite_height)
-                && !self.sprite_buffer.full()
+                && !self.obj_buffer.full()
             {
-                self.sprite_buffer.add(attr);
+                self.obj_buffer.add(attr);
             }
         }
     }
@@ -181,7 +181,7 @@ impl Ppu {
 
                     // Increment Window line counter if scanline had any window pixels on it
                     // only increment once per scanline though
-                    if window_present && !self.fetcher.window_line.already_checked() {
+                    if window_present && !self.fetcher.window_line.checked() {
                         self.fetcher.window_line.increment();
                     }
 
@@ -203,7 +203,7 @@ impl Ppu {
                     let scx_offset = if window_present { 0 } else { scroll_x / 8 } & 0x1F;
 
                     let offset = if window_present {
-                        32 * (self.fetcher.window_line.value() as u16 / 8)
+                        32 * (self.fetcher.window_line.count() as u16 / 8)
                     } else {
                         32 * (((y_offset) & 0x00FF) / 8)
                     };
@@ -211,7 +211,7 @@ impl Ppu {
                     let addr = tile_map_addr + offset + x_offset + scx_offset as u16;
 
                     let id = self.read_byte(addr);
-                    self.fetcher.builder.with_id(id);
+                    self.fetcher.tile.with_id(id);
 
                     // Move on to the Next state in 2 T-cycles
                     self.fetcher.state = TileDataLow;
@@ -219,7 +219,7 @@ impl Ppu {
                 TileDataLow => {
                     let id = self
                         .fetcher
-                        .builder
+                        .tile
                         .id
                         .expect("Tile Number unexpectedly missing");
 
@@ -229,21 +229,21 @@ impl Ppu {
                     };
 
                     let offset = if window_present {
-                        2 * (self.fetcher.window_line.value() % 8)
+                        2 * (self.fetcher.window_line.count() % 8)
                     } else {
                         2 * ((line_y + scroll_y) % 8)
                     };
 
                     let addr = tile_data_addr + offset as u16;
                     let low = self.read_byte(addr);
-                    self.fetcher.builder.with_data_low(low);
+                    self.fetcher.tile.with_low_byte(low);
 
                     self.fetcher.state = TileDataHigh;
                 }
                 TileDataHigh => {
                     let id = self
                         .fetcher
-                        .builder
+                        .tile
                         .id
                         .expect("Tile Number unexpectedly missing");
 
@@ -253,21 +253,21 @@ impl Ppu {
                     };
 
                     let offset = if window_present {
-                        2 * (self.fetcher.window_line.value() % 8)
+                        2 * (self.fetcher.window_line.count() % 8)
                     } else {
                         2 * ((line_y + scroll_y) % 8)
                     };
 
                     let addr = tile_data_addr + offset as u16;
                     let high = self.read_byte(addr + 1);
-                    self.fetcher.builder.with_data_high(high);
+                    self.fetcher.tile.with_high_byte(high);
 
                     self.fetcher.state = SendToFifo;
                 }
                 SendToFifo => {
-                    if let Some(low) = self.fetcher.builder.low {
-                        if let Some(high) = self.fetcher.builder.high {
-                            let pixel = Pixels::from_bytes(high, low);
+                    if let Some(low) = self.fetcher.tile.low {
+                        if let Some(high) = self.fetcher.tile.high {
+                            let pixel = TwoBitsPerPixel::from_bytes(high, low);
                             let palette = self.monochrome.bg_palette;
 
                             if self.fifo.background.is_empty() {
@@ -296,9 +296,9 @@ impl Ppu {
             }
         }
 
-        // Handle Pixel and Sprite FIFO
+        // Handle Background Pixel and Sprite FIFO
         if let Some(bg_pixel) = self.fifo.background.pop_front() {
-            if let Some(_sprite_pixel) = self.fifo.sprite.pop_front() {
+            if let Some(_object_pixel) = self.fifo.object.pop_front() {
                 todo!("Mix the pixels or whatever I'm supposed todo here");
             } else {
                 // Only Background Pixels will be rendered
@@ -334,7 +334,7 @@ impl Default for Ppu {
             oam: Default::default(),
             fetcher: Default::default(),
             fifo: Default::default(),
-            sprite_buffer: Default::default(),
+            obj_buffer: Default::default(),
             x_pos: Default::default(),
         }
     }
@@ -734,9 +734,9 @@ impl From<ObjectPalette> for u8 {
     }
 }
 
-struct Pixels(u8, u8);
+struct TwoBitsPerPixel(u8, u8);
 
-impl Pixels {
+impl TwoBitsPerPixel {
     pub fn from_bytes(higher: u8, lower: u8) -> Self {
         Self(higher, lower)
     }
@@ -750,11 +750,11 @@ impl Pixels {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpriteAttributeTable {
+pub struct ObjectAttributeTable {
     buf: Box<[u8; OAM_SIZE]>,
 }
 
-impl SpriteAttributeTable {
+impl ObjectAttributeTable {
     pub fn read_byte(&self, addr: u16) -> u8 {
         let index = (addr - 0xFE00) as usize;
         self.buf[index]
@@ -765,7 +765,7 @@ impl SpriteAttributeTable {
         self.buf[index] = byte;
     }
 
-    pub fn attribute(&self, index: usize) -> SpriteAttribute {
+    pub fn attribute(&self, index: usize) -> ObjectAttribute {
         let slice: &[u8; 4] = self.buf[index..(index + 4)]
             .try_into()
             .expect("Could not interpret &[u8] as a &[u8; 4]");
@@ -774,7 +774,7 @@ impl SpriteAttributeTable {
     }
 }
 
-impl Default for SpriteAttributeTable {
+impl Default for ObjectAttributeTable {
     fn default() -> Self {
         Self {
             buf: Box::new([0; OAM_SIZE]),
@@ -783,14 +783,14 @@ impl Default for SpriteAttributeTable {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SpriteAttribute {
+pub struct ObjectAttribute {
     y: u8,
     x: u8,
     tile_index: u8,
-    flags: SpriteFlag,
+    flags: ObjectFlags,
 }
 
-impl From<[u8; 4]> for SpriteAttribute {
+impl From<[u8; 4]> for ObjectAttribute {
     fn from(bytes: [u8; 4]) -> Self {
         Self {
             y: bytes[0],
@@ -801,7 +801,7 @@ impl From<[u8; 4]> for SpriteAttribute {
     }
 }
 
-impl<'a> From<&'a [u8; 4]> for SpriteAttribute {
+impl<'a> From<&'a [u8; 4]> for ObjectAttribute {
     fn from(bytes: &'a [u8; 4]) -> Self {
         Self {
             y: bytes[0],
@@ -813,35 +813,35 @@ impl<'a> From<&'a [u8; 4]> for SpriteAttribute {
 }
 
 bitfield! {
-    pub struct SpriteFlag(u8);
+    pub struct ObjectFlags(u8);
     impl Debug;
 
     from into RenderPriority, priority, set_priority: 7, 7;
     y_flip, set_y_flip: 6;
     x_flip, set_x_flip: 5;
-    from into SpritePaletteNumber, palette, set_palette: 4, 4;
+    from into ObjectPaletteId, palette, set_palette: 4, 4;
 }
 
-impl Copy for SpriteFlag {}
-impl Clone for SpriteFlag {
+impl Copy for ObjectFlags {}
+impl Clone for ObjectFlags {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl From<u8> for SpriteFlag {
+impl From<u8> for ObjectFlags {
     fn from(byte: u8) -> Self {
         Self(byte)
     }
 }
 
-impl From<SpriteFlag> for u8 {
-    fn from(flags: SpriteFlag) -> Self {
+impl From<ObjectFlags> for u8 {
+    fn from(flags: ObjectFlags) -> Self {
         flags.0
     }
 }
 
-impl Default for SpriteFlag {
+impl Default for ObjectFlags {
     fn default() -> Self {
         Self(0)
     }
@@ -849,14 +849,14 @@ impl Default for SpriteFlag {
 
 #[derive(Debug, Clone, Copy)]
 pub enum RenderPriority {
-    Sprite = 0,
+    Object = 0,
     BackgroundAndWindow = 1,
 }
 
 impl From<u8> for RenderPriority {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => Self::Sprite,
+            0b00 => Self::Object,
             0b01 => Self::BackgroundAndWindow,
             _ => unreachable!("{:#04X} is not a valid value for RenderPriority", byte),
         }
@@ -871,39 +871,39 @@ impl From<RenderPriority> for u8 {
 
 impl Default for RenderPriority {
     fn default() -> Self {
-        Self::Sprite
+        Self::Object
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SpritePaletteNumber {
-    SpritePalette0 = 0,
-    SpritePalette1 = 1,
+pub enum ObjectPaletteId {
+    Palette0 = 0,
+    Palette1 = 1,
 }
 
-impl From<u8> for SpritePaletteNumber {
+impl From<u8> for ObjectPaletteId {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => SpritePaletteNumber::SpritePalette0,
-            0b01 => SpritePaletteNumber::SpritePalette1,
+            0b00 => ObjectPaletteId::Palette0,
+            0b01 => ObjectPaletteId::Palette1,
             _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
         }
     }
 }
 
-impl From<SpritePaletteNumber> for u8 {
-    fn from(flip: SpritePaletteNumber) -> Self {
-        flip as u8
+impl From<ObjectPaletteId> for u8 {
+    fn from(palette_num: ObjectPaletteId) -> Self {
+        palette_num as u8
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-struct SpriteBuffer {
-    buf: [SpriteAttribute; 10],
+struct ObjectBuffer {
+    buf: [ObjectAttribute; 10],
     len: usize,
 }
 
-impl SpriteBuffer {
+impl ObjectBuffer {
     pub fn full(&self) -> bool {
         self.len == self.buf.len()
     }
@@ -913,16 +913,16 @@ impl SpriteBuffer {
         self.len = 0;
     }
 
-    pub fn add(&mut self, attr: SpriteAttribute) {
+    pub fn add(&mut self, attr: ObjectAttribute) {
         self.buf[self.len] = attr;
         self.len += 1;
     }
 }
 
-impl Default for SpriteBuffer {
+impl Default for ObjectBuffer {
     fn default() -> Self {
         Self {
-            buf: [Default::default(); SPRITE_BUFFER_LIMIT],
+            buf: [Default::default(); OBJECT_LIMIT],
             len: 0,
         }
     }
@@ -930,17 +930,17 @@ impl Default for SpriteBuffer {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct PixelFetcher {
-    state: FetcherState,
     x_pos: u8,
+    state: FetcherState,
     window_line: WindowLineCounter,
-    builder: TileBuilder,
+    tile: TileBuilder,
 }
 
 impl PixelFetcher {
     pub fn hblank_reset(&mut self) {
         self.window_line.hblank_reset();
 
-        self.builder = Default::default();
+        self.tile = Default::default();
         self.state = Default::default();
         self.x_pos = 0;
     }
@@ -952,31 +952,31 @@ impl PixelFetcher {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct WindowLineCounter {
-    value: u8,
-    already_checked: bool,
+    count: u8,
+    checked: bool,
 }
 
 impl WindowLineCounter {
-    pub fn already_checked(&self) -> bool {
-        self.already_checked
+    pub fn checked(&self) -> bool {
+        self.checked
     }
 
     pub fn increment(&mut self) {
-        self.value += 1;
-        self.already_checked = true;
+        self.count += 1;
+        self.checked = true;
     }
 
     pub fn hblank_reset(&mut self) {
-        self.already_checked = false;
+        self.checked = false;
     }
 
     pub fn vblank_reset(&mut self) {
-        self.value = 0;
-        self.already_checked = false;
+        self.count = 0;
+        self.checked = false;
     }
 
-    pub fn value(&self) -> u8 {
-        self.value
+    pub fn count(&self) -> u8 {
+        self.count
     }
 }
 
@@ -997,7 +997,7 @@ impl Default for FetcherState {
 #[derive(Debug, Clone, Copy)]
 enum FifoPixelKind {
     Background,
-    Sprite,
+    Object,
 }
 
 impl Default for FifoPixelKind {
@@ -1014,19 +1014,29 @@ struct FifoPixel {
     priority: Option<RenderPriority>,
 }
 
+impl FifoPixel {
+    pub fn new_background(shade: GrayShade) -> Self {
+        Self {
+            kind: FifoPixelKind::Background,
+            shade,
+            ..Default::default()
+        }
+    }
+}
+
 // FIXME: Fifo Registers have a known size. Are heap allocations
 // really necessary here?
 #[derive(Debug, Clone)]
 struct FifoRenderer {
     background: VecDeque<FifoPixel>,
-    sprite: VecDeque<FifoPixel>,
+    object: VecDeque<FifoPixel>,
 }
 
 impl Default for FifoRenderer {
     fn default() -> Self {
         Self {
             background: VecDeque::with_capacity(8),
-            sprite: VecDeque::with_capacity(8),
+            object: VecDeque::with_capacity(8),
         }
     }
 }
@@ -1043,11 +1053,11 @@ impl TileBuilder {
         self.id = Some(id);
     }
 
-    pub fn with_data_low(&mut self, data: u8) {
+    pub fn with_low_byte(&mut self, data: u8) {
         self.low = Some(data);
     }
 
-    pub fn with_data_high(&mut self, data: u8) {
+    pub fn with_high_byte(&mut self, data: u8) {
         self.high = Some(data);
     }
 }
