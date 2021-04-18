@@ -170,6 +170,9 @@ impl Ppu {
 
         // By only running on odd cycles, we can ensure that we draw every two T cycles
         if cycle % 2 != 0 {
+            let control = &self.control;
+            let pos = &self.pos;
+
             let line_y = self.pos.line_y;
             let scroll_y = self.pos.scroll_y;
             let window_y = self.pos.window_y;
@@ -177,38 +180,17 @@ impl Ppu {
 
             match self.fetcher.state {
                 TileNumber => {
-                    let scroll_x = self.pos.scroll_x;
-
                     // Increment Window line counter if scanline had any window pixels on it
                     // only increment once per scanline though
                     if window_present && !self.fetcher.window_line.checked() {
                         self.fetcher.window_line.increment();
                     }
 
-                    // Determine which tile map is being used
-                    let tile_map = if window_present {
-                        self.control.win_tile_map_addr()
-                    } else {
-                        self.control.bg_tile_map_addr()
-                    };
-                    let tile_map_addr = tile_map.into_address();
+                    let x_pos = self.fetcher.x_pos;
 
-                    // Both Offsets are used to offset the tile map address we found above
-                    // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
-                    // TODO: Is this necessary / important in other fetcher modes?
-                    let x_offset = (self.fetcher.x_pos + scroll_x) as u16 & 0x03FF;
-                    let y_offset = (line_y.wrapping_add(scroll_y)) as u16 & 0x03FF;
-
-                    // Scroll X Offset is only used when we're rendering the background;
-                    let scx_offset = if window_present { 0 } else { scroll_x / 8 } & 0x1F;
-
-                    let offset = if window_present {
-                        32 * (self.fetcher.window_line.count() as u16 / 8)
-                    } else {
-                        32 * (((y_offset) & 0x00FF) / 8)
-                    };
-
-                    let addr = tile_map_addr + offset + x_offset + scx_offset as u16;
+                    let addr = self
+                        .fetcher
+                        .bg_tile_num_addr(control, pos, x_pos, window_present);
 
                     let id = self.read_byte(addr);
                     self.fetcher.tile.with_id(id);
@@ -217,81 +199,26 @@ impl Ppu {
                     self.fetcher.state = TileDataLow;
                 }
                 TileDataLow => {
-                    let id = self
-                        .fetcher
-                        .tile
-                        .id
-                        .expect("Tile Number unexpectedly missing");
+                    let addr = self.fetcher.bg_byte_low_addr(control, pos, window_present);
 
-                    let tile_data_addr = match self.control.tile_data_addr() {
-                        TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
-                        TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
-                    };
-
-                    let offset = if window_present {
-                        2 * (self.fetcher.window_line.count() % 8)
-                    } else {
-                        2 * ((line_y + scroll_y) % 8)
-                    };
-
-                    let addr = tile_data_addr + offset as u16;
                     let low = self.read_byte(addr);
                     self.fetcher.tile.with_low_byte(low);
 
                     self.fetcher.state = TileDataHigh;
                 }
                 TileDataHigh => {
-                    let id = self
-                        .fetcher
-                        .tile
-                        .id
-                        .expect("Tile Number unexpectedly missing");
+                    let addr = self.fetcher.bg_byte_low_addr(control, pos, window_present);
 
-                    let tile_data_addr = match self.control.tile_data_addr() {
-                        TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
-                        TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
-                    };
-
-                    let offset = if window_present {
-                        2 * (self.fetcher.window_line.count() % 8)
-                    } else {
-                        2 * ((line_y + scroll_y) % 8)
-                    };
-
-                    let addr = tile_data_addr + offset as u16;
                     let high = self.read_byte(addr + 1);
                     self.fetcher.tile.with_high_byte(high);
 
                     self.fetcher.state = SendToFifo;
                 }
                 SendToFifo => {
-                    if let Some(low) = self.fetcher.tile.low {
-                        if let Some(high) = self.fetcher.tile.high {
-                            let pixel = TwoBitsPerPixel::from_bytes(high, low);
-                            let palette = self.monochrome.bg_palette;
+                    let palette = &self.monochrome.bg_palette;
+                    self.fetcher.send_to_fifo(&mut self.fifo, palette);
 
-                            if self.fifo.background.is_empty() {
-                                for i in 0..8 {
-                                    // Horizontally flip pixels
-                                    let bit = 7 - i;
-
-                                    let shade = palette.colour(pixel.pixel(bit));
-
-                                    let fifo_pixel = FifoPixel {
-                                        kind: FifoPixelKind::Background,
-                                        shade,
-                                        palette: None,
-                                        priority: None,
-                                    };
-
-                                    self.fifo.background.push_back(fifo_pixel);
-                                }
-                            }
-
-                            self.fetcher.state = TileNumber;
-                            self.fetcher.x_pos += 1;
-                        }
-                    }
+                    self.fetcher.state = TileNumber;
                 }
             }
         }
@@ -947,6 +874,100 @@ impl PixelFetcher {
 
     pub fn vblank_reset(&mut self) {
         self.window_line.vblank_reset();
+    }
+
+    fn bg_tile_num_addr(
+        &self,
+        control: &LCDControl,
+        pos: &ScreenPosition,
+        x_pos: u8,
+        window: bool,
+    ) -> u16 {
+        let line_y = pos.line_y;
+        let scroll_y = pos.scroll_y;
+        let scroll_x = pos.scroll_x;
+
+        // Determine which tile map is being used
+        let tile_map = if window {
+            control.win_tile_map_addr()
+        } else {
+            control.bg_tile_map_addr()
+        };
+        let tile_map_addr = tile_map.into_address();
+
+        // Both Offsets are used to offset the tile map address we found above
+        // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
+        // TODO: Is this necessary / important in other fetcher modes?
+        let x_offset = (x_pos + scroll_x) as u16 & 0x03FF;
+        let y_offset = (line_y.wrapping_add(scroll_y)) as u16 & 0x03FF;
+
+        // Scroll X Offset is only used when we're rendering the background;
+        let scx_offset = if window { 0 } else { scroll_x / 8 } & 0x1F;
+
+        let offset = if window {
+            32 * (self.window_line.count() as u16 / 8)
+        } else {
+            32 * (((y_offset) & 0x00FF) / 8)
+        };
+
+        // Determine Address
+        tile_map_addr + offset + x_offset + scx_offset as u16
+    }
+
+    fn bg_byte_low_addr(
+        &mut self,
+        control: &LCDControl,
+        pos: &ScreenPosition,
+        window: bool,
+    ) -> u16 {
+        let line_y = pos.line_y;
+        let scroll_y = pos.scroll_y;
+
+        let id = self.tile.id.expect("Tile Number unexpectedly missing");
+
+        let tile_data_addr = match control.tile_data_addr() {
+            TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
+            TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
+        };
+
+        let offset = if window {
+            2 * (self.window_line.count() % 8)
+        } else {
+            2 * ((line_y + scroll_y) % 8)
+        };
+
+        tile_data_addr + offset as u16
+    }
+
+    fn send_to_fifo(&mut self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
+        let tile_bytes = self.tile.low.zip(self.tile.high);
+
+        if let Some(bytes) = tile_bytes {
+            let low = bytes.0;
+            let high = bytes.1;
+
+            let pixel = TwoBitsPerPixel::from_bytes(high, low);
+
+            if fifo.background.is_empty() {
+                for i in 0..8 {
+                    // Horizontally flip pixels
+                    let bit = 7 - i;
+
+                    let shade = palette.colour(pixel.pixel(bit));
+
+                    let fifo_pixel = FifoPixel {
+                        kind: FifoPixelKind::Background,
+                        shade,
+                        palette: None,
+                        priority: None,
+                    };
+
+                    fifo.background.push_back(fifo_pixel);
+                }
+            }
+        }
+
+        self.x_pos += 1;
     }
 }
 
