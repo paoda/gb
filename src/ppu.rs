@@ -174,71 +174,172 @@ impl Ppu {
             let pos = &self.pos;
 
             let line_y = self.pos.line_y;
-            let scroll_y = self.pos.scroll_y;
             let window_y = self.pos.window_y;
-            let window_present = self.control.window_enabled() && window_y <= line_y;
+            let is_window = self.control.window_enabled() && window_y <= line_y;
 
-            match self.fetcher.state {
-                TileNumber => {
-                    // Increment Window line counter if scanline had any window pixels on it
-                    // only increment once per scanline though
-                    if window_present && !self.fetcher.window_line.checked() {
-                        self.fetcher.window_line.increment();
+            // Determine whether we need to enable sprite fetching
+            let mut obj_attr = None;
+            for i in 0..self.obj_buffer.len() {
+                if let Some(attr) = self.obj_buffer.get(i) {
+                    if attr.x <= (self.x_pos + 8) {
+                        // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
+                        self.fetcher.bg.reset();
+                        self.fetcher.bg.pause();
+                        self.fifo.pause();
+
+                        obj_attr = Some(attr);
                     }
-
-                    let x_pos = self.fetcher.x_pos;
-
-                    let addr = self
-                        .fetcher
-                        .bg_tile_num_addr(control, pos, x_pos, window_present);
-
-                    let id = self.read_byte(addr);
-                    self.fetcher.tile.with_id(id);
-
-                    // Move on to the Next state in 2 T-cycles
-                    self.fetcher.state = TileDataLow;
                 }
-                TileDataLow => {
-                    let addr = self.fetcher.bg_byte_low_addr(control, pos, window_present);
+            }
 
-                    let low = self.read_byte(addr);
-                    self.fetcher.tile.with_low_byte(low);
+            if let Some(attr) = obj_attr {
+                // Run the Object Fetcher
+                let obj_size = match self.control.obj_size() {
+                    ObjectSize::EightByEight => 8,
+                    ObjectSize::EightBySixteen => 16,
+                };
 
-                    self.fetcher.state = TileDataHigh;
+                match self.fetcher.obj.state {
+                    TileNumber => {
+                        self.fetcher.obj.tile.with_id(attr.tile_index);
+
+                        self.fetcher.obj.next(TileDataLow);
+                    }
+                    TileDataLow => {
+                        let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
+
+                        let byte = self.read_byte(addr);
+                        self.fetcher.obj.tile.with_low_byte(byte);
+
+                        self.fetcher.obj.next(TileDataHigh);
+                    }
+                    TileDataHigh => {
+                        let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
+
+                        let byte = self.read_byte(addr + 1);
+                        self.fetcher.obj.tile.with_high_byte(byte);
+
+                        self.fetcher.obj.next(SendToFifo);
+                    }
+                    SendToFifo => {
+                        self.fetcher.obj.fifo_count += 1;
+
+                        if self.fetcher.obj.fifo_count == 1 {
+                            // Load into fifo
+                            let tile_bytes =
+                                self.fetcher.obj.tile.low.zip(self.fetcher.obj.tile.high);
+
+                            if let Some(bytes) = tile_bytes {
+                                let low = bytes.0;
+                                let high = bytes.1;
+
+                                let pixel = TwoBitsPerPixel::from_bytes(high, low);
+
+                                let palette = match attr.flags.palette() {
+                                    ObjectPaletteId::Palette0 => self.monochrome.obj_palette_0,
+                                    ObjectPaletteId::Palette1 => self.monochrome.obj_palette_1,
+                                };
+
+                                let num_to_add = 8 - self.fifo.object.len();
+
+                                for i in 0..num_to_add {
+                                    let bit = 7 - i;
+
+                                    let priority = attr.flags.priority();
+
+                                    let shade = palette.colour(pixel.pixel(bit));
+
+                                    let fifo_pixel = ObjectFifoPixel {
+                                        shade,
+                                        palette,
+                                        priority,
+                                    };
+
+                                    self.fifo.object.push_back(fifo_pixel);
+                                }
+                            }
+                        } else if self.fetcher.obj.fifo_count == 2 {
+                            self.fetcher.bg.resume();
+                            self.fifo.resume();
+
+                            self.fetcher.obj.reset();
+                        } else {
+                            panic!("Rekai Musuka <rekai@musuka.dev> is a bad programmer");
+                        }
+                    }
                 }
-                TileDataHigh => {
-                    let addr = self.fetcher.bg_byte_low_addr(control, pos, window_present);
+            }
 
-                    let high = self.read_byte(addr + 1);
-                    self.fetcher.tile.with_high_byte(high);
+            if self.fetcher.bg.is_enabled() {
+                match self.fetcher.bg.state {
+                    TileNumber => {
+                        // Increment Window line counter if scanline had any window pixels on it
+                        // only increment once per scanline though
+                        if is_window && !self.fetcher.bg.window_line.checked() {
+                            self.fetcher.bg.window_line.increment();
+                        }
 
-                    self.fetcher.state = SendToFifo;
+                        let x_pos = self.fetcher.x_pos;
+
+                        let addr = self
+                            .fetcher
+                            .bg_tile_num_addr(control, pos, x_pos, is_window);
+
+                        let id = self.read_byte(addr);
+                        self.fetcher.bg.tile.with_id(id);
+
+                        // Move on to the Next state in 2 T-cycles
+                        self.fetcher.bg.next(TileDataLow);
+                    }
+                    TileDataLow => {
+                        let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+
+                        let low = self.read_byte(addr);
+                        self.fetcher.bg.tile.with_low_byte(low);
+
+                        self.fetcher.bg.next(TileDataHigh);
+                    }
+                    TileDataHigh => {
+                        let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+
+                        let high = self.read_byte(addr + 1);
+                        self.fetcher.bg.tile.with_high_byte(high);
+
+                        self.fetcher.bg.next(SendToFifo);
+                    }
+                    SendToFifo => {
+                        let palette = &self.monochrome.bg_palette;
+                        self.fetcher.send_to_fifo(&mut self.fifo, palette);
+
+                        // FIXME: Should this be equivalent to a reset?
+                        self.fetcher.bg.next(TileNumber);
+                    }
                 }
-                SendToFifo => {
-                    let palette = &self.monochrome.bg_palette;
-                    self.fetcher.send_to_fifo(&mut self.fifo, palette);
-
-                    self.fetcher.state = TileNumber;
-                }
+            } else {
+                self.fetcher.bg.resume();
             }
         }
 
-        // Handle Background Pixel and Sprite FIFO
-        if let Some(bg_pixel) = self.fifo.background.pop_front() {
-            if let Some(_object_pixel) = self.fifo.object.pop_front() {
-                todo!("Mix the pixels or whatever I'm supposed todo here");
-            } else {
-                // Only Background Pixels will be rendered
+        if self.fifo.is_enabled() {
+            // Handle Background Pixel and Sprite FIFO
+            if let Some(bg_pixel) = self.fifo.background.pop_front() {
+                if let Some(_object_pixel) = self.fifo.object.pop_front() {
+                    todo!("Mix the pixels or whatever I'm supposed todo here");
+                } else {
+                    // Only Background Pixels will be rendered
 
-                let y = self.pos.line_y as usize;
-                let x = self.x_pos as usize;
-                let rgba = bg_pixel.shade.into_rgba();
+                    let y = self.pos.line_y as usize;
+                    let x = self.x_pos as usize;
+                    let rgba = bg_pixel.0.into_rgba();
 
-                let i = (GB_WIDTH * 4) * y + (x * 4);
-                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
+                    let i = (GB_WIDTH * 4) * y + (x * 4);
+                    self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
+                }
+
+                self.x_pos += 1;
             }
-
-            self.x_pos += 1;
+        } else {
+            self.fifo.resume();
         }
     }
 
@@ -844,6 +945,18 @@ impl ObjectBuffer {
         self.buf[self.len] = attr;
         self.len += 1;
     }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn get(&self, index: usize) -> Option<&ObjectAttribute> {
+        if index < self.len {
+            Some(&self.buf[index])
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for ObjectBuffer {
@@ -858,22 +971,21 @@ impl Default for ObjectBuffer {
 #[derive(Debug, Clone, Copy, Default)]
 struct PixelFetcher {
     x_pos: u8,
-    state: FetcherState,
-    window_line: WindowLineCounter,
-    tile: TileBuilder,
+    bg: BackgroundFetcher,
+    obj: ObjectFetcher,
 }
 
 impl PixelFetcher {
     pub fn hblank_reset(&mut self) {
-        self.window_line.hblank_reset();
+        self.bg.window_line.hblank_reset();
 
-        self.tile = Default::default();
-        self.state = Default::default();
+        self.bg.tile = Default::default();
+        self.bg.state = Default::default();
         self.x_pos = 0;
     }
 
     pub fn vblank_reset(&mut self) {
-        self.window_line.vblank_reset();
+        self.bg.window_line.vblank_reset();
     }
 
     fn bg_tile_num_addr(
@@ -905,7 +1017,7 @@ impl PixelFetcher {
         let scx_offset = if window { 0 } else { scroll_x / 8 } & 0x1F;
 
         let offset = if window {
-            32 * (self.window_line.count() as u16 / 8)
+            32 * (self.bg.window_line.count() as u16 / 8)
         } else {
             32 * (((y_offset) & 0x00FF) / 8)
         };
@@ -923,7 +1035,7 @@ impl PixelFetcher {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
 
-        let id = self.tile.id.expect("Tile Number unexpectedly missing");
+        let id = self.bg.tile.id.expect("Tile Number unexpectedly missing");
 
         let tile_data_addr = match control.tile_data_addr() {
             TileDataAddress::X8800 => (0x9000_i32 + (id as i32 * 16)) as u16,
@@ -931,7 +1043,7 @@ impl PixelFetcher {
         };
 
         let offset = if window {
-            2 * (self.window_line.count() % 8)
+            2 * (self.bg.window_line.count() % 8)
         } else {
             2 * ((line_y + scroll_y) % 8)
         };
@@ -940,7 +1052,7 @@ impl PixelFetcher {
     }
 
     fn send_to_fifo(&mut self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
-        let tile_bytes = self.tile.low.zip(self.tile.high);
+        let tile_bytes = self.bg.tile.low.zip(self.bg.tile.high);
 
         if let Some(bytes) = tile_bytes {
             let low = bytes.0;
@@ -955,19 +1067,108 @@ impl PixelFetcher {
 
                     let shade = palette.colour(pixel.pixel(bit));
 
-                    let fifo_pixel = FifoPixel {
-                        kind: FifoPixelKind::Background,
-                        shade,
-                        palette: None,
-                        priority: None,
-                    };
-
+                    let fifo_pixel = BackgroundFifoPixel(shade);
                     fifo.background.push_back(fifo_pixel);
                 }
             }
         }
 
         self.x_pos += 1;
+    }
+
+    pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, obj_size: u8) -> u16 {
+        let line_y = pos.line_y;
+
+        // FIXME: Should we subtract 16 from attr.y?
+        let y = attr.y.wrapping_sub(16);
+
+        let line = if attr.flags.y_flip() {
+            (obj_size - (line_y - y)) * 2
+        } else {
+            (line_y - y) * 2
+        };
+
+        0x8000 + (attr.tile_index as u16 * 16) + line as u16
+    }
+}
+
+trait Fetcher {
+    fn next(&mut self, state: FetcherState);
+    fn reset(&mut self);
+    fn pause(&mut self);
+    fn resume(&mut self);
+    fn is_enabled(&self) -> bool;
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BackgroundFetcher {
+    state: FetcherState,
+    tile: TileBuilder,
+    window_line: WindowLineCounter,
+    enabled: bool,
+}
+
+impl Fetcher for BackgroundFetcher {
+    fn next(&mut self, state: FetcherState) {
+        self.state = state
+    }
+
+    fn reset(&mut self) {
+        self.state = FetcherState::TileNumber;
+    }
+
+    fn pause(&mut self) {
+        self.enabled = false;
+    }
+
+    fn resume(&mut self) {
+        self.enabled = true;
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
+impl Default for BackgroundFetcher {
+    fn default() -> Self {
+        Self {
+            state: Default::default(),
+            tile: Default::default(),
+            window_line: Default::default(),
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct ObjectFetcher {
+    state: FetcherState,
+    tile: TileBuilder,
+    fifo_count: u8,
+    enabled: bool,
+}
+
+impl Fetcher for ObjectFetcher {
+    fn next(&mut self, state: FetcherState) {
+        self.state = state
+    }
+
+    fn reset(&mut self) {
+        self.fifo_count = 0;
+        self.state = FetcherState::TileNumber;
+    }
+
+    fn pause(&mut self) {
+        self.enabled = false;
+    }
+
+    fn resume(&mut self) {
+        self.enabled = true;
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
     }
 }
 
@@ -1028,29 +1229,36 @@ impl Default for FifoPixelKind {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct FifoPixel {
-    kind: FifoPixelKind,
-    shade: GrayShade,
-    palette: Option<ObjectPalette>,
-    priority: Option<RenderPriority>,
-}
+struct BackgroundFifoPixel(GrayShade);
 
-impl FifoPixel {
-    pub fn new_background(shade: GrayShade) -> Self {
-        Self {
-            kind: FifoPixelKind::Background,
-            shade,
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Clone, Copy, Default)]
+struct ObjectFifoPixel {
+    shade: Option<GrayShade>,
+    palette: ObjectPalette,
+    priority: RenderPriority,
 }
 
 // FIXME: Fifo Registers have a known size. Are heap allocations
 // really necessary here?
 #[derive(Debug, Clone)]
 struct FifoRenderer {
-    background: VecDeque<FifoPixel>,
-    object: VecDeque<FifoPixel>,
+    background: VecDeque<BackgroundFifoPixel>,
+    object: VecDeque<ObjectFifoPixel>,
+    enabled: bool,
+}
+
+impl FifoRenderer {
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn pause(&mut self) {
+        self.enabled = false;
+    }
+
+    pub fn resume(&mut self) {
+        self.enabled = true;
+    }
 }
 
 impl Default for FifoRenderer {
@@ -1058,6 +1266,7 @@ impl Default for FifoRenderer {
         Self {
             background: VecDeque::with_capacity(8),
             object: VecDeque::with_capacity(8),
+            enabled: true,
         }
     }
 }
