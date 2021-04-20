@@ -168,45 +168,45 @@ impl Ppu {
 
     fn draw(&mut self, cycle: u32) {
         use FetcherState::*;
+        let control = &self.control;
+        let pos = &self.pos;
 
-        // By only running on odd cycles, we can ensure that we draw every two T cycles
-        if cycle % 2 != 0 {
-            let control = &self.control;
-            let pos = &self.pos;
+        let line_y = self.pos.line_y;
+        let window_y = self.pos.window_y;
+        let is_window = self.control.window_enabled() && window_y <= line_y;
 
-            let line_y = self.pos.line_y;
-            let window_y = self.pos.window_y;
-            let is_window = self.control.window_enabled() && window_y <= line_y;
+        // Determine whether we need to enable sprite fetching
+        let mut obj_attr = None;
 
-            // Determine whether we need to enable sprite fetching
-            let mut obj_attr = None;
-            for i in 0..self.obj_buffer.len() {
-                if let Some(attr) = self.obj_buffer.get(i) {
-                    if attr.x <= (self.x_pos + 8) {
-                        // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
-                        self.fetcher.bg.reset();
-                        self.fetcher.bg.pause();
-                        self.fifo.pause();
+        for i in 0..self.obj_buffer.len() {
+            if let Some(attr) = self.obj_buffer.get(i) {
+                if attr.x <= (self.x_pos + 8) {
+                    // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
+                    self.fetcher.bg.reset();
+                    self.fetcher.bg.pause();
+                    self.fifo.pause();
 
-                        obj_attr = Some(attr);
-                    }
+                    obj_attr = Some(attr);
                 }
             }
+        }
 
-            if let Some(attr) = obj_attr {
-                // Run the Object Fetcher
-                let obj_size = match self.control.obj_size() {
-                    ObjectSize::EightByEight => 8,
-                    ObjectSize::EightBySixteen => 16,
-                };
-
-                match self.fetcher.obj.state {
-                    TileNumber => {
+        if let Some(attr) = obj_attr {
+            match self.fetcher.obj.state {
+                TileNumber => {
+                    if cycle % 2 != 0 {
                         self.fetcher.obj.tile.with_id(attr.tile_index);
 
                         self.fetcher.obj.next(TileDataLow);
                     }
-                    TileDataLow => {
+                }
+                TileDataLow => {
+                    if cycle % 2 != 0 {
+                        let obj_size = match self.control.obj_size() {
+                            ObjectSize::EightByEight => 8,
+                            ObjectSize::EightBySixteen => 16,
+                        };
+
                         let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
 
                         let byte = self.read_byte(addr);
@@ -214,7 +214,14 @@ impl Ppu {
 
                         self.fetcher.obj.next(TileDataHigh);
                     }
-                    TileDataHigh => {
+                }
+                TileDataHigh => {
+                    if cycle % 2 != 0 {
+                        let obj_size = match self.control.obj_size() {
+                            ObjectSize::EightByEight => 8,
+                            ObjectSize::EightBySixteen => 16,
+                        };
+
                         let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
 
                         let byte = self.read_byte(addr + 1);
@@ -222,55 +229,57 @@ impl Ppu {
 
                         self.fetcher.obj.next(SendToFifo);
                     }
-                    SendToFifo => {
-                        self.fetcher.obj.fifo_count += 1;
+                }
+                SendToFifo => {
+                    self.fetcher.obj.fifo_count += 1;
 
-                        if self.fetcher.obj.fifo_count == 1 {
-                            // Load into fifo
-                            let tile_bytes =
-                                self.fetcher.obj.tile.low.zip(self.fetcher.obj.tile.high);
+                    if self.fetcher.obj.fifo_count == 1 {
+                        // Load into Fifo
+                        let tile_bytes = self.fetcher.obj.tile.low.zip(self.fetcher.obj.tile.high);
 
-                            if let Some(bytes) = tile_bytes {
-                                let low = bytes.0;
-                                let high = bytes.1;
+                        if let Some(bytes) = tile_bytes {
+                            let low = bytes.0;
+                            let high = bytes.1;
 
-                                let pixel = TwoBitsPerPixel::from_bytes(high, low);
+                            let pixel = TwoBitsPerPixel::from_bytes(high, low);
 
-                                let palette = match attr.flags.palette() {
-                                    ObjectPaletteId::Palette0 => self.monochrome.obj_palette_0,
-                                    ObjectPaletteId::Palette1 => self.monochrome.obj_palette_1,
+                            let palette = match attr.flags.palette() {
+                                ObjectPaletteId::Palette0 => self.monochrome.obj_palette_0,
+                                ObjectPaletteId::Palette1 => self.monochrome.obj_palette_1,
+                            };
+
+                            let num_to_add = 8 - self.fifo.object.len();
+
+                            for i in 0..num_to_add {
+                                let bit = 7 - i;
+
+                                let priority = attr.flags.priority();
+
+                                let shade = palette.colour(pixel.pixel(bit));
+
+                                let fifo_pixel = ObjectFifoPixel {
+                                    shade,
+                                    palette,
+                                    priority,
                                 };
 
-                                let num_to_add = 8 - self.fifo.object.len();
-
-                                for i in 0..num_to_add {
-                                    let bit = 7 - i;
-
-                                    let priority = attr.flags.priority();
-
-                                    let shade = palette.colour(pixel.pixel(bit));
-
-                                    let fifo_pixel = ObjectFifoPixel {
-                                        shade,
-                                        palette,
-                                        priority,
-                                    };
-
-                                    self.fifo.object.push_back(fifo_pixel);
-                                }
+                                self.fifo.object.push_back(fifo_pixel);
                             }
-                        } else if self.fetcher.obj.fifo_count == 2 {
+
                             self.fetcher.bg.resume();
                             self.fifo.resume();
-
-                            self.fetcher.obj.reset();
-                        } else {
-                            panic!("Rekai Musuka <rekai@musuka.dev> is a bad programmer");
                         }
+                    } else if self.fetcher.obj.fifo_count == 2 {
+                        self.fetcher.obj.reset();
+                    } else {
+                        panic!("Object FIFO Logic Error has occurred :angry:");
                     }
                 }
             }
+        }
 
+        // By only running on odd cycles, we can ensure that we draw every two T cycles
+        if cycle % 2 != 0 {
             if self.fetcher.bg.is_enabled() {
                 match self.fetcher.bg.state {
                     TileNumber => {
@@ -316,8 +325,6 @@ impl Ppu {
                         self.fetcher.bg.next(TileNumber);
                     }
                 }
-            } else {
-                self.fetcher.bg.resume();
             }
         }
 
@@ -339,8 +346,6 @@ impl Ppu {
 
                 self.x_pos += 1;
             }
-        } else {
-            self.fifo.resume();
         }
     }
 
