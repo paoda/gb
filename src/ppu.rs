@@ -71,6 +71,7 @@ impl Ppu {
                         // we can reset the ppu x_pos and fetcher state now
                         self.x_pos = 0;
                         self.fetcher.hblank_reset();
+                        self.obj_buffer.clear();
 
                         self.stat.set_mode(Mode::HBlank);
                     } else {
@@ -936,7 +937,7 @@ impl ObjectBuffer {
         self.len == self.buf.len()
     }
 
-    pub fn _clear(&mut self) {
+    pub fn clear(&mut self) {
         self.buf = [Default::default(); 10];
         self.len = 0;
     }
