@@ -186,7 +186,7 @@ impl Ppu {
                     self.fetcher.bg.pause();
                     self.fifo.pause();
 
-                    obj_attr = Some(attr);
+                    obj_attr = Some(*attr);
                 }
             }
         }
@@ -207,7 +207,7 @@ impl Ppu {
                             ObjectSize::EightBySixteen => 16,
                         };
 
-                        let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
+                        let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
                         let byte = self.read_byte(addr);
                         self.fetcher.obj.tile.with_low_byte(byte);
@@ -222,7 +222,7 @@ impl Ppu {
                             ObjectSize::EightBySixteen => 16,
                         };
 
-                        let addr = PixelFetcher::get_obj_low_addr(attr, &self.pos, obj_size);
+                        let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
                         let byte = self.read_byte(addr + 1);
                         self.fetcher.obj.tile.with_high_byte(byte);
@@ -268,6 +268,10 @@ impl Ppu {
 
                             self.fetcher.bg.resume();
                             self.fifo.resume();
+
+                            self.obj_buffer
+                                .remove(&attr)
+                                .expect("Failed to remove Sprite Attribute from Buffer");
                         }
                     } else if self.fetcher.obj.fifo_count == 2 {
                         self.fetcher.obj.reset();
@@ -279,51 +283,49 @@ impl Ppu {
         }
 
         // By only running on odd cycles, we can ensure that we draw every two T cycles
-        if cycle % 2 != 0 {
-            if self.fetcher.bg.is_enabled() {
-                match self.fetcher.bg.state {
-                    TileNumber => {
-                        // Increment Window line counter if scanline had any window pixels on it
-                        // only increment once per scanline though
-                        if is_window && !self.fetcher.bg.window_line.checked() {
-                            self.fetcher.bg.window_line.increment();
-                        }
-
-                        let x_pos = self.fetcher.x_pos;
-
-                        let addr = self
-                            .fetcher
-                            .bg_tile_num_addr(control, pos, x_pos, is_window);
-
-                        let id = self.read_byte(addr);
-                        self.fetcher.bg.tile.with_id(id);
-
-                        // Move on to the Next state in 2 T-cycles
-                        self.fetcher.bg.next(TileDataLow);
+        if cycle % 2 != 0 && self.fetcher.bg.is_enabled() {
+            match self.fetcher.bg.state {
+                TileNumber => {
+                    // Increment Window line counter if scanline had any window pixels on it
+                    // only increment once per scanline though
+                    if is_window && !self.fetcher.bg.window_line.checked() {
+                        self.fetcher.bg.window_line.increment();
                     }
-                    TileDataLow => {
-                        let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
-                        let low = self.read_byte(addr);
-                        self.fetcher.bg.tile.with_low_byte(low);
+                    let x_pos = self.fetcher.x_pos;
 
-                        self.fetcher.bg.next(TileDataHigh);
-                    }
-                    TileDataHigh => {
-                        let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+                    let addr = self
+                        .fetcher
+                        .bg_tile_num_addr(control, pos, x_pos, is_window);
 
-                        let high = self.read_byte(addr + 1);
-                        self.fetcher.bg.tile.with_high_byte(high);
+                    let id = self.read_byte(addr);
+                    self.fetcher.bg.tile.with_id(id);
 
-                        self.fetcher.bg.next(SendToFifo);
-                    }
-                    SendToFifo => {
-                        let palette = &self.monochrome.bg_palette;
-                        self.fetcher.send_to_fifo(&mut self.fifo, palette);
+                    // Move on to the Next state in 2 T-cycles
+                    self.fetcher.bg.next(TileDataLow);
+                }
+                TileDataLow => {
+                    let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
-                        // FIXME: Should this be equivalent to a reset?
-                        self.fetcher.bg.next(TileNumber);
-                    }
+                    let low = self.read_byte(addr);
+                    self.fetcher.bg.tile.with_low_byte(low);
+
+                    self.fetcher.bg.next(TileDataHigh);
+                }
+                TileDataHigh => {
+                    let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+
+                    let high = self.read_byte(addr + 1);
+                    self.fetcher.bg.tile.with_high_byte(high);
+
+                    self.fetcher.bg.next(SendToFifo);
+                }
+                SendToFifo => {
+                    let palette = &self.monochrome.bg_palette;
+                    self.fetcher.send_to_fifo(&mut self.fifo, palette);
+
+                    // FIXME: Should this be equivalent to a reset?
+                    self.fetcher.bg.next(TileNumber);
                 }
             }
         }
@@ -331,18 +333,31 @@ impl Ppu {
         if self.fifo.is_enabled() {
             // Handle Background Pixel and Sprite FIFO
             if let Some(bg_pixel) = self.fifo.background.pop_front() {
-                if let Some(_object_pixel) = self.fifo.object.pop_front() {
-                    todo!("Mix the pixels or whatever I'm supposed todo here");
-                } else {
-                    // Only Background Pixels will be rendered
+                let rgba = match self.fifo.object.pop_front() {
+                    Some(obj_pixel) => match obj_pixel.shade {
+                        Some(obj_shade) => {
+                            if let RenderPriority::BackgroundAndWindow = obj_pixel.priority {
+                                match bg_pixel.shade {
+                                    GrayShade::White => obj_shade.into_rgba(),
+                                    _ => bg_pixel.shade.into_rgba(),
+                                }
+                            } else {
+                                obj_shade.into_rgba()
+                            }
+                        }
+                        None => bg_pixel.shade.into_rgba(),
+                    },
+                    None => {
+                        // Only Background Pixels will be rendered
+                        bg_pixel.shade.into_rgba()
+                    }
+                };
 
-                    let y = self.pos.line_y as usize;
-                    let x = self.x_pos as usize;
-                    let rgba = bg_pixel.0.into_rgba();
+                let y = self.pos.line_y as usize;
+                let x = self.x_pos as usize;
 
-                    let i = (GB_WIDTH * 4) * y + (x * 4);
-                    self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
-                }
+                let i = (GB_WIDTH * 4) * y + (x * 4);
+                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
 
                 self.x_pos += 1;
             }
@@ -816,7 +831,7 @@ impl Default for ObjectAttributeTable {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ObjectAttribute {
     y: u8,
     x: u8,
@@ -854,6 +869,13 @@ bitfield! {
     y_flip, set_y_flip: 6;
     x_flip, set_x_flip: 5;
     from into ObjectPaletteId, palette, set_palette: 4, 4;
+}
+
+impl Eq for ObjectFlags {}
+impl PartialEq for ObjectFlags {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
 }
 
 impl Copy for ObjectFlags {}
@@ -962,6 +984,38 @@ impl ObjectBuffer {
         } else {
             None
         }
+    }
+
+    pub fn position(&self, attr: &ObjectAttribute) -> Option<usize> {
+        let mut index = None;
+
+        for i in 0..self.len {
+            if self.buf[i] == *attr {
+                index = Some(i);
+            }
+        }
+
+        index
+    }
+
+    pub fn remove(&mut self, attr: &ObjectAttribute) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: Make this not bad code
+        let mut copy: ObjectBuffer = Default::default();
+
+        let i = self
+            .position(attr)
+            .ok_or_else(|| format!("Could not find {:?} in Sprite Buffer", attr))?;
+
+        for j in 0..self.len {
+            if j != i {
+                copy.add(self.buf[j])
+            }
+        }
+
+        self.buf = copy.buf;
+        self.len = copy.len;
+
+        Ok(())
     }
 }
 
@@ -1073,7 +1127,7 @@ impl PixelFetcher {
 
                     let shade = palette.colour(pixel.pixel(bit));
 
-                    let fifo_pixel = BackgroundFifoPixel(shade);
+                    let fifo_pixel = BackgroundFifoPixel { shade };
                     fifo.background.push_back(fifo_pixel);
                 }
             }
@@ -1222,20 +1276,10 @@ impl Default for FetcherState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum FifoPixelKind {
-    Background,
-    Object,
-}
-
-impl Default for FifoPixelKind {
-    fn default() -> Self {
-        Self::Background
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default)]
-struct BackgroundFifoPixel(GrayShade);
+struct BackgroundFifoPixel {
+    shade: GrayShade,
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 struct ObjectFifoPixel {
