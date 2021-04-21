@@ -33,6 +33,7 @@ pub struct Ppu {
     pub vram: Box<[u8; VRAM_SIZE]>,
     pub stat: LCDStatus,
     pub oam: ObjectAttributeTable,
+    clock: TimingClock,
     fetcher: PixelFetcher,
     fifo: FifoRenderer,
     obj_buffer: ObjectBuffer,
@@ -82,7 +83,12 @@ impl Ppu {
 
                         self.stat.set_mode(Mode::HBlank);
                     } else {
-                        self.draw(self.cycles.into());
+                        if self.control.lcd_enabled() {
+                            // Only Draw when the LCD Is Enabled
+                            self.draw(self.cycles.into());
+                        } else {
+                            self.reset();
+                        }
                     }
                 }
                 Mode::HBlank => {
@@ -147,17 +153,22 @@ impl Ppu {
                     }
                 }
             }
+
+            // The TimingClock is either Tick or Tock, and it changes
+            // every other cycle, which means that we can use it to ensure
+            // that things run every other cycle
+            self.clock_next();
         }
     }
 
     fn scan_oam(&mut self, cycle: u32) {
-        if cycle % 2 == 0 {
+        if self.clock == TimingClock::Tock {
             // This is run 50% of the time, or 40 times
             // which is the number of sprites in OAM
 
             let sprite_height = match self.control.obj_size() {
-                ObjectSize::EightByEight => 8,
-                ObjectSize::EightBySixteen => 16,
+                ObjectSize::Eight => 8,
+                ObjectSize::Sixteen => 16,
             };
 
             let attr = self.oam.attribute((cycle / 2) as usize);
@@ -201,17 +212,17 @@ impl Ppu {
         if let Some(attr) = obj_attr {
             match self.fetcher.obj.state {
                 TileNumber => {
-                    if cycle % 2 != 0 {
+                    if self.clock == TimingClock::Tick {
                         self.fetcher.obj.tile.with_id(attr.tile_index);
 
                         self.fetcher.obj.next(TileDataLow);
                     }
                 }
                 TileDataLow => {
-                    if cycle % 2 != 0 {
+                    if self.clock == TimingClock::Tick {
                         let obj_size = match self.control.obj_size() {
-                            ObjectSize::EightByEight => 8,
-                            ObjectSize::EightBySixteen => 16,
+                            ObjectSize::Eight => 8,
+                            ObjectSize::Sixteen => 16,
                         };
 
                         let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
@@ -223,10 +234,10 @@ impl Ppu {
                     }
                 }
                 TileDataHigh => {
-                    if cycle % 2 != 0 {
+                    if self.clock == TimingClock::Tick {
                         let obj_size = match self.control.obj_size() {
-                            ObjectSize::EightByEight => 8,
-                            ObjectSize::EightBySixteen => 16,
+                            ObjectSize::Eight => 8,
+                            ObjectSize::Sixteen => 16,
                         };
 
                         let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
@@ -251,8 +262,8 @@ impl Ppu {
                             let pixel = TwoBitsPerPixel::from_bytes(high, low);
 
                             let palette = match attr.flags.palette() {
-                                ObjectPaletteId::Palette0 => self.monochrome.obj_palette_0,
-                                ObjectPaletteId::Palette1 => self.monochrome.obj_palette_1,
+                                ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
+                                ObjectPaletteId::One => self.monochrome.obj_palette_1,
                             };
 
                             let num_to_add = 8 - self.fifo.object.len();
@@ -288,7 +299,7 @@ impl Ppu {
         }
 
         // By only running on odd cycles, we can ensure that we draw every two T cycles
-        if cycle % 2 != 0 && self.fetcher.bg.is_enabled() {
+        if self.clock == TimingClock::Tick && self.fetcher.bg.is_enabled() {
             match self.fetcher.bg.state {
                 TileNumber => {
                     // Increment Window line counter if scanline had any window pixels on it
@@ -369,6 +380,30 @@ impl Ppu {
         }
     }
 
+    fn clock_next(&mut self) {
+        use TimingClock::*;
+
+        self.clock = match self.clock {
+            Tick => Tock,
+            Tock => Tick,
+        }
+    }
+
+    fn reset(&mut self) {
+        // FIXME: Discover what actually is supposed to be reset here
+
+        self.clock = Default::default();
+        self.cycles = Cycle::new(0);
+
+        self.x_pos = 0;
+        self.stat.set_mode(Mode::OamScan);
+        self.pos.line_y = 0;
+
+        self.fetcher.bg.reset();
+        self.fetcher.obj.reset();
+        self.obj_buffer.clear();
+    }
+
     pub fn copy_to_gui(&self, frame: &mut [u8]) {
         frame.copy_from_slice(self.frame_buf.as_ref());
     }
@@ -386,11 +421,24 @@ impl Default for Ppu {
             pos: Default::default(),
             stat: Default::default(),
             oam: Default::default(),
+            clock: Default::default(),
             fetcher: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
             x_pos: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TimingClock {
+    Tick = 0,
+    Tock = 1,
+}
+
+impl Default for TimingClock {
+    fn default() -> Self {
+        Self::Tick
     }
 }
 
@@ -607,15 +655,15 @@ impl Default for TileDataAddress {
 
 #[derive(Debug, Clone, Copy)]
 enum ObjectSize {
-    EightByEight = 0,
-    EightBySixteen = 1,
+    Eight = 0,
+    Sixteen = 1,
 }
 
 impl From<u8> for ObjectSize {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => Self::EightByEight,
-            0b01 => Self::EightBySixteen,
+            0b00 => Self::Eight,
+            0b01 => Self::Sixteen,
             _ => unreachable!("{:#04X} is not a valid value for ObjSize", byte),
         }
     }
@@ -629,7 +677,7 @@ impl From<ObjectSize> for u8 {
 
 impl Default for ObjectSize {
     fn default() -> Self {
-        Self::EightByEight
+        Self::Eight
     }
 }
 
@@ -938,15 +986,15 @@ impl Default for RenderPriority {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ObjectPaletteId {
-    Palette0 = 0,
-    Palette1 = 1,
+    Zero = 0,
+    One = 1,
 }
 
 impl From<u8> for ObjectPaletteId {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => ObjectPaletteId::Palette0,
-            0b01 => ObjectPaletteId::Palette1,
+            0b00 => ObjectPaletteId::Zero,
+            0b01 => ObjectPaletteId::One,
             _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
         }
     }
