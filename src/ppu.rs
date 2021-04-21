@@ -12,7 +12,7 @@ const PPU_START_ADDRESS: usize = 0x8000;
 // OAM Scan
 const OBJECT_LIMIT: usize = 10;
 
-// // White and Black
+// // White
 // const WHITE: [u8; 4] = 0xFFFFFFFFu32.to_be_bytes();
 // const LIGHT_GRAY: [u8; 4] = 0xB6B6B6FFu32.to_be_bytes();
 // const DARK_GRAY: [u8; 4] = 0x676767FFu32.to_be_bytes();
@@ -151,7 +151,7 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self, cycle: u32) {
-        if cycle % 2 != 0 {
+        if cycle % 2 == 0 {
             // This is run 50% of the time, or 40 times
             // which is the number of sprites in OAM
 
@@ -276,9 +276,7 @@ impl Ppu {
                             self.fetcher.bg.resume();
                             self.fifo.resume();
 
-                            self.obj_buffer
-                                .remove(&attr)
-                                .expect("Failed to remove Sprite Attribute from Buffer");
+                            self.obj_buffer.remove(&attr);
                         }
                     } else if self.fetcher.obj.fifo_count == 2 {
                         self.fetcher.obj.reset();
@@ -962,67 +960,49 @@ impl From<ObjectPaletteId> for u8 {
 
 #[derive(Debug, Clone, Copy)]
 struct ObjectBuffer {
-    buf: [ObjectAttribute; 10],
-    len: usize,
+    buf: [Option<ObjectAttribute>; 10],
 }
 
 impl ObjectBuffer {
     pub fn full(&self) -> bool {
-        self.len == self.buf.len()
+        !self.buf.iter().any(|maybe_attr| maybe_attr.is_none())
     }
 
     pub fn clear(&mut self) {
         self.buf = [Default::default(); 10];
-        self.len = 0;
     }
 
     pub fn add(&mut self, attr: ObjectAttribute) {
-        self.buf[self.len] = attr;
-        self.len += 1;
+        // TODO: Maybe this doesn't need to be O(n)?
+        for maybe_attr in self.buf.iter_mut() {
+            if maybe_attr.is_none() {
+                *maybe_attr = Some(attr);
+            }
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.len
+        self.buf
+            .iter()
+            .filter(|maybe_attr| maybe_attr.is_some())
+            .count()
     }
 
     pub fn get(&self, index: usize) -> Option<&ObjectAttribute> {
-        if index < self.len {
-            Some(&self.buf[index])
-        } else {
-            None
-        }
+        self.buf[index].as_ref()
     }
 
     pub fn position(&self, attr: &ObjectAttribute) -> Option<usize> {
-        let mut index = None;
-
-        for i in 0..self.len {
-            if self.buf[i] == *attr {
-                index = Some(i);
-            }
-        }
-
-        index
+        self.buf.iter().position(|maybe_attr| match maybe_attr {
+            Some(other_attr) => attr == other_attr,
+            None => false,
+        })
     }
 
-    pub fn remove(&mut self, attr: &ObjectAttribute) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: Make this not bad code
-        let mut copy: ObjectBuffer = Default::default();
-
-        let i = self
-            .position(attr)
-            .ok_or_else(|| format!("Could not find {:?} in Sprite Buffer", attr))?;
-
-        for j in 0..self.len {
-            if j != i {
-                copy.add(self.buf[j])
-            }
+    pub fn remove(&mut self, attr: &ObjectAttribute) {
+        if let Some(i) = self.position(attr) {
+            self.buf[i] = None;
         }
-
-        self.buf = copy.buf;
-        self.len = copy.len;
-
-        Ok(())
     }
 }
 
@@ -1030,7 +1010,6 @@ impl Default for ObjectBuffer {
     fn default() -> Self {
         Self {
             buf: [Default::default(); OBJECT_LIMIT],
-            len: 0,
         }
     }
 }
