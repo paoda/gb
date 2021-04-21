@@ -12,10 +12,17 @@ const PPU_START_ADDRESS: usize = 0x8000;
 // OAM Scan
 const OBJECT_LIMIT: usize = 10;
 
-const WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
-const LIGHT_GRAY: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xFF];
-const DARK_GRAY: [u8; 4] = [0x77, 0x77, 0x77, 0xFF];
-const BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+// // White and Black
+// const WHITE: [u8; 4] = 0xFFFFFFFFu32.to_be_bytes();
+// const LIGHT_GRAY: [u8; 4] = 0xB6B6B6FFu32.to_be_bytes();
+// const DARK_GRAY: [u8; 4] = 0x676767FFu32.to_be_bytes();
+// const BLACK: [u8; 4] = 0x000000FFu32.to_be_bytes();
+
+// Green
+const WHITE: [u8; 4] = 0xE3EEC0FFu32.to_be_bytes();
+const LIGHT_GRAY: [u8; 4] = 0xAEBA89FFu32.to_be_bytes();
+const DARK_GRAY: [u8; 4] = 0x5E6745FFu32.to_be_bytes();
+const BLACK: [u8; 4] = 0x202020FFu32.to_be_bytes();
 
 #[derive(Debug, Clone)]
 pub struct Ppu {
