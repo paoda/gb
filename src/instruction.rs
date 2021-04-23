@@ -1245,7 +1245,7 @@ impl Instruction {
 
                         let shifted = value << 1;
 
-                        cpu.write_byte(addr, value);
+                        cpu.write_byte(addr, shifted);
                         (Cycle::new(16), (value >> 7) & 0x01, shifted)
                     }
                 };
@@ -1279,7 +1279,7 @@ impl Instruction {
                         let msb = (value >> 7) & 0x01;
                         let shifted = msb << 7 | value >> 1;
 
-                        cpu.write_byte(addr, value);
+                        cpu.write_byte(addr, shifted);
                         (Cycle::new(16), value & 0x01, shifted)
                     }
                 };
