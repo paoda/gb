@@ -205,6 +205,7 @@ impl Ppu {
                     self.fifo.pause();
 
                     obj_attr = Some(*attr);
+                    break;
                 }
             }
         }
@@ -286,6 +287,7 @@ impl Ppu {
 
                             self.fetcher.bg.resume();
                             self.fifo.resume();
+                            self.obj_buffer.remove(&attr);
                         }
                     } else if self.fetcher.obj.fifo_count == 2 {
                         self.fetcher.obj.reset();
@@ -1031,6 +1033,17 @@ impl ObjectBuffer {
 
     pub fn get(&self, index: usize) -> Option<&ObjectAttribute> {
         self.buf[index].as_ref()
+    }
+
+    pub fn remove(&mut self, attr: &ObjectAttribute) {
+        let maybe_index = self.buf.iter().position(|maybe_attr| match maybe_attr {
+            Some(other_attr) => attr == other_attr,
+            None => false,
+        });
+
+        if let Some(i) = maybe_index {
+            self.buf[i] = None;
+        }
     }
 }
 
