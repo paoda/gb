@@ -82,13 +82,11 @@ impl Ppu {
                         self.obj_buffer.clear();
 
                         self.stat.set_mode(Mode::HBlank);
+                    } else if self.control.lcd_enabled() {
+                        // Only Draw when the LCD Is Enabled
+                        self.draw(self.cycles.into());
                     } else {
-                        if self.control.lcd_enabled() {
-                            // Only Draw when the LCD Is Enabled
-                            self.draw(self.cycles.into());
-                        } else {
-                            self.reset();
-                        }
+                        self.reset();
                     }
                 }
                 Mode::HBlank => {
