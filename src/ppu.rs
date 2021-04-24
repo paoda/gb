@@ -196,17 +196,15 @@ impl Ppu {
         // Determine whether we need to enable sprite fetching
         let mut obj_attr = None;
 
-        for i in 0..self.obj_buffer.len() {
-            if let Some(attr) = self.obj_buffer.get(i) {
-                if attr.x <= (self.x_pos + 8) {
-                    // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
-                    self.fetcher.bg.reset();
-                    self.fetcher.bg.pause();
-                    self.fifo.pause();
+        for attr in self.obj_buffer.iter().flatten() {
+            if attr.x <= (self.x_pos + 8) {
+                // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
+                self.fetcher.bg.reset();
+                self.fetcher.bg.pause();
+                self.fifo.pause();
 
-                    obj_attr = Some(*attr);
-                    break;
-                }
+                obj_attr = Some(*attr);
+                break;
             }
         }
 
@@ -1013,6 +1011,36 @@ struct ObjectBuffer {
 }
 
 impl ObjectBuffer {
+    pub fn iter(&self) -> std::slice::Iter<'_, Option<ObjectAttribute>> {
+        self.into_iter()
+    }
+
+    pub fn iter_mut(&mut self) -> &mut std::slice::IterMut<'_, Option<ObjectAttribute>> {
+        todo!("Figure out the lifetimes for ObjectBuffer::iter_mut()");
+    }
+}
+
+impl<'a> IntoIterator for &'a ObjectBuffer {
+    type Item = &'a Option<ObjectAttribute>;
+
+    type IntoIter = std::slice::Iter<'a, Option<ObjectAttribute>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.buf.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut ObjectBuffer {
+    type Item = &'a Option<ObjectAttribute>;
+
+    type IntoIter = std::slice::Iter<'a, Option<ObjectAttribute>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.buf.iter()
+    }
+}
+
+impl ObjectBuffer {
     pub fn is_full(&self) -> bool {
         self.len == OBJECT_LIMIT
     }
@@ -1025,14 +1053,6 @@ impl ObjectBuffer {
     pub fn add(&mut self, attr: ObjectAttribute) {
         self.buf[self.len] = Some(attr);
         self.len += 1;
-    }
-
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn get(&self, index: usize) -> Option<&ObjectAttribute> {
-        self.buf[index].as_ref()
     }
 
     pub fn remove(&mut self, attr: &ObjectAttribute) {
