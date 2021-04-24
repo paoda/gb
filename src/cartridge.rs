@@ -30,7 +30,7 @@ impl Cartridge {
         let ram_size = Self::find_ram_size(&memory);
         let bank_count = Self::find_bank_count(&memory);
         let mbc_kind = Self::find_mbc(&memory);
-        let ram_byte_count = ram_size.to_byte_count();
+        let ram_byte_count = ram_size.as_byte_count();
 
         match mbc_kind {
             MbcKind::None => Box::new(NoMbc {}),
@@ -168,7 +168,7 @@ impl Mbc1 {
     fn calc_ram_address(&self, addr: u16) -> u16 {
         match self.ram_size {
             RamSize::_2KB | RamSize::_8KB => {
-                let ram_size = self.ram_size.to_byte_count() as u16;
+                let ram_size = self.ram_size.as_byte_count() as u16;
                 (addr - 0xA000) % ram_size
             }
             RamSize::_32KB => {
@@ -290,7 +290,7 @@ enum RamSize {
 }
 
 impl RamSize {
-    pub fn to_byte_count(&self) -> u32 {
+    pub fn as_byte_count(&self) -> u32 {
         use RamSize::*;
 
         match *self {
