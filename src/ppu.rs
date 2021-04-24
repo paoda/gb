@@ -177,7 +177,7 @@ impl Ppu {
             if attr.x > 0
                 && line_y >= attr.y
                 && line_y < (attr.y + sprite_height)
-                && !self.obj_buffer.full()
+                && !self.obj_buffer.is_full()
             {
                 self.obj_buffer.add(attr);
             }
@@ -286,8 +286,6 @@ impl Ppu {
 
                             self.fetcher.bg.resume();
                             self.fifo.resume();
-
-                            self.obj_buffer.remove(&attr);
                         }
                     } else if self.fetcher.obj.fifo_count == 2 {
                         self.fetcher.obj.reset();
@@ -1008,49 +1006,31 @@ impl From<ObjectPaletteId> for u8 {
 
 #[derive(Debug, Clone, Copy)]
 struct ObjectBuffer {
-    buf: [Option<ObjectAttribute>; 10],
+    buf: [Option<ObjectAttribute>; OBJECT_LIMIT],
+    len: usize,
 }
 
 impl ObjectBuffer {
-    pub fn full(&self) -> bool {
-        !self.buf.iter().any(|maybe_attr| maybe_attr.is_none())
+    pub fn is_full(&self) -> bool {
+        self.len == OBJECT_LIMIT
     }
 
     pub fn clear(&mut self) {
         self.buf = [Default::default(); 10];
+        self.len = 0;
     }
 
     pub fn add(&mut self, attr: ObjectAttribute) {
-        // TODO: Maybe this doesn't need to be O(n)?
-        for maybe_attr in self.buf.iter_mut() {
-            if maybe_attr.is_none() {
-                *maybe_attr = Some(attr);
-            }
-        }
+        self.buf[self.len] = Some(attr);
+        self.len += 1;
     }
 
     pub fn len(&self) -> usize {
-        self.buf
-            .iter()
-            .filter(|maybe_attr| maybe_attr.is_some())
-            .count()
+        self.len
     }
 
     pub fn get(&self, index: usize) -> Option<&ObjectAttribute> {
         self.buf[index].as_ref()
-    }
-
-    pub fn position(&self, attr: &ObjectAttribute) -> Option<usize> {
-        self.buf.iter().position(|maybe_attr| match maybe_attr {
-            Some(other_attr) => attr == other_attr,
-            None => false,
-        })
-    }
-
-    pub fn remove(&mut self, attr: &ObjectAttribute) {
-        if let Some(i) = self.position(attr) {
-            self.buf[i] = None;
-        }
     }
 }
 
@@ -1058,6 +1038,7 @@ impl Default for ObjectBuffer {
     fn default() -> Self {
         Self {
             buf: [Default::default(); OBJECT_LIMIT],
+            len: Default::default(),
         }
     }
 }
