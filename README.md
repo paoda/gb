@@ -3,11 +3,13 @@
 
 
 ### Status
-Currently:
-* CPU passes Blargg's cpu_instrs.gb 
-* Gameboy Boot ROM runs correctly
+* Passes Blargg's cpu_instrs Test
+* Renders Background & Window Tiles 
+* Implements a PPU FIFO
 
 
 ### Notes
-* Emulator takes longer than others to resume execution from HALT in Blargg's 2nd cpu_instrs test.
-
+* [gameboy-logs](https://github.com/wheremyfoodat/Gameboy-logs) suggests that there are still some underlying problems with the cpu implementation
+* The Sprite FIFO does not work as expected yet
+* Sound is neither emulated nor stubbed. Upon writing / reading to a APU related register the emulator will panic. 
+* Code cleanup is pending completion of some minimum viable product of the emulator
