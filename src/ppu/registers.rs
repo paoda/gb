@@ -179,6 +179,17 @@ pub enum ObjectSize {
     Sixteen = 1,
 }
 
+impl ObjectSize {
+    pub fn as_u8(&self) -> u8 {
+        use ObjectSize::*;
+
+        match self {
+            Eight => 8,
+            Sixteen => 16,
+        }
+    }
+}
+
 impl From<u8> for ObjectSize {
     fn from(byte: u8) -> Self {
         match byte {

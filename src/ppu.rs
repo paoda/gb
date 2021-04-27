@@ -6,7 +6,7 @@ use std::convert::TryInto;
 
 use registers::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, ObjectSize, PpuMode, RenderPriority, TileDataAddress, TwoBitsPerPixel,
+    ObjectPaletteId, PpuMode, RenderPriority, TileDataAddress, TwoBitsPerPixel,
 };
 
 mod registers;
@@ -170,10 +170,7 @@ impl Ppu {
             // This is run 50% of the time, or 40 times
             // which is the number of sprites in OAM
 
-            let sprite_height = match self.control.obj_size() {
-                ObjectSize::Eight => 8,
-                ObjectSize::Sixteen => 16,
-            };
+            let sprite_height = self.control.obj_size().as_u8();
 
             let attr = self.oam.attribute((cycle / 2) as usize);
             let line_y = self.pos.line_y + 16;
@@ -215,93 +212,77 @@ impl Ppu {
         if let Some(attr) = obj_attr {
             match self.fetcher.obj.state {
                 TileNumber => {
-                    if self.clock == TimingClock::Tick {
-                        self.fetcher.obj.tile.with_id(attr.tile_index);
-
-                        self.fetcher.obj.next(TileDataLow);
-                    }
+                    self.fetcher.obj.tile.with_id(attr.tile_index);
+                    self.fetcher.obj.next(SleepZero);
                 }
+                SleepZero => self.fetcher.obj.next(TileDataLow),
                 TileDataLow => {
-                    if self.clock == TimingClock::Tick {
-                        let obj_size = match self.control.obj_size() {
-                            ObjectSize::Eight => 8,
-                            ObjectSize::Sixteen => 16,
-                        };
+                    let obj_size = self.control.obj_size().as_u8();
 
-                        let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
-                        let byte = self.read_byte(addr);
-                        self.fetcher.obj.tile.with_low_byte(byte);
+                    let byte = self.read_byte(addr);
+                    self.fetcher.obj.tile.with_low_byte(byte);
 
-                        self.fetcher.obj.next(TileDataHigh);
-                    }
+                    self.fetcher.obj.next(SleepOne);
                 }
+                SleepOne => self.fetcher.obj.next(TileDataHigh),
                 TileDataHigh => {
-                    if self.clock == TimingClock::Tick {
-                        let obj_size = match self.control.obj_size() {
-                            ObjectSize::Eight => 8,
-                            ObjectSize::Sixteen => 16,
+                    let obj_size = self.control.obj_size().as_u8();
+
+                    let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
+
+                    let byte = self.read_byte(addr + 1);
+                    self.fetcher.obj.tile.with_high_byte(byte);
+
+                    self.fetcher.obj.next(SleepTwo);
+                }
+                SleepTwo => self.fetcher.obj.next(SendToFifoOne),
+                SendToFifoOne => {
+                    // Load into Fifo
+                    let maybe_low = self.fetcher.obj.tile.low;
+                    let maybe_high = self.fetcher.obj.tile.high;
+
+                    let (low, high) = maybe_low
+                        .zip(maybe_high)
+                        .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
+
+                    let pixel = TwoBitsPerPixel::from_bytes(high, low);
+
+                    let palette = match attr.flags.palette() {
+                        ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
+                        ObjectPaletteId::One => self.monochrome.obj_palette_1,
+                    };
+
+                    let num_to_add = 8 - self.fifo.object.len();
+
+                    for i in 0..num_to_add {
+                        let bit = 7 - i;
+
+                        let priority = attr.flags.priority();
+
+                        let shade = palette.colour(pixel.pixel(bit));
+
+                        let fifo_pixel = ObjectFifoPixel {
+                            shade,
+                            palette,
+                            priority,
                         };
 
-                        let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
-
-                        let byte = self.read_byte(addr + 1);
-                        self.fetcher.obj.tile.with_high_byte(byte);
-
-                        self.fetcher.obj.next(SendToFifo);
+                        self.fifo.object.push_back(fifo_pixel);
                     }
+
+                    self.fetcher.bg.resume();
+                    self.fifo.resume();
+                    self.obj_buffer.remove(&attr);
+
+                    self.fetcher.obj.next(SendToFifoTwo);
                 }
-                SendToFifo => {
-                    self.fetcher.obj.fifo_count += 1;
-
-                    if self.fetcher.obj.fifo_count == 1 {
-                        // Load into Fifo
-                        let tile_bytes = self.fetcher.obj.tile.low.zip(self.fetcher.obj.tile.high);
-
-                        if let Some(bytes) = tile_bytes {
-                            let low = bytes.0;
-                            let high = bytes.1;
-
-                            let pixel = TwoBitsPerPixel::from_bytes(high, low);
-
-                            let palette = match attr.flags.palette() {
-                                ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
-                                ObjectPaletteId::One => self.monochrome.obj_palette_1,
-                            };
-
-                            let num_to_add = 8 - self.fifo.object.len();
-
-                            for i in 0..num_to_add {
-                                let bit = 7 - i;
-
-                                let priority = attr.flags.priority();
-
-                                let shade = palette.colour(pixel.pixel(bit));
-
-                                let fifo_pixel = ObjectFifoPixel {
-                                    shade,
-                                    palette,
-                                    priority,
-                                };
-
-                                self.fifo.object.push_back(fifo_pixel);
-                            }
-
-                            self.fetcher.bg.resume();
-                            self.fifo.resume();
-                            self.obj_buffer.remove(&attr);
-                        }
-                    } else if self.fetcher.obj.fifo_count == 2 {
-                        self.fetcher.obj.reset();
-                    } else {
-                        panic!("Object FIFO Logic Error has occurred :angry:");
-                    }
-                }
+                SendToFifoTwo => self.fetcher.obj.reset(),
             }
         }
 
-        // By only running on odd cycles, we can ensure that we draw every two T cycles
-        if self.clock == TimingClock::Tick && self.fetcher.bg.is_enabled() {
+        if self.fetcher.bg.is_enabled() {
             match self.fetcher.bg.state {
                 TileNumber => {
                     // Increment Window line counter if scanline had any window pixels on it
@@ -320,25 +301,31 @@ impl Ppu {
                     self.fetcher.bg.tile.with_id(id);
 
                     // Move on to the Next state in 2 T-cycles
-                    self.fetcher.bg.next(TileDataLow);
+                    self.fetcher.bg.next(SleepZero);
                 }
+                SleepZero => self.fetcher.bg.next(TileDataLow),
                 TileDataLow => {
                     let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
                     let low = self.read_byte(addr);
                     self.fetcher.bg.tile.with_low_byte(low);
 
-                    self.fetcher.bg.next(TileDataHigh);
+                    self.fetcher.bg.next(SleepOne);
                 }
+                SleepOne => self.fetcher.bg.next(TileDataHigh),
                 TileDataHigh => {
                     let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
                     let high = self.read_byte(addr + 1);
                     self.fetcher.bg.tile.with_high_byte(high);
 
-                    self.fetcher.bg.next(SendToFifo);
+                    self.fetcher.bg.next(SleepTwo);
                 }
-                SendToFifo => {
+                SleepTwo => self.fetcher.bg.next(SendToFifoOne),
+                SendToFifoOne => {
+                    self.fetcher.bg.next(SendToFifoTwo);
+                }
+                SendToFifoTwo => {
                     let palette = &self.monochrome.bg_palette;
                     self.fetcher.send_to_fifo(&mut self.fifo, palette);
 
@@ -558,10 +545,6 @@ impl ObjectBuffer {
     pub fn iter(&self) -> std::slice::Iter<'_, Option<ObjectAttribute>> {
         self.into_iter()
     }
-
-    pub fn iter_mut(&mut self) -> &mut std::slice::IterMut<'_, Option<ObjectAttribute>> {
-        todo!("Figure out the lifetimes for ObjectBuffer::iter_mut()");
-    }
 }
 
 impl<'a> IntoIterator for &'a ObjectBuffer {
@@ -704,24 +687,24 @@ impl PixelFetcher {
     }
 
     fn send_to_fifo(&mut self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
-        let tile_bytes = self.bg.tile.low.zip(self.bg.tile.high);
+        let maybe_low = self.bg.tile.low;
+        let maybe_high = self.bg.tile.high;
 
-        if let Some(bytes) = tile_bytes {
-            let low = bytes.0;
-            let high = bytes.1;
+        let (low, high) = maybe_low
+            .zip(maybe_high)
+            .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-            let pixel = TwoBitsPerPixel::from_bytes(high, low);
+        let pixel = TwoBitsPerPixel::from_bytes(high, low);
 
-            if fifo.background.is_empty() {
-                for i in 0..8 {
-                    // Horizontally flip pixels
-                    let bit = 7 - i;
+        if fifo.background.is_empty() {
+            for i in 0..8 {
+                // Horizontally flip pixels
+                let bit = 7 - i;
 
-                    let shade = palette.colour(pixel.pixel(bit));
+                let shade = palette.colour(pixel.pixel(bit));
 
-                    let fifo_pixel = BackgroundFifoPixel { shade };
-                    fifo.background.push_back(fifo_pixel);
-                }
+                let fifo_pixel = BackgroundFifoPixel { shade };
+                fifo.background.push_back(fifo_pixel);
             }
         }
 
@@ -857,9 +840,13 @@ impl WindowLineCounter {
 #[derive(Debug, Clone, Copy)]
 pub enum FetcherState {
     TileNumber,
+    SleepZero,
     TileDataLow,
+    SleepOne,
     TileDataHigh,
-    SendToFifo,
+    SleepTwo,
+    SendToFifoOne,
+    SendToFifoTwo,
 }
 
 impl Default for FetcherState {
