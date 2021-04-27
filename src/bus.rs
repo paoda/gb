@@ -17,12 +17,12 @@ pub struct Bus {
     boot: Option<[u8; BOOT_ROM_SIZE]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
     pub ppu: Ppu,
-    wram: WorkRam,
-    vwram: VariableWorkRam,
+    work_ram: WorkRam,
+    var_ram: VariableWorkRam,
     timer: Timer,
     int: Interrupt,
     sound: Sound,
-    hram: HighRam,
+    high_ram: HighRam,
     serial: Serial,
     joypad: Joypad,
 }
@@ -33,12 +33,12 @@ impl Default for Bus {
             boot: None,
             cartridge: None,
             ppu: Default::default(),
-            wram: Default::default(),
-            vwram: Default::default(),
+            work_ram: Default::default(),
+            var_ram: Default::default(),
             timer: Default::default(),
             int: Default::default(),
             sound: Default::default(),
-            hram: Default::default(),
+            high_ram: Default::default(),
             serial: Default::default(),
             joypad: Default::default(),
         }
@@ -106,11 +106,11 @@ impl Bus {
             },
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                self.wram.read_byte(addr)
+                self.work_ram.read_byte(addr)
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                self.vwram.read_byte(addr)
+                self.var_ram.read_byte(addr)
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
@@ -119,11 +119,11 @@ impl Bus {
                 match addr {
                     0xE000..=0xEFFF => {
                         // 4KB Work RAM Bank 0
-                        self.wram.read_byte(addr)
+                        self.work_ram.read_byte(addr)
                     }
                     0xF000..=0xFDFF => {
                         // 4KB Work RAM Bank 1 -> N
-                        self.vwram.read_byte(addr)
+                        self.var_ram.read_byte(addr)
                     }
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
@@ -172,7 +172,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                self.hram.read_byte(addr)
+                self.high_ram.read_byte(addr)
             }
             0xFFFF => {
                 // Interrupts Enable Register
@@ -210,11 +210,11 @@ impl Bus {
             }
             0xC000..=0xCFFF => {
                 // 4KB Work RAM Bank 0
-                self.wram.write_byte(addr, byte);
+                self.work_ram.write_byte(addr, byte);
             }
             0xD000..=0xDFFF => {
                 // 4KB Work RAM Bank 1 -> N
-                self.vwram.write_byte(addr, byte);
+                self.var_ram.write_byte(addr, byte);
             }
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF
@@ -223,11 +223,11 @@ impl Bus {
                 match addr {
                     0xE000..=0xEFFF => {
                         // 4KB Work RAM Bank 0
-                        self.wram.write_byte(addr, byte);
+                        self.work_ram.write_byte(addr, byte);
                     }
                     0xF000..=0xFDFF => {
                         // 4KB Work RAM Bank 1 -> N
-                        self.vwram.write_byte(addr, byte);
+                        self.var_ram.write_byte(addr, byte);
                     }
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
@@ -291,7 +291,7 @@ impl Bus {
             }
             0xFF80..=0xFFFE => {
                 // High RAM
-                self.hram.write_byte(addr, byte);
+                self.high_ram.write_byte(addr, byte);
             }
             0xFFFF => {
                 // Interrupts Enable Register
