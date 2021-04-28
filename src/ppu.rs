@@ -194,29 +194,46 @@ impl Ppu {
         let window_y = self.pos.window_y;
         let is_window = self.control.window_enabled() && window_y <= line_y;
 
-        // Determine whether we need to enable sprite fetching
-        let mut obj_attr = None;
+        let iter = &mut self.obj_buffer.iter();
 
-        for attr in self.obj_buffer.iter().flatten() {
-            if attr.x <= (self.x_pos + 8) {
-                // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
-                self.fetcher.bg.reset();
-                self.fetcher.bg.pause();
-                self.fifo.pause();
+        let obj_attr = loop {
+            match iter.flatten().next() {
+                Some(attr) => {
+                    if attr.x <= (self.x_pos + 8) {
+                        self.fetcher.bg.reset();
+                        self.fetcher.bg.pause();
+                        self.fifo.pause();
 
-                obj_attr = Some(*attr);
-                break;
+                        break Some(*attr);
+                    }
+                }
+                None => break None,
             }
-        }
+        };
+
+        // // Determine whether we need to enable sprite fetching
+        // let mut obj_attr = None;
+
+        // for attr in self.obj_buffer.iter().flatten() {
+        //     if attr.x <= (self.x_pos + 8) {
+        //         // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
+        //         self.fetcher.bg.reset();
+        //         self.fetcher.bg.pause();
+        //         self.fifo.pause();
+
+        //         obj_attr = Some(*attr);
+        //         break;
+        //     }
+        // }
 
         if let Some(attr) = obj_attr {
             match self.fetcher.obj.state {
                 TileNumber => {
                     self.fetcher.obj.tile.with_id(attr.tile_index);
-                    self.fetcher.obj.next(SleepZero);
+                    self.fetcher.obj.next(ToLowByteSleep);
                 }
-                SleepZero => self.fetcher.obj.next(TileDataLow),
-                TileDataLow => {
+                ToLowByteSleep => self.fetcher.obj.next(TileLowByte),
+                TileLowByte => {
                     let obj_size = self.control.obj_size().as_u8();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
@@ -224,10 +241,10 @@ impl Ppu {
                     let byte = self.read_byte(addr);
                     self.fetcher.obj.tile.with_low_byte(byte);
 
-                    self.fetcher.obj.next(SleepOne);
+                    self.fetcher.obj.next(ToHighByteSleep);
                 }
-                SleepOne => self.fetcher.obj.next(TileDataHigh),
-                TileDataHigh => {
+                ToHighByteSleep => self.fetcher.obj.next(TileHighByte),
+                TileHighByte => {
                     let obj_size = self.control.obj_size().as_u8();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
@@ -235,9 +252,9 @@ impl Ppu {
                     let byte = self.read_byte(addr + 1);
                     self.fetcher.obj.tile.with_high_byte(byte);
 
-                    self.fetcher.obj.next(SleepTwo);
+                    self.fetcher.obj.next(ToFifoSleep);
                 }
-                SleepTwo => self.fetcher.obj.next(SendToFifoOne),
+                ToFifoSleep => self.fetcher.obj.next(SendToFifoOne),
                 SendToFifoOne => {
                     // Load into Fifo
                     let maybe_low = self.fetcher.obj.tile.low;
@@ -301,27 +318,27 @@ impl Ppu {
                     self.fetcher.bg.tile.with_id(id);
 
                     // Move on to the Next state in 2 T-cycles
-                    self.fetcher.bg.next(SleepZero);
+                    self.fetcher.bg.next(ToLowByteSleep);
                 }
-                SleepZero => self.fetcher.bg.next(TileDataLow),
-                TileDataLow => {
+                ToLowByteSleep => self.fetcher.bg.next(TileLowByte),
+                TileLowByte => {
                     let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
                     let low = self.read_byte(addr);
                     self.fetcher.bg.tile.with_low_byte(low);
 
-                    self.fetcher.bg.next(SleepOne);
+                    self.fetcher.bg.next(ToHighByteSleep);
                 }
-                SleepOne => self.fetcher.bg.next(TileDataHigh),
-                TileDataHigh => {
+                ToHighByteSleep => self.fetcher.bg.next(TileHighByte),
+                TileHighByte => {
                     let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
 
                     let high = self.read_byte(addr + 1);
                     self.fetcher.bg.tile.with_high_byte(high);
 
-                    self.fetcher.bg.next(SleepTwo);
+                    self.fetcher.bg.next(ToFifoSleep);
                 }
-                SleepTwo => self.fetcher.bg.next(SendToFifoOne),
+                ToFifoSleep => self.fetcher.bg.next(SendToFifoOne),
                 SendToFifoOne => {
                     self.fetcher.bg.next(SendToFifoTwo);
                 }
@@ -840,11 +857,11 @@ impl WindowLineCounter {
 #[derive(Debug, Clone, Copy)]
 pub enum FetcherState {
     TileNumber,
-    SleepZero,
-    TileDataLow,
-    SleepOne,
-    TileDataHigh,
-    SleepTwo,
+    ToLowByteSleep,
+    TileLowByte,
+    ToHighByteSleep,
+    TileHighByte,
+    ToFifoSleep,
     SendToFifoOne,
     SendToFifoTwo,
 }
