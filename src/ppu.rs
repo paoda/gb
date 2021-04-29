@@ -211,21 +211,6 @@ impl Ppu {
             }
         };
 
-        // // Determine whether we need to enable sprite fetching
-        // let mut obj_attr = None;
-
-        // for attr in self.obj_buffer.iter().flatten() {
-        //     if attr.x <= (self.x_pos + 8) {
-        //         // self.fetcher.obj.resume(); TODO: Try running only when there's a sprite
-        //         self.fetcher.bg.reset();
-        //         self.fetcher.bg.pause();
-        //         self.fifo.pause();
-
-        //         obj_attr = Some(*attr);
-        //         break;
-        //     }
-        // }
-
         if let Some(attr) = obj_attr {
             match self.fetcher.obj.state {
                 TileNumber => {
@@ -264,29 +249,28 @@ impl Ppu {
                         .zip(maybe_high)
                         .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-                    let pixel = TwoBitsPerPixel::from_bytes(high, low);
+                    let tbpp = TwoBitsPerPixel::from_bytes(high, low);
 
                     let palette = match attr.flags.palette() {
                         ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
                         ObjectPaletteId::One => self.monochrome.obj_palette_1,
                     };
 
-                    let num_to_add = 8 - self.fifo.object.len();
+                    let start = ((self.x_pos + 8) - attr.x) as usize;
+                    let end = 8 - self.fifo.object.len();
 
-                    for i in 0..num_to_add {
-                        let bit = 7 - i;
-
+                    for x in start..end {
                         let priority = attr.flags.priority();
 
-                        let shade = palette.colour(pixel.pixel(bit));
+                        let shade = palette.shade(tbpp.shade_id(x));
 
-                        let fifo_pixel = ObjectFifoPixel {
+                        let fifo_info = ObjectFifoPixel {
                             shade,
                             palette,
                             priority,
                         };
 
-                        self.fifo.object.push_back(fifo_pixel);
+                        self.fifo.object.push_back(fifo_info);
                     }
 
                     self.fetcher.bg.resume();
@@ -711,14 +695,11 @@ impl PixelFetcher {
             .zip(maybe_high)
             .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-        let pixel = TwoBitsPerPixel::from_bytes(high, low);
+        let tbpp = TwoBitsPerPixel::from_bytes(high, low);
 
         if fifo.background.is_empty() {
-            for i in 0..8 {
-                // Horizontally flip pixels
-                let bit = 7 - i;
-
-                let shade = palette.colour(pixel.pixel(bit));
+            for x in 0..8 {
+                let shade = palette.shade(tbpp.shade_id(x));
 
                 let fifo_pixel = BackgroundFifoPixel { shade };
                 fifo.background.push_back(fifo_pixel);
@@ -735,12 +716,12 @@ impl PixelFetcher {
         let y = attr.y.wrapping_sub(16);
 
         let line = if attr.flags.y_flip() {
-            (obj_size - (line_y - y)) * 2
+            obj_size - (line_y - y)
         } else {
-            (line_y - y) * 2
+            line_y - y
         };
 
-        0x8000 + (attr.tile_index as u16 * 16) + line as u16
+        0x8000 + (attr.tile_index as u16 * 16) + (line as u16 * 2)
     }
 }
 

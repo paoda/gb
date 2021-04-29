@@ -222,7 +222,7 @@ bitfield! {
 }
 
 impl BackgroundPalette {
-    pub fn colour(&self, id: u8) -> GrayShade {
+    pub fn shade(&self, id: u8) -> GrayShade {
         match id {
             0b00 => self.i0_colour(),
             0b01 => self.i1_colour(),
@@ -267,7 +267,7 @@ bitfield! {
 }
 
 impl ObjectPalette {
-    pub fn colour(&self, id: u8) -> Option<GrayShade> {
+    pub fn shade(&self, id: u8) -> Option<GrayShade> {
         match id {
             0b00 => None,
             0b01 => Some(self.i1_colour()),
@@ -310,7 +310,9 @@ impl TwoBitsPerPixel {
         Self(higher, lower)
     }
 
-    pub fn pixel(&self, bit: usize) -> u8 {
+    pub fn shade_id(&self, x: usize) -> u8 {
+        let bit = 7 - x;
+
         let higher = self.0 >> bit;
         let lower = self.1 >> bit;
 
