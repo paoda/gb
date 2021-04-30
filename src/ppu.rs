@@ -190,8 +190,6 @@ impl Ppu {
 
     fn draw(&mut self, _cycle: u32) {
         use FetcherState::*;
-        let control = &self.control;
-        let pos = &self.pos;
 
         let iter = &mut self.obj_buffer.iter();
 
@@ -298,8 +296,8 @@ impl Ppu {
                     let x_pos = self.fetcher.x_pos;
 
                     let addr = self.fetcher.bg_tile_num_addr(
-                        control,
-                        pos,
+                        &self.control,
+                        &self.pos,
                         x_pos,
                         self.window_stat.should_draw(),
                     );
@@ -312,9 +310,11 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetcher.bg.next(TileLowByte),
                 TileLowByte => {
-                    let addr =
-                        self.fetcher
-                            .bg_byte_low_addr(control, pos, self.window_stat.should_draw());
+                    let addr = self.fetcher.bg_byte_low_addr(
+                        &self.control,
+                        &self.pos,
+                        self.window_stat.should_draw(),
+                    );
 
                     let low = self.read_byte(addr);
                     self.fetcher.bg.tile.with_low_byte(low);
@@ -323,9 +323,11 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetcher.bg.next(TileHighByte),
                 TileHighByte => {
-                    let addr =
-                        self.fetcher
-                            .bg_byte_low_addr(control, pos, self.window_stat.should_draw());
+                    let addr = self.fetcher.bg_byte_low_addr(
+                        &self.control,
+                        &self.pos,
+                        self.window_stat.should_draw(),
+                    );
 
                     let high = self.read_byte(addr + 1);
                     self.fetcher.bg.tile.with_high_byte(high);
@@ -348,36 +350,43 @@ impl Ppu {
 
         if self.fifo.is_enabled() {
             // Handle Background Pixel and Sprite FIFO
-            if let Some(bg_pixel) = self.fifo.background.pop_front() {
-                let rgba = match self.fifo.object.pop_front() {
-                    Some(obj_pixel) => match obj_pixel.shade {
-                        Some(obj_shade) => {
-                            if let RenderPriority::BackgroundAndWindow = obj_pixel.priority {
-                                match bg_pixel.shade {
-                                    GrayShade::White => obj_shade.into_rgba(),
-                                    _ => bg_pixel.shade.into_rgba(),
-                                }
-                            } else {
-                                obj_shade.into_rgba()
-                            }
-                        }
-                        None => bg_pixel.shade.into_rgba(),
-                    },
-                    None => {
-                        // Only Background Pixels will be rendered
-                        bg_pixel.shade.into_rgba()
-                    }
-                };
+            let bg_enabled = self.control.bg_win_enabled();
+            // FIXME: Is this the correct behaviour
+            let bg_zero_colour = self.monochrome.bg_palette.i0_colour();
 
+            let maybe_rgba = self.fifo.background.pop_front().map(|bg_info| {
+                match self.fifo.object.pop_front() {
+                    Some(obj_info) => match obj_info.shade {
+                        Some(obj_shade) => match obj_info.priority {
+                            RenderPriority::BackgroundAndWindow => match bg_info.shade {
+                                GrayShade::White => obj_shade.into_rgba(),
+                                _ if bg_enabled => bg_info.shade.into_rgba(),
+                                _ => bg_zero_colour.into_rgba(),
+                            },
+                            RenderPriority::Object => obj_shade.into_rgba(),
+                        },
+                        None if bg_enabled => bg_info.shade.into_rgba(),
+                        None => bg_zero_colour.into_rgba(),
+                    },
+                    None if bg_enabled => bg_info.shade.into_rgba(),
+                    None => bg_zero_colour.into_rgba(),
+                }
+            });
+
+            if let Some(rgba) = maybe_rgba.as_ref() {
                 let y = self.pos.line_y as usize;
                 let x = self.x_pos as usize;
 
                 let i = (GB_WIDTH * 4) * y + (x * 4);
-                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
+                self.frame_buf[i..(i + rgba.len())].copy_from_slice(rgba);
 
                 self.x_pos += 1;
 
                 // Determine whether we should draw the window next frame
+                if self.pos.line_y == self.pos.window_y {
+                    self.window_stat.set_coincidence(true);
+                }
+
                 if self.window_stat.coincidence()
                     && self.control.window_enabled()
                     && self.x_pos >= self.pos.window_x - 7
@@ -387,10 +396,6 @@ impl Ppu {
                     self.fifo.background.clear();
                     self.fetcher.x_pos = 0;
                 } else {
-                    if self.pos.line_y == self.pos.window_y {
-                        self.window_stat.set_coincidence(true);
-                    }
-
                     self.window_stat.set_should_draw(false);
                 }
             }

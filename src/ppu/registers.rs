@@ -79,8 +79,8 @@ bitfield! {
     pub from into TileDataAddress, tile_data_addr, set_tile_data_addr: 4, 4;
     pub from into TileMapAddress, bg_tile_map_addr, set_bg_tile_map_addr: 3, 3;
     pub from into ObjectSize, obj_size, set_obj_size: 2, 2;
-    obj_enabled, set_obj_enabled: 1;
-    bg_win_enabled, set_bg_win_enabled: 0;
+    pub obj_enabled, set_obj_enabled: 1;
+    pub bg_win_enabled, set_bg_win_enabled: 0;
 }
 
 impl Copy for LCDControl {}
@@ -384,7 +384,7 @@ impl From<ObjectPaletteId> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RenderPriority {
     Object = 0,
     BackgroundAndWindow = 1,
