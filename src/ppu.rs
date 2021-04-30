@@ -44,8 +44,9 @@ pub struct Ppu {
     fifo: FifoRenderer,
     obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
+    window_stat: WindowStatus,
     x_pos: u8,
-    cycles: Cycle,
+    cycles: Cycle, // TODO: Rename this to Cycle
 }
 
 impl Ppu {
@@ -154,6 +155,8 @@ impl Ppu {
                             }
 
                             self.scan_state.reset();
+                            self.window_stat.set_coincidence(false);
+
                             self.stat.set_mode(PpuMode::OamScan);
                         }
                     }
@@ -185,14 +188,10 @@ impl Ppu {
         self.scan_state.next();
     }
 
-    fn draw(&mut self, cycle: u32) {
+    fn draw(&mut self, _cycle: u32) {
         use FetcherState::*;
         let control = &self.control;
         let pos = &self.pos;
-
-        let line_y = self.pos.line_y;
-        let window_y = self.pos.window_y;
-        let is_window = self.control.window_enabled() && window_y <= line_y;
 
         let iter = &mut self.obj_buffer.iter();
 
@@ -291,15 +290,19 @@ impl Ppu {
                 TileNumber => {
                     // Increment Window line counter if scanline had any window pixels on it
                     // only increment once per scanline though
-                    if is_window && !self.fetcher.bg.window_line.checked() {
+
+                    if self.window_stat.should_draw() {
                         self.fetcher.bg.window_line.increment();
                     }
 
                     let x_pos = self.fetcher.x_pos;
 
-                    let addr = self
-                        .fetcher
-                        .bg_tile_num_addr(control, pos, x_pos, is_window);
+                    let addr = self.fetcher.bg_tile_num_addr(
+                        control,
+                        pos,
+                        x_pos,
+                        self.window_stat.should_draw(),
+                    );
 
                     let id = self.read_byte(addr);
                     self.fetcher.bg.tile.with_id(id);
@@ -309,7 +312,9 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetcher.bg.next(TileLowByte),
                 TileLowByte => {
-                    let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+                    let addr =
+                        self.fetcher
+                            .bg_byte_low_addr(control, pos, self.window_stat.should_draw());
 
                     let low = self.read_byte(addr);
                     self.fetcher.bg.tile.with_low_byte(low);
@@ -318,7 +323,9 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetcher.bg.next(TileHighByte),
                 TileHighByte => {
-                    let addr = self.fetcher.bg_byte_low_addr(control, pos, is_window);
+                    let addr =
+                        self.fetcher
+                            .bg_byte_low_addr(control, pos, self.window_stat.should_draw());
 
                     let high = self.read_byte(addr + 1);
                     self.fetcher.bg.tile.with_high_byte(high);
@@ -369,6 +376,23 @@ impl Ppu {
                 self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
 
                 self.x_pos += 1;
+
+                // Determine whether we should draw the window next frame
+                if self.window_stat.coincidence()
+                    && self.control.window_enabled()
+                    && self.x_pos >= self.pos.window_x - 7
+                {
+                    self.window_stat.set_should_draw(true);
+                    self.fetcher.bg.reset();
+                    self.fifo.background.clear();
+                    self.fetcher.x_pos = 0;
+                } else {
+                    if self.pos.line_y == self.pos.window_y {
+                        self.window_stat.set_coincidence(true);
+                    }
+
+                    self.window_stat.set_should_draw(false);
+                }
             }
         }
     }
@@ -380,6 +404,7 @@ impl Ppu {
         self.cycles = Cycle::new(0);
 
         self.x_pos = 0;
+        self.window_stat = Default::default();
         self.stat.set_mode(PpuMode::OamScan);
         self.pos.line_y = 0;
 
@@ -397,7 +422,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
-            cycles: 0.into(),
+            cycles: Cycle::new(0),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
             control: Default::default(),
@@ -409,7 +434,8 @@ impl Default for Ppu {
             fetcher: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
-            x_pos: Default::default(),
+            window_stat: Default::default(),
+            x_pos: 0,
         }
     }
 }
@@ -630,20 +656,18 @@ impl PixelFetcher {
         // Both Offsets are used to offset the tile map address we found above
         // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
         // TODO: Is this necessary / important in other fetcher modes?
-        let x_offset = (x_pos + scroll_x) as u16 & 0x03FF;
-        let y_offset = (line_y.wrapping_add(scroll_y)) as u16 & 0x03FF;
 
-        // Scroll X Offset is only used when we're rendering the background;
-        let scx_offset = if window { 0 } else { scroll_x / 8 } & 0x1F;
-
-        let offset = if window {
+        let scx_offset = if window { 0u16 } else { scroll_x as u16 / 8 } & 0x1F;
+        let y_offset = if window {
             32 * (self.bg.window_line.count() as u16 / 8)
         } else {
-            32 * (((y_offset) & 0x00FF) / 8)
+            (32 * (((line_y as u16 + scroll_y as u16) & 0xFF) / 8)) & 0x3FF
         };
 
-        // Determine Address
-        tile_map_addr + offset + x_offset + scx_offset as u16
+        let x_offset = (x_pos as u16 + scx_offset) & 0x3FF;
+        let y_offset = y_offset;
+
+        tile_map_addr + x_offset + y_offset
     }
 
     fn bg_byte_low_addr(
@@ -732,6 +756,7 @@ impl Fetcher for BackgroundFetcher {
 
     fn reset(&mut self) {
         self.state = FetcherState::TileNumber;
+        self.tile = Default::default();
     }
 
     fn pause(&mut self) {
@@ -945,5 +970,32 @@ enum OamScanMode {
 impl Default for OamScanMode {
     fn default() -> Self {
         Self::Scan
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct WindowStatus {
+    /// This will be true if WY == LY at any point in the frame thus far
+    coincidence: bool,
+    /// This will be true if the conditions which tell the PPU to start
+    /// drawing from the window tile map is true
+    should_draw: bool,
+}
+
+impl WindowStatus {
+    pub fn should_draw(&self) -> bool {
+        self.should_draw
+    }
+
+    pub fn coincidence(&self) -> bool {
+        self.coincidence
+    }
+
+    pub fn set_should_draw(&mut self, value: bool) {
+        self.should_draw = value;
+    }
+
+    pub fn set_coincidence(&mut self, value: bool) {
+        self.coincidence = value;
     }
 }
