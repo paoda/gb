@@ -6,7 +6,7 @@ use std::convert::TryInto;
 
 use registers::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, PpuMode, RenderPriority, TileDataAddress, TwoBitsPerPixel,
+    ObjectPaletteId, Pixel, PpuMode, RenderPriority, TileDataAddress,
 };
 
 mod registers;
@@ -249,7 +249,7 @@ impl Ppu {
                         .zip(maybe_high)
                         .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-                    let tbpp = TwoBitsPerPixel::from_bytes(high, low);
+                    let tbpp = Pixel::from_bytes(high, low);
 
                     let palette = match attr.flags.palette() {
                         ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
@@ -267,7 +267,7 @@ impl Ppu {
                         let priority = attr.flags.priority();
                         let shade = palette.shade(tbpp.shade_id(x));
 
-                        let fifo_info = ObjectFifoPixel {
+                        let fifo_info = ObjectFifoInfo {
                             shade,
                             palette,
                             priority,
@@ -679,14 +679,14 @@ impl PixelFetcher {
             .zip(maybe_high)
             .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-        let tbpp = TwoBitsPerPixel::from_bytes(high, low);
+        let tbpp = Pixel::from_bytes(high, low);
 
         if fifo.background.is_empty() {
             for x in 0..8 {
                 let shade = palette.shade(tbpp.shade_id(x));
 
-                let fifo_pixel = BackgroundFifoPixel { shade };
-                fifo.background.push_back(fifo_pixel);
+                let fifo_info = BackgroundFifoInfo { shade };
+                fifo.background.push_back(fifo_info);
             }
         }
 
@@ -762,7 +762,6 @@ impl Default for BackgroundFetcher {
 struct ObjectFetcher {
     state: FetcherState,
     tile: TileBuilder,
-    fifo_count: u8,
     enabled: bool,
 }
 
@@ -772,7 +771,6 @@ impl Fetcher for ObjectFetcher {
     }
 
     fn reset(&mut self) {
-        self.fifo_count = 0;
         self.state = FetcherState::TileNumber;
     }
 
@@ -838,12 +836,12 @@ impl Default for FetcherState {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct BackgroundFifoPixel {
+struct BackgroundFifoInfo {
     shade: GrayShade,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct ObjectFifoPixel {
+struct ObjectFifoInfo {
     shade: Option<GrayShade>,
     palette: ObjectPalette,
     priority: RenderPriority,
@@ -853,8 +851,8 @@ struct ObjectFifoPixel {
 // really necessary here?
 #[derive(Debug, Clone)]
 struct FifoRenderer {
-    background: VecDeque<BackgroundFifoPixel>,
-    object: VecDeque<ObjectFifoPixel>,
+    background: VecDeque<BackgroundFifoInfo>,
+    object: VecDeque<ObjectFifoInfo>,
     enabled: bool,
 }
 
