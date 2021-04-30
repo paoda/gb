@@ -39,7 +39,7 @@ pub struct Ppu {
     pub vram: Box<[u8; VRAM_SIZE]>,
     pub stat: LCDStatus,
     pub oam: ObjectAttributeTable,
-    clock: TimingClock,
+    scan_state: OamScanState,
     fetcher: PixelFetcher,
     fifo: FifoRenderer,
     obj_buffer: ObjectBuffer,
@@ -72,7 +72,7 @@ impl Ppu {
                         self.stat.set_mode(PpuMode::Drawing);
                     }
 
-                    self.scan_oam(self.cycles.into());
+                    self.scan_oam();
                 }
                 PpuMode::Drawing => {
                     if self.x_pos >= 160 {
@@ -127,6 +127,7 @@ impl Ppu {
                                 self.int.set_lcd_stat(true);
                             }
 
+                            self.scan_state.reset();
                             PpuMode::OamScan
                         };
 
@@ -152,27 +153,22 @@ impl Ppu {
                                 self.int.set_lcd_stat(true);
                             }
 
+                            self.scan_state.reset();
                             self.stat.set_mode(PpuMode::OamScan);
                         }
                     }
                 }
             }
-
-            // The TimingClock is either Tick or Tock, and it changes
-            // every other cycle, which means that we can use it to ensure
-            // that things run every other cycle
-            self.clock_next();
         }
     }
 
-    fn scan_oam(&mut self, cycle: u32) {
-        if self.clock == TimingClock::Tock {
-            // This is run 50% of the time, or 40 times
-            // which is the number of sprites in OAM
-
+    fn scan_oam(&mut self) {
+        if self.scan_state.mode() == OamScanMode::Scan {
             let sprite_height = self.control.obj_size().as_u8();
 
-            let attr = self.oam.attribute((cycle / 2) as usize);
+            let index = self.scan_state.count();
+
+            let attr = self.oam.attribute(index as usize);
             let line_y = self.pos.line_y + 16;
 
             if attr.x > 0
@@ -182,7 +178,11 @@ impl Ppu {
             {
                 self.obj_buffer.add(attr);
             }
+
+            self.scan_state.increase();
         }
+
+        self.scan_state.next();
     }
 
     fn draw(&mut self, cycle: u32) {
@@ -370,19 +370,10 @@ impl Ppu {
         }
     }
 
-    fn clock_next(&mut self) {
-        use TimingClock::*;
-
-        self.clock = match self.clock {
-            Tick => Tock,
-            Tock => Tick,
-        }
-    }
-
     fn reset(&mut self) {
         // FIXME: Discover what actually is supposed to be reset here
 
-        self.clock = Default::default();
+        self.scan_state = Default::default();
         self.cycles = Cycle::new(0);
 
         self.x_pos = 0;
@@ -411,24 +402,12 @@ impl Default for Ppu {
             pos: Default::default(),
             stat: Default::default(),
             oam: Default::default(),
-            clock: Default::default(),
+            scan_state: Default::default(),
             fetcher: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
             x_pos: Default::default(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TimingClock {
-    Tick = 0,
-    Tock = 1,
-}
-
-impl Default for TimingClock {
-    fn default() -> Self {
-        Self::Tick
     }
 }
 
@@ -490,7 +469,9 @@ impl ObjectAttributeTable {
     }
 
     pub fn attribute(&self, index: usize) -> ObjectAttribute {
-        let slice: &[u8; 4] = self.buf[index..(index + 4)]
+        let start = index * 4;
+
+        let slice: &[u8; 4] = self.buf[start..(start + 4)]
             .try_into()
             .expect("Could not interpret &[u8] as a &[u8; 4]");
 
@@ -916,5 +897,52 @@ impl TileBuilder {
 
     pub fn with_high_byte(&mut self, data: u8) {
         self.high = Some(data);
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct OamScanState {
+    count: u8,
+    mode: OamScanMode,
+}
+
+impl OamScanState {
+    pub fn increase(&mut self) {
+        self.count += 1;
+        self.count %= 40;
+    }
+
+    pub fn reset(&mut self) {
+        self.count = Default::default();
+        self.mode = Default::default();
+    }
+
+    pub fn count(&self) -> u8 {
+        self.count
+    }
+
+    pub fn mode(&self) -> OamScanMode {
+        self.mode
+    }
+
+    pub fn next(&mut self) {
+        use OamScanMode::*;
+
+        self.mode = match self.mode {
+            Scan => Sleep,
+            Sleep => Scan,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum OamScanMode {
+    Scan,
+    Sleep,
+}
+
+impl Default for OamScanMode {
+    fn default() -> Self {
+        Self::Scan
     }
 }
