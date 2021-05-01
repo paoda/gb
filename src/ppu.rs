@@ -254,12 +254,12 @@ impl Ppu {
                     };
 
                     let start = ((self.x_pos + 8) - attr.x) as usize;
-                    let end = 8 - self.fifo.object.len();
+                    let end = start + (8 - self.fifo.object.len());
 
                     let x_flip = attr.flags.x_flip();
 
                     for i in start..end {
-                        let x = if x_flip { end - i } else { i };
+                        let x = if x_flip { 7 - i } else { i };
 
                         let priority = attr.flags.priority();
                         let shade = palette.shade(tbpp.shade_id(x));
