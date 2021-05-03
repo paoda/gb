@@ -19,26 +19,24 @@ impl Joypad {
 bitfield! {
     pub struct JoypadStatus(u8);
     impl Debug;
-    pub from into ButtonSelection, action_buttons, select_action_buttons: 5, 5;
-    pub from into ButtonSelection, direction_buttons, select_direction_buttons: 4, 4;
-    _down, _set_down: 3;
-    _up, _set_up: 2;
-    _left, _set_left: 1;
-    _right, _set_right: 0;
+    from into ButtonRowStatus, action_row, set_action_row: 5, 5;
+    from into ButtonRowStatus, direction_row, set_direction_row: 4, 4;
+    from into ButtonStatus, _down, _set_down: 3, 3;
+    from into ButtonStatus, _up, _set_up: 2, 2;
+    from into ButtonStatus, _left, _set_left: 1, 1;
+    from into ButtonStatus, _right, _set_right: 0, 0;
+}
+
+impl Default for JoypadStatus {
+    fn default() -> Self {
+        Self(0xFF)
+    }
 }
 
 impl Copy for JoypadStatus {}
 impl Clone for JoypadStatus {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for JoypadStatus {
-    fn default() -> Self {
-        // Selected Direction Buttons
-        // All Buttons are not pressed
-        Self(0b00011111)
     }
 }
 
@@ -49,123 +47,132 @@ impl From<u8> for JoypadStatus {
 }
 
 impl From<JoypadStatus> for u8 {
-    fn from(joypad: JoypadStatus) -> Self {
-        joypad.0
+    fn from(status: JoypadStatus) -> Self {
+        status.0
     }
 }
 
 impl JoypadStatus {
-    pub fn start(&self) -> bool {
-        self.down()
+    pub fn set_down(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_direction_row();
+        // }
+        self._set_down(is_pressed.into());
     }
 
-    pub fn set_start(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self.set_down(pressed)
+    pub fn set_start(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_action_row();
+        // }
+        self._set_down(is_pressed.into());
     }
 
-    pub fn select(&self) -> bool {
-        self.up()
+    pub fn set_up(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_direction_row();
+        // }
+        self._set_up(is_pressed.into());
     }
 
-    pub fn set_select(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self.set_up(pressed)
+    pub fn set_select(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_action_row();
+        // }
+        self._set_up(is_pressed.into());
     }
 
-    pub fn b(&self) -> bool {
-        self.left()
+    pub fn set_left(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_direction_row();
+        // }
+        self._set_left(is_pressed.into());
     }
 
-    pub fn set_b(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self.set_left(pressed)
+    pub fn set_b(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_action_row();
+        // }
+        self._set_left(is_pressed.into());
     }
 
-    pub fn a(&self) -> bool {
-        self.right()
+    pub fn set_right(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_direction_row();
+        // }
+        self._set_right(is_pressed.into());
     }
 
-    pub fn set_a(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self.set_right(pressed)
+    pub fn set_a(&mut self, is_pressed: bool) {
+        // if is_pressed {
+        //     self.select_action_row();
+        // }
+        self._set_right(is_pressed.into());
     }
 
-    pub fn down(&self) -> bool {
-        self._down()
+    pub fn select_direction_row(&mut self) {
+        use ButtonRowStatus::*;
+
+        self.set_direction_row(Selected);
+        self.set_action_row(Deselected);
     }
 
-    pub fn set_down(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self._set_down(pressed);
+    pub fn select_action_row(&mut self) {
+        use ButtonRowStatus::*;
 
-        if !self._down() && pressed {
-            Some(JoypadAction::TriggerInterrupt)
-        } else {
-            None
-        }
+        self.set_action_row(Selected);
+        self.set_direction_row(Deselected);
     }
-
-    pub fn up(&self) -> bool {
-        self._up()
-    }
-
-    pub fn set_up(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self._set_up(pressed);
-
-        if !self._up() && pressed {
-            Some(JoypadAction::TriggerInterrupt)
-        } else {
-            None
-        }
-    }
-
-    pub fn left(&self) -> bool {
-        self._left()
-    }
-
-    pub fn set_left(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self._set_left(pressed);
-
-        if !self._left() && pressed {
-            Some(JoypadAction::TriggerInterrupt)
-        } else {
-            None
-        }
-    }
-
-    pub fn right(&self) -> bool {
-        self._right()
-    }
-
-    pub fn set_right(&mut self, pressed: bool) -> Option<JoypadAction> {
-        self._set_right(pressed);
-
-        if !self._right() && pressed {
-            Some(JoypadAction::TriggerInterrupt)
-        } else {
-            None
-        }
-    }
-}
-
-pub enum JoypadAction {
-    TriggerInterrupt,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ButtonSelection {
-    Selected = 0,
-    NotSelected,
+enum ButtonStatus {
+    Pressed = 0,
+    Released = 1,
 }
 
-impl From<u8> for ButtonSelection {
+impl From<u8> for ButtonStatus {
     fn from(byte: u8) -> Self {
         match byte {
-            0b00 => Self::Selected,
-            0b01 => Self::NotSelected,
-            _ => unreachable!("{:#04X} is not a valid value for ButtonSelection", byte),
+            0b00 => Self::Pressed,
+            0b01 => Self::Released,
+            _ => unreachable!("{:#04X} is not a valid value for ButtonStatus", byte),
         }
     }
 }
 
-impl From<ButtonSelection> for u8 {
-    fn from(selection: ButtonSelection) -> Self {
-        selection as Self
+impl From<ButtonStatus> for u8 {
+    fn from(status: ButtonStatus) -> Self {
+        status as u8
+    }
+}
+
+impl From<bool> for ButtonStatus {
+    fn from(value: bool) -> Self {
+        match value {
+            true => Self::Pressed,
+            false => Self::Released,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ButtonRowStatus {
+    Selected,
+    Deselected,
+}
+
+impl From<u8> for ButtonRowStatus {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0b00 => Self::Selected,
+            0b01 => Self::Deselected,
+            _ => unreachable!("{:#04X} is not a valid value for ButtonRowStatus", byte),
+        }
+    }
+}
+
+impl From<ButtonRowStatus> for u8 {
+    fn from(status: ButtonRowStatus) -> Self {
+        status as u8
     }
 }

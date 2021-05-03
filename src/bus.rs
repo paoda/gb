@@ -133,7 +133,7 @@ impl Bus {
                 self.ppu.oam.read_byte(addr)
             }
             0xFEA0..=0xFEFF => {
-                eprintln!("Read from {:#06X}, which is prohibited", addr);
+                // eprintln!("Read from {:#06X}, which is prohibited", addr);
                 // TODO: Properly Emulate what can happen here
                 0x00
             }
@@ -237,7 +237,7 @@ impl Bus {
                 self.ppu.oam.write_byte(addr, byte);
             }
             0xFEA0..=0xFEFF => {
-                eprintln!("Wrote {:#04X} to {:#06X}, which is prohibited", byte, addr);
+                // eprintln!("Wrote {:#04X} to {:#06X}, which is prohibited", byte, addr);
                 // TODO: Properly emulate what can happen here
             }
             0xFF00..=0xFF7F => {
