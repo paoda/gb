@@ -300,7 +300,7 @@ impl Instruction {
                 let flags: &Flags = cpu.flags();
 
                 let prev = cpu.register_pair(RegisterPair::PC);
-                let addr = Self::add_u16_i8_no_flags(prev, offset);
+                let addr = prev.wrapping_add(offset as u16);
 
                 match cond {
                     JumpCondition::Always => {
@@ -352,7 +352,7 @@ impl Instruction {
                         BC | DE | HL | SP => {
                             let hl_value = cpu.register_pair(RegisterPair::HL);
                             let value = cpu.register_pair(pair);
-                            let sum = Self::add_u16s(hl_value, value, &mut flags);
+                            let sum = Self::add_u16(hl_value, value, &mut flags);
 
                             cpu.set_register_pair(RegisterPair::HL, sum);
                         }
@@ -372,14 +372,14 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
 
-                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            let sum = Self::add(a_value, value, &mut flags);
                             (Cycle::new(4), sum)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let value = cpu.read_byte(addr);
 
-                            let sum = Self::add_u8s(a_value, value, &mut flags);
+                            let sum = Self::add(a_value, value, &mut flags);
                             (Cycle::new(8), sum)
                         }
                     };
@@ -402,7 +402,7 @@ impl Instruction {
                 (MATHTarget::Register(InstrRegister::A), MATHTarget::ImmediateByte(n)) => {
                     // ADD A, n | Add n to register A
                     let mut flags: Flags = *cpu.flags();
-                    let sum = Self::add_u8s(cpu.register(Register::A), n, &mut flags);
+                    let sum = Self::add(cpu.register(Register::A), n, &mut flags);
 
                     cpu.set_register(Register::A, sum);
                     cpu.set_flags(flags);
@@ -638,12 +638,12 @@ impl Instruction {
                     let (cycles, sum) = match reg {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.to_register());
-                            let sum = Self::add_with_carry(left, right, flags.c(), &mut flags);
+                            let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
                             (Cycle::new(4), sum)
                         }
                         IndirectHL => {
                             let right = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            let sum = Self::add_with_carry(left, right, flags.c(), &mut flags);
+                            let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
                             (Cycle::new(8), sum)
                         }
                     };
@@ -657,7 +657,7 @@ impl Instruction {
                     let mut flags: Flags = *cpu.flags();
                     let value = cpu.register(Register::A);
 
-                    let sum = Self::add_with_carry(value, n, flags.c(), &mut flags);
+                    let sum = Self::add_with_carry_bit(value, n, flags.c(), &mut flags);
 
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, sum);
@@ -676,12 +676,12 @@ impl Instruction {
                     let (cycles, diff) = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            let diff = Self::sub(a_value, value, &mut flags);
                             (Cycle::new(4), diff)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            let diff = Self::sub_u8s(a_value, value, &mut flags);
+                            let diff = Self::sub(a_value, value, &mut flags);
                             (Cycle::new(8), diff)
                         }
                     };
@@ -693,7 +693,7 @@ impl Instruction {
                 MATHTarget::ImmediateByte(n) => {
                     // SUB n | Subtract the immediate byte from register A, then store in A
                     let mut flags: Flags = *cpu.flags();
-                    let diff = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
+                    let diff = Self::sub(cpu.register(Register::A), n, &mut flags);
 
                     cpu.set_flags(flags);
                     cpu.set_register(Register::A, diff);
@@ -859,12 +859,12 @@ impl Instruction {
                     let cycles = match reg {
                         B | C | D | E | H | L | A => {
                             let value = cpu.register(reg.to_register());
-                            let _ = Self::sub_u8s(a_value, value, &mut flags);
+                            let _ = Self::sub(a_value, value, &mut flags);
                             Cycle::new(4)
                         }
                         IndirectHL => {
                             let value = cpu.read_byte(cpu.register_pair(RegisterPair::HL));
-                            let _ = Self::sub_u8s(a_value, value, &mut flags);
+                            let _ = Self::sub(a_value, value, &mut flags);
                             Cycle::new(8)
                         }
                     };
@@ -875,7 +875,7 @@ impl Instruction {
                 MATHTarget::ImmediateByte(n) => {
                     // CP n | Same behaviour as SUB, except the result is not stored,
                     let mut flags: Flags = *cpu.flags();
-                    let _ = Self::sub_u8s(cpu.register(Register::A), n, &mut flags);
+                    let _ = Self::sub(cpu.register(Register::A), n, &mut flags);
 
                     cpu.set_flags(flags);
                     Cycle::new(8)
@@ -1464,14 +1464,14 @@ impl Instruction {
     }
 
     fn dec_register(byte: u8, flags: &mut Flags) -> u8 {
-        Self::sub_u8s_no_carry(byte, 1, flags)
+        Self::sub_no_carry(byte, 1, flags)
     }
 
     fn inc_register(byte: u8, flags: &mut Flags) -> u8 {
-        Self::add_u8s_no_carry(byte, 1, flags)
+        Self::add_no_carry(byte, 1, flags)
     }
 
-    fn sub_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
+    fn sub_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let diff = left.wrapping_sub(right);
 
         flags.set_z(diff == 0);
@@ -1481,7 +1481,7 @@ impl Instruction {
         diff
     }
 
-    fn sub_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
+    fn sub(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let (diff, did_overflow) = left.overflowing_sub(right);
 
         flags.update(
@@ -1513,24 +1513,16 @@ impl Instruction {
         diff
     }
 
-    fn add_u16_i8_no_flags(left: u16, right: i8) -> u16 {
-        if right < 0 {
-            left.wrapping_sub((!right + 1) as u16)
-        } else {
-            left.wrapping_add(right as u16)
-        }
-    }
-
     fn add_u16_i8(left: u16, right: i8, flags: &mut Flags) -> u16 {
         let (_, did_overflow) = (left as u8).overflowing_add(right as u8);
-        let sum = Self::add_u16_i8_no_flags(left, right);
+        let sum = left.wrapping_add(right as u16);
 
         let half_carry = Self::bit_3_overflow(left as u8, right as u8);
         flags.update(false, false, half_carry, did_overflow);
         sum
     }
 
-    fn add_u8s_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
+    fn add_no_carry(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let sum = left.wrapping_add(right);
 
         flags.set_z(sum == 0);
@@ -1539,7 +1531,7 @@ impl Instruction {
         sum
     }
 
-    fn add_u8s(left: u8, right: u8, flags: &mut Flags) -> u8 {
+    fn add(left: u8, right: u8, flags: &mut Flags) -> u8 {
         let (sum, did_overflow) = left.overflowing_add(right);
 
         flags.update(
@@ -1552,7 +1544,7 @@ impl Instruction {
         sum
     }
 
-    fn add_with_carry(left: u8, right: u8, carry: bool, flags: &mut Flags) -> u8 {
+    fn add_with_carry_bit(left: u8, right: u8, carry: bool, flags: &mut Flags) -> u8 {
         let carry = carry as u8;
 
         let (sum, did_overflow) = {
@@ -1572,7 +1564,7 @@ impl Instruction {
         sum
     }
 
-    fn add_u16s(left: u16, right: u16, flags: &mut Flags) -> u16 {
+    fn add_u16(left: u16, right: u16, flags: &mut Flags) -> u16 {
         let (sum, did_overflow) = left.overflowing_add(right);
 
         flags.set_n(false);
