@@ -28,6 +28,16 @@ bitfield! {
 }
 
 impl JoypadStatus {
+    pub(crate) fn update(&mut self, byte: u8) {
+        let action_row = (byte >> 5) & 0x01;
+        let direction_row = (byte >> 4) & 0x01;
+
+        self.set_action_row(action_row.into());
+        self.set_direction_row(direction_row.into());
+    }
+}
+
+impl JoypadStatus {
     pub fn set_down_start(&mut self, state: ButtonState, int: &mut bool) {
         if !(*int) {
             *int = self.down_start() == ButtonState::Released && state == ButtonState::Pressed;
@@ -71,12 +81,6 @@ impl Copy for JoypadStatus {}
 impl Clone for JoypadStatus {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl From<u8> for JoypadStatus {
-    fn from(byte: u8) -> Self {
-        Self(byte)
     }
 }
 

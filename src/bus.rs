@@ -243,7 +243,7 @@ impl Bus {
             0xFF00..=0xFF7F => {
                 // IO Registers
                 match addr {
-                    0xFF00 => self.joypad.status = byte.into(),
+                    0xFF00 => self.joypad.status.update(byte),
                     0xFF01 => self.serial.next = byte,
                     0xFF02 => self.serial.control = byte.into(),
                     0xFF04 => self.timer.divider = 0x00,
