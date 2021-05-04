@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::LR35902_CLOCK_SPEED;
-use gb::{Cycle, LR35902};
+use gb::{ButtonState, Cycle, LR35902};
+use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType, Gamepad, Gilrs};
 use pixels::{Pixels, SurfaceTexture};
 use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
@@ -61,6 +62,10 @@ fn main() -> Result<()> {
     let default_title = "DMG-01 Emulator";
     let cartridge_title = game_boy.rom_title().unwrap_or(&default_title);
 
+    // Initialize Gamepad Support
+    let mut gilrs = Gilrs::new().expect("Failed to initialize Gilrs");
+    let mut active_gamepad = None;
+
     // Initialize GUI
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -91,6 +96,10 @@ fn main() -> Result<()> {
                 pixels.resize(size.width, size.height);
             }
 
+            if active_gamepad.is_none() {
+                active_gamepad = gilrs.next_event().map(|e| e.id);
+            }
+
             // Emulate Game Boy
             let delta = now.elapsed().subsec_nanos();
             now = Instant::now();
@@ -100,6 +109,10 @@ fn main() -> Result<()> {
 
             let mut elapsed_cycles: Cycle = Default::default();
             while elapsed_cycles <= pending_cycles {
+                if let Some(event) = gilrs.next_event() {
+                    handle_gamepad_input(&mut game_boy, event);
+                }
+
                 elapsed_cycles += game_boy.step();
             }
 
@@ -130,4 +143,44 @@ fn create_pixels(window: &Window) -> Result<Pixels<Window>> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     Ok(Pixels::new(GB_WIDTH, GB_HEIGHT, surface_texture)?)
+}
+
+fn handle_gamepad_input(game_boy: &mut LR35902, event: GamepadEvent) {
+    use GamepadEventType::*;
+    let joypad_status = &mut game_boy.bus.joypad.status;
+    let interrupt = &mut game_boy.bus.joypad.interrupt;
+
+    match event.event {
+        ButtonPressed(button, _) => match button {
+            Button::DPadDown | Button::Start => {
+                joypad_status.set_down_start(ButtonState::Pressed, interrupt)
+            }
+            Button::DPadUp | Button::Select => {
+                joypad_status.set_up_select(ButtonState::Pressed, interrupt)
+            }
+            Button::DPadLeft | Button::South => {
+                joypad_status.set_left_b(ButtonState::Pressed, interrupt)
+            }
+            Button::DPadRight | Button::East => {
+                joypad_status.set_right_a(ButtonState::Pressed, interrupt)
+            }
+            _ => {}
+        },
+        ButtonReleased(button, _) => match button {
+            Button::DPadDown | Button::Start => {
+                joypad_status.set_down_start(ButtonState::Released, interrupt)
+            }
+            Button::DPadUp | Button::Select => {
+                joypad_status.set_up_select(ButtonState::Released, interrupt)
+            }
+            Button::DPadLeft | Button::South => {
+                joypad_status.set_left_b(ButtonState::Released, interrupt)
+            }
+            Button::DPadRight | Button::East => {
+                joypad_status.set_right_a(ButtonState::Released, interrupt)
+            }
+            _ => {}
+        },
+        _ => {}
+    }
 }

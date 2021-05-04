@@ -24,7 +24,7 @@ pub struct Bus {
     sound: Sound,
     high_ram: HighRam,
     serial: Serial,
-    joypad: Joypad,
+    pub joypad: Joypad,
 }
 
 impl Default for Bus {

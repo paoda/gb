@@ -1,5 +1,6 @@
 pub use cpu::Cpu as LR35902;
 pub use instruction::Cycle;
+pub use joypad::ButtonState;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;

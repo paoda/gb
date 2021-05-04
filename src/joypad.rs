@@ -3,7 +3,7 @@ use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Joypad {
     pub status: JoypadStatus,
-    interrupt: bool,
+    pub interrupt: bool,
 }
 
 impl Joypad {
@@ -19,12 +19,46 @@ impl Joypad {
 bitfield! {
     pub struct JoypadStatus(u8);
     impl Debug;
-    from into ButtonRowStatus, action_row, set_action_row: 5, 5;
-    from into ButtonRowStatus, direction_row, set_direction_row: 4, 4;
-    from into ButtonStatus, _down, _set_down: 3, 3;
-    from into ButtonStatus, _up, _set_up: 2, 2;
-    from into ButtonStatus, _left, _set_left: 1, 1;
-    from into ButtonStatus, _right, _set_right: 0, 0;
+    from into RowState, action_row, set_action_row: 5, 5;
+    from into RowState, direction_row, set_direction_row: 4, 4;
+    from into ButtonState, down_start, _set_down_start: 3, 3;
+    from into ButtonState, up_select, _set_up_select: 2, 2;
+    from into ButtonState, left_b, _set_left_b: 1, 1;
+    from into ButtonState, right_a, _set_right_a: 0, 0;
+}
+
+impl JoypadStatus {
+    pub fn set_down_start(&mut self, state: ButtonState, int: &mut bool) {
+        if !(*int) {
+            *int = self.down_start() == ButtonState::Released && state == ButtonState::Pressed;
+        }
+
+        self._set_down_start(state);
+    }
+
+    pub fn set_up_select(&mut self, state: ButtonState, int: &mut bool) {
+        if !(*int) {
+            *int = self.up_select() == ButtonState::Released && state == ButtonState::Pressed;
+        }
+
+        self._set_up_select(state);
+    }
+
+    pub fn set_left_b(&mut self, state: ButtonState, int: &mut bool) {
+        if !(*int) {
+            *int = self.left_b() == ButtonState::Released && state == ButtonState::Pressed;
+        }
+
+        self._set_left_b(state);
+    }
+
+    pub fn set_right_a(&mut self, state: ButtonState, int: &mut bool) {
+        if !(*int) {
+            *int = self.right_a() == ButtonState::Released && state == ButtonState::Pressed;
+        }
+
+        self._set_right_a(state);
+    }
 }
 
 impl Default for JoypadStatus {
@@ -52,85 +86,13 @@ impl From<JoypadStatus> for u8 {
     }
 }
 
-impl JoypadStatus {
-    pub fn set_down(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_direction_row();
-        // }
-        self._set_down(is_pressed.into());
-    }
-
-    pub fn set_start(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_action_row();
-        // }
-        self._set_down(is_pressed.into());
-    }
-
-    pub fn set_up(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_direction_row();
-        // }
-        self._set_up(is_pressed.into());
-    }
-
-    pub fn set_select(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_action_row();
-        // }
-        self._set_up(is_pressed.into());
-    }
-
-    pub fn set_left(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_direction_row();
-        // }
-        self._set_left(is_pressed.into());
-    }
-
-    pub fn set_b(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_action_row();
-        // }
-        self._set_left(is_pressed.into());
-    }
-
-    pub fn set_right(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_direction_row();
-        // }
-        self._set_right(is_pressed.into());
-    }
-
-    pub fn set_a(&mut self, is_pressed: bool) {
-        // if is_pressed {
-        //     self.select_action_row();
-        // }
-        self._set_right(is_pressed.into());
-    }
-
-    pub fn select_direction_row(&mut self) {
-        use ButtonRowStatus::*;
-
-        self.set_direction_row(Selected);
-        self.set_action_row(Deselected);
-    }
-
-    pub fn select_action_row(&mut self) {
-        use ButtonRowStatus::*;
-
-        self.set_action_row(Selected);
-        self.set_direction_row(Deselected);
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum ButtonStatus {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ButtonState {
     Pressed = 0,
     Released = 1,
 }
 
-impl From<u8> for ButtonStatus {
+impl From<u8> for ButtonState {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::Pressed,
@@ -140,13 +102,13 @@ impl From<u8> for ButtonStatus {
     }
 }
 
-impl From<ButtonStatus> for u8 {
-    fn from(status: ButtonStatus) -> Self {
+impl From<ButtonState> for u8 {
+    fn from(status: ButtonState) -> Self {
         status as u8
     }
 }
 
-impl From<bool> for ButtonStatus {
+impl From<bool> for ButtonState {
     fn from(value: bool) -> Self {
         match value {
             true => Self::Pressed,
@@ -155,13 +117,13 @@ impl From<bool> for ButtonStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ButtonRowStatus {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RowState {
     Selected,
     Deselected,
 }
 
-impl From<u8> for ButtonRowStatus {
+impl From<u8> for RowState {
     fn from(byte: u8) -> Self {
         match byte {
             0b00 => Self::Selected,
@@ -171,8 +133,8 @@ impl From<u8> for ButtonRowStatus {
     }
 }
 
-impl From<ButtonRowStatus> for u8 {
-    fn from(status: ButtonRowStatus) -> Self {
+impl From<RowState> for u8 {
+    fn from(status: RowState) -> Self {
         status as u8
     }
 }
