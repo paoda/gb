@@ -292,13 +292,6 @@ impl Ppu {
         if self.fetcher.bg.is_enabled() {
             match self.fetcher.bg.state {
                 TileNumber => {
-                    // Increment Window line counter if scanline had any window pixels on it
-                    // only increment once per scanline though
-
-                    if self.window_stat.should_draw() {
-                        self.fetcher.bg.window_line.increment();
-                    }
-
                     let x_pos = self.fetcher.x_pos;
 
                     let addr = self.fetcher.bg_tile_num_addr(
@@ -388,6 +381,13 @@ impl Ppu {
 
                 self.x_pos += 1;
 
+                // Increment Window line counter if scanline had any window pixels on it
+                // only increment once per scanline though
+
+                if self.window_stat.should_draw() && !self.fetcher.bg.window_line.checked() {
+                    self.fetcher.bg.window_line.increment();
+                }
+
                 // Determine whether we should draw the window next frame
                 if self.pos.line_y == self.pos.window_y {
                     self.window_stat.set_coincidence(true);
@@ -396,6 +396,7 @@ impl Ppu {
                 if self.window_stat.coincidence()
                     && self.control.window_enabled()
                     && self.x_pos >= self.pos.window_x - 7
+                    && !self.window_stat.should_draw()
                 {
                     self.window_stat.set_should_draw(true);
                     self.fetcher.bg.reset();
@@ -670,15 +671,14 @@ impl PixelFetcher {
 
         let scx_offset = if window { 0u16 } else { scroll_x as u16 / 8 } & 0x1F;
         let y_offset = if window {
-            32 * (self.bg.window_line.count() as u16 / 8)
+            self.bg.window_line.count() as u16 / 8
         } else {
-            (32 * (((line_y as u16 + scroll_y as u16) & 0xFF) / 8)) & 0x3FF
-        };
+            ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
+        } * 32;
 
-        let x_offset = (x_pos as u16 + scx_offset) & 0x3FF;
-        let y_offset = y_offset;
+        let x_offset = x_pos as u16 + scx_offset;
 
-        tile_map_addr + x_offset + y_offset
+        tile_map_addr + ((x_offset + y_offset) & 0x3FF)
     }
 
     fn bg_byte_low_addr(
@@ -697,11 +697,11 @@ impl PixelFetcher {
             TileDataAddress::X8000 => 0x8000 + (id as u16).wrapping_mul(16),
         };
 
-        let offset = 2 * if window {
+        let offset = if window {
             self.bg.window_line.count() % 8
         } else {
             (line_y + scroll_y) % 8
-        };
+        } * 2;
 
         tile_data_addr + offset as u16
     }
