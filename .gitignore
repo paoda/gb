@@ -2,3 +2,7 @@
 /.idea
 /.vscode
 /bin
+
+# Perf Data
+perf.data*
+flamegraph.svg
