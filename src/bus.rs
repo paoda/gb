@@ -166,7 +166,6 @@ impl Bus {
                     0xFF4A => self.ppu.pos.window_y,
                     0xFF4B => self.ppu.pos.window_x,
                     0xFF4D => 0x00, // Reading from this address is useful on the CGB only
-                    0xFF7F => 0x00, // Don't think this address is used for anything
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -285,7 +284,6 @@ impl Bus {
                             self.boot = None;
                         }
                     }
-                    0xFF7F => {} // Don't think this address is used for anything
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
