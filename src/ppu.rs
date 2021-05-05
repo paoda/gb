@@ -691,10 +691,10 @@ impl PixelFetcher {
             TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
         };
 
-        let offset = if window {
-            2 * (self.bg.window_line.count() % 8)
+        let offset = 2 * if window {
+            self.bg.window_line.count() % 8
         } else {
-            2 * ((line_y + scroll_y) % 8)
+            (line_y + scroll_y) % 8
         };
 
         tile_data_addr + offset as u16
@@ -724,17 +724,15 @@ impl PixelFetcher {
 
     pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, obj_size: u8) -> u16 {
         let line_y = pos.line_y;
+        let scroll_y = pos.scroll_y;
 
-        // FIXME: Should we subtract 16 from attr.y?
-        let y = attr.y.wrapping_sub(16);
-
-        let line = if attr.flags.y_flip() {
-            obj_size - (line_y - y)
+        let offset = 2 * if attr.flags.y_flip() {
+            obj_size - (line_y + scroll_y) % 8
         } else {
-            line_y - y
+            (line_y + scroll_y) % 8
         };
 
-        0x8000 + (attr.tile_index as u16 * 16) + (line as u16 * 2)
+        0x8000 + (attr.tile_index as u16 * 16) + offset as u16
     }
 }
 
