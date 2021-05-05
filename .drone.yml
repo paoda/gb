@@ -6,6 +6,8 @@ name: default
 steps:
 - name: cargo test
   image: rust:latest
-  commands: 
+  commands:
+  - apt-get update
+  - apt-get install -y libudev-dev
   - cargo build --verbose --all
   - cargo test --verbose --all
