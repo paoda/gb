@@ -4,9 +4,9 @@ use crate::GB_WIDTH;
 use std::collections::VecDeque;
 use std::convert::TryInto;
 
-use registers::{
+use self::registers::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, Pixels, PpuMode, RenderPriority, TileDataAddress,
+    ObjectPaletteId, ObjectSize, Pixels, PpuMode, RenderPriority, TileDataAddress,
 };
 
 mod registers;
@@ -216,7 +216,7 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetcher.obj.next(TileLowByte),
                 TileLowByte => {
-                    let obj_size = self.control.obj_size().as_u8();
+                    let obj_size = self.control.obj_size();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
@@ -227,7 +227,7 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetcher.obj.next(TileHighByte),
                 TileHighByte => {
-                    let obj_size = self.control.obj_size().as_u8();
+                    let obj_size = self.control.obj_size();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
@@ -722,12 +722,17 @@ impl PixelFetcher {
         self.x_pos += 1;
     }
 
-    pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, obj_size: u8) -> u16 {
+    pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
 
+        let tile_number = match size {
+            ObjectSize::Eight => attr.tile_index,
+            ObjectSize::Sixteen => attr.tile_index & !0x01,
+        };
+
         let offset = 2 * if attr.flags.y_flip() {
-            (obj_size - 1) - (line_y + scroll_y) % 8
+            (size.as_u8() - 1) - (line_y + scroll_y) % 8
         } else {
             (line_y + scroll_y) % 8
         };
