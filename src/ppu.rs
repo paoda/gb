@@ -727,7 +727,7 @@ impl PixelFetcher {
         let scroll_y = pos.scroll_y;
 
         let offset = 2 * if attr.flags.y_flip() {
-            obj_size - (line_y + scroll_y) % 8
+            (obj_size - 1) - (line_y + scroll_y) % 8
         } else {
             (line_y + scroll_y) % 8
         };
