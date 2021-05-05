@@ -303,9 +303,11 @@ impl From<ObjectPalette> for u8 {
     }
 }
 
-pub struct Pixel(u8, u8);
+pub struct Pixels(u8, u8);
 
-impl Pixel {
+impl Pixels {
+    pub const PIXEL_COUNT: usize = 8;
+
     pub fn from_bytes(higher: u8, lower: u8) -> Self {
         Self(higher, lower)
     }

@@ -6,7 +6,7 @@ use std::convert::TryInto;
 
 use registers::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, Pixel, PpuMode, RenderPriority, TileDataAddress,
+    ObjectPaletteId, Pixels, PpuMode, RenderPriority, TileDataAddress,
 };
 
 mod registers;
@@ -246,19 +246,19 @@ impl Ppu {
                         .zip(maybe_high)
                         .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-                    let tbpp = Pixel::from_bytes(high, low);
+                    let tbpp = Pixels::from_bytes(high, low);
 
                     let palette = match attr.flags.palette() {
                         ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
                         ObjectPaletteId::One => self.monochrome.obj_palette_1,
                     };
 
-                    let start = ((self.x_pos + 8) - attr.x) as usize;
-                    let end = start + (8 - self.fifo.object.len());
+                    let end = Pixels::PIXEL_COUNT - self.fifo.object.len();
+                    let start = Pixels::PIXEL_COUNT - end;
 
                     let x_flip = attr.flags.x_flip();
 
-                    for i in start..end {
+                    for i in start..Pixels::PIXEL_COUNT {
                         let x = if x_flip { 7 - i } else { i };
 
                         let priority = attr.flags.priority();
@@ -708,10 +708,10 @@ impl PixelFetcher {
             .zip(maybe_high)
             .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
 
-        let tbpp = Pixel::from_bytes(high, low);
+        let tbpp = Pixels::from_bytes(high, low);
 
         if fifo.background.is_empty() {
-            for x in 0..8 {
+            for x in 0..Pixels::PIXEL_COUNT {
                 let shade = palette.shade(tbpp.shade_id(x));
 
                 let fifo_info = BackgroundFifoInfo { shade };
