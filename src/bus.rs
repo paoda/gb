@@ -245,7 +245,7 @@ impl Bus {
                     0xFF00 => self.joypad.status.update(byte),
                     0xFF01 => self.serial.next = byte,
                     0xFF02 => self.serial.control = byte.into(),
-                    0xFF04 => self.timer.divider = 0x00,
+                    0xFF04 => self.timer.divider = 0x0000,
                     0xFF05 => self.timer.counter = byte,
                     0xFF06 => self.timer.modulo = byte,
                     0xFF07 => self.timer.control = byte.into(),
@@ -258,7 +258,7 @@ impl Bus {
                     0xFF25 => self.sound.control.output = byte.into(),
                     0xFF26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
                     0xFF40 => self.ppu.control = byte.into(),
-                    0xFF41 => self.ppu.stat = byte.into(),
+                    0xFF41 => self.ppu.stat.update(byte),
                     0xFF42 => self.ppu.pos.scroll_y = byte,
                     0xFF43 => self.ppu.pos.scroll_x = byte,
                     0xFF44 => self.ppu.pos.line_y = byte,
@@ -267,9 +267,12 @@ impl Bus {
                         self.ppu.pos.ly_compare = byte;
 
                         // Update Coincidence Flag
-                        if self.ppu.stat.coincidence_int() {
-                            let are_equal = self.ppu.pos.line_y == byte;
-                            self.ppu.stat.set_coincidence(are_equal);
+                        let are_equal = self.ppu.pos.line_y == byte;
+                        self.ppu.stat.set_coincidence(are_equal);
+
+                        // If enabled, request a LCD STAT interrupt
+                        if self.ppu.stat.coincidence_int() && are_equal {
+                            self.ppu.int.set_lcd_stat(true);
                         }
                     }
                     0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),

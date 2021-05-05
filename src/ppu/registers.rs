@@ -13,6 +13,16 @@ bitfield! {
     pub from into PpuMode, mode, set_mode: 1, 0;
 }
 
+impl LCDStatus {
+    pub fn update(&mut self, byte: u8) {
+        // Bytes 2 -> 0 are read only
+        let mask = 0b00000111;
+
+        let read_only = self.0 & mask;
+        self.0 = (byte & !mask) | read_only;
+    }
+}
+
 impl Copy for LCDStatus {}
 impl Clone for LCDStatus {
     fn clone(&self) -> Self {
@@ -23,12 +33,6 @@ impl Clone for LCDStatus {
 impl Default for LCDStatus {
     fn default() -> Self {
         Self(0x80) // bit 7 is always 1
-    }
-}
-
-impl From<u8> for LCDStatus {
-    fn from(byte: u8) -> Self {
-        Self(byte)
     }
 }
 

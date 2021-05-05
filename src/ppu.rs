@@ -103,10 +103,13 @@ impl Ppu {
                         self.cycles %= 456;
                         self.pos.line_y += 1;
 
-                        // New Scanline is next, check for LYC=LY
-                        if self.stat.coincidence_int() {
-                            let are_equal = self.pos.line_y == self.pos.ly_compare;
-                            self.stat.set_coincidence(are_equal);
+                        // Update LY==LYC bit
+                        let are_equal = self.pos.line_y == self.pos.ly_compare;
+                        self.stat.set_coincidence(are_equal);
+
+                        // Request LCD STAT interrupt if conditions met
+                        if self.stat.coincidence_int() && are_equal {
+                            self.int.set_lcd_stat(true);
                         }
 
                         let next_mode = if self.pos.line_y >= 144 {
@@ -140,10 +143,13 @@ impl Ppu {
                         self.cycles %= 456;
                         self.pos.line_y += 1;
 
-                        // New Scanline is next, check for LYC=LY
-                        if self.stat.coincidence_int() {
-                            let are_equal = self.pos.line_y == self.pos.ly_compare;
-                            self.stat.set_coincidence(are_equal);
+                        // Update LY==LYC bit
+                        let are_equal = self.pos.line_y == self.pos.ly_compare;
+                        self.stat.set_coincidence(are_equal);
+
+                        // Request LCD STAT interrupt if conditions met
+                        if self.stat.coincidence_int() && are_equal {
+                            self.int.set_lcd_stat(true);
                         }
 
                         if self.pos.line_y == 154 {
@@ -687,8 +693,8 @@ impl PixelFetcher {
         let id = self.bg.tile.id.expect("Tile Number unexpectedly missing");
 
         let tile_data_addr = match control.tile_data_addr() {
-            TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as i8 * 16) as u16),
-            TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
+            TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as i8).wrapping_mul(16) as u16),
+            TileDataAddress::X8000 => 0x8000 + (id as u16).wrapping_mul(16),
         };
 
         let offset = 2 * if window {
@@ -737,7 +743,7 @@ impl PixelFetcher {
             (line_y + scroll_y) % 8
         };
 
-        0x8000 + (attr.tile_index as u16 * 16) + offset as u16
+        0x8000 + (tile_number as u16 * 16) + offset as u16
     }
 }
 
