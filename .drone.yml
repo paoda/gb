@@ -9,5 +9,5 @@ steps:
   commands:
   - apt-get update
   - apt-get install -y libudev-dev
-  - cargo build --verbose --all
-  - cargo test --verbose --all
+  - cargo build --all
+  - cargo test --all
