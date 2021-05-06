@@ -29,11 +29,11 @@ bitfield! {
 
 impl JoypadStatus {
     pub(crate) fn update(&mut self, byte: u8) {
-        let action_row = (byte >> 5) & 0x01;
-        let direction_row = (byte >> 4) & 0x01;
+        // Bytes 3 -> 0 are Read Only
+        let mask = 0b00001111;
 
-        self.set_action_row(action_row.into());
-        self.set_direction_row(direction_row.into());
+        let read_only = self.0 & mask;
+        self.0 = (byte & !mask) | read_only;
     }
 }
 
