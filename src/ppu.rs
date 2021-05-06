@@ -46,7 +46,7 @@ pub struct Ppu {
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     window_stat: WindowStatus,
     x_pos: u8,
-    cycles: Cycle, // TODO: Rename this to Cycle
+    cycle: Cycle,
 }
 
 impl Ppu {
@@ -61,15 +61,15 @@ impl Ppu {
 
 impl Ppu {
     pub fn step(&mut self, cycles: Cycle) {
-        let start: u32 = self.cycles.into();
+        let start: u32 = self.cycle.into();
         let end: u32 = cycles.into();
 
         for _ in start..(start + end) {
-            self.cycles += 1;
+            self.cycle += 1;
 
             match self.stat.mode() {
                 PpuMode::OamScan => {
-                    if self.cycles >= 80.into() {
+                    if self.cycle >= 80.into() {
                         self.stat.set_mode(PpuMode::Drawing);
                     }
 
@@ -91,7 +91,7 @@ impl Ppu {
                         self.stat.set_mode(PpuMode::HBlank);
                     } else if self.control.lcd_enabled() {
                         // Only Draw when the LCD Is Enabled
-                        self.draw(self.cycles.into());
+                        self.draw(self.cycle.into());
                     } else {
                         self.reset();
                     }
@@ -99,8 +99,8 @@ impl Ppu {
                 PpuMode::HBlank => {
                     // This mode will always end at 456 cycles
 
-                    if self.cycles >= 456.into() {
-                        self.cycles %= 456;
+                    if self.cycle >= 456.into() {
+                        self.cycle %= 456;
                         self.pos.line_y += 1;
 
                         // Update LY==LYC bit
@@ -139,8 +139,8 @@ impl Ppu {
                     }
                 }
                 PpuMode::VBlank => {
-                    if self.cycles > 456.into() {
-                        self.cycles %= 456;
+                    if self.cycle > 456.into() {
+                        self.cycle %= 456;
                         self.pos.line_y += 1;
 
                         // Update LY==LYC bit
@@ -413,7 +413,7 @@ impl Ppu {
         // FIXME: Discover what actually is supposed to be reset here
 
         self.scan_state = Default::default();
-        self.cycles = Cycle::new(0);
+        self.cycle = Cycle::new(0);
 
         self.x_pos = 0;
         self.window_stat = Default::default();
@@ -434,7 +434,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
-            cycles: Cycle::new(0),
+            cycle: Cycle::new(0),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
             control: Default::default(),
