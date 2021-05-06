@@ -293,13 +293,11 @@ impl Ppu {
             match self.fetcher.bg.state {
                 TileNumber => {
                     let x_pos = self.fetcher.x_pos;
+                    let window = self.window_stat.should_draw();
 
-                    let addr = self.fetcher.bg_tile_num_addr(
-                        &self.control,
-                        &self.pos,
-                        x_pos,
-                        self.window_stat.should_draw(),
-                    );
+                    let addr =
+                        self.fetcher
+                            .bg_tile_num_addr(&self.control, &self.pos, x_pos, window);
 
                     let id = self.read_byte(addr);
                     self.fetcher.bg.tile.with_id(id);
@@ -309,11 +307,11 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetcher.bg.next(TileLowByte),
                 TileLowByte => {
-                    let addr = self.fetcher.bg_byte_low_addr(
-                        &self.control,
-                        &self.pos,
-                        self.window_stat.should_draw(),
-                    );
+                    let window = self.window_stat.should_draw();
+
+                    let addr = self
+                        .fetcher
+                        .bg_byte_low_addr(&self.control, &self.pos, window);
 
                     let low = self.read_byte(addr);
                     self.fetcher.bg.tile.with_low_byte(low);
@@ -322,11 +320,11 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetcher.bg.next(TileHighByte),
                 TileHighByte => {
-                    let addr = self.fetcher.bg_byte_low_addr(
-                        &self.control,
-                        &self.pos,
-                        self.window_stat.should_draw(),
-                    );
+                    let window = self.window_stat.should_draw();
+
+                    let addr = self
+                        .fetcher
+                        .bg_byte_low_addr(&self.control, &self.pos, window);
 
                     let high = self.read_byte(addr + 1);
                     self.fetcher.bg.tile.with_high_byte(high);
@@ -340,9 +338,10 @@ impl Ppu {
                 SendToFifoTwo => {
                     let palette = &self.monochrome.bg_palette;
                     self.fetcher.send_to_fifo(&mut self.fifo, palette);
+                    self.fetcher.x_pos += 1;
 
-                    // FIXME: Should this be equivalent to a reset?
                     self.fetcher.bg.next(TileNumber);
+                    self.fetcher.bg.tile = Default::default();
                 }
             }
         }
@@ -396,12 +395,13 @@ impl Ppu {
                 if self.window_stat.coincidence()
                     && self.control.window_enabled()
                     && self.x_pos >= self.pos.window_x - 7
-                    && !self.window_stat.should_draw()
                 {
-                    self.window_stat.set_should_draw(true);
-                    self.fetcher.bg.reset();
-                    self.fifo.background.clear();
-                    self.fetcher.x_pos = 0;
+                    if !self.window_stat.should_draw() {
+                        self.window_stat.set_should_draw(true);
+                        self.fetcher.bg.reset();
+                        self.fifo.background.clear();
+                        self.fetcher.x_pos = 0;
+                    }
                 } else {
                     self.window_stat.set_should_draw(false);
                 }
@@ -706,7 +706,7 @@ impl PixelFetcher {
         tile_data_addr + offset as u16
     }
 
-    fn send_to_fifo(&mut self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
+    fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
         let maybe_low = self.bg.tile.low;
         let maybe_high = self.bg.tile.high;
 
@@ -724,8 +724,6 @@ impl PixelFetcher {
                 fifo.background.push_back(fifo_info);
             }
         }
-
-        self.x_pos += 1;
     }
 
     pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
