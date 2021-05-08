@@ -299,11 +299,12 @@ impl Ppu {
             match self.fetch.back.state {
                 TileNumber => {
                     let x_pos = self.fetch.x_pos;
-                    let window = self.window_stat.should_draw();
 
-                    let addr = self
-                        .fetch
-                        .bg_tile_num_addr(&self.control, &self.pos, x_pos, window);
+                    self.fetch
+                        .back
+                        .should_render_window(self.window_stat.should_draw());
+
+                    let addr = self.fetch.bg_tile_num_addr(&self.control, &self.pos, x_pos);
 
                     let id = self.read_byte(addr);
                     self.fetch.back.tile.with_id(id);
@@ -313,11 +314,7 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetch.back.next(TileLowByte),
                 TileLowByte => {
-                    let window = self.window_stat.should_draw();
-
-                    let addr = self
-                        .fetch
-                        .bg_byte_low_addr(&self.control, &self.pos, window);
+                    let addr = self.fetch.bg_byte_low_addr(&self.control, &self.pos);
 
                     let low = self.read_byte(addr);
                     self.fetch.back.tile.with_low_byte(low);
@@ -326,11 +323,7 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetch.back.next(TileHighByte),
                 TileHighByte => {
-                    let window = self.window_stat.should_draw();
-
-                    let addr = self
-                        .fetch
-                        .bg_byte_low_addr(&self.control, &self.pos, window);
+                    let addr = self.fetch.bg_byte_low_addr(&self.control, &self.pos);
 
                     let high = self.read_byte(addr + 1);
                     self.fetch.back.tile.with_high_byte(high);
@@ -411,7 +404,9 @@ impl Ppu {
                         self.fifo.back.clear();
                     }
                 } else {
-                    self.window_stat.set_should_draw(false);
+                    if self.window_stat.should_draw() {
+                        self.window_stat.set_should_draw(false);
+                    }
                 }
             }
         }
@@ -652,19 +647,14 @@ impl PixelFetcher {
         self.back.vblank_reset();
     }
 
-    fn bg_tile_num_addr(
-        &self,
-        control: &LCDControl,
-        pos: &ScreenPosition,
-        x_pos: u8,
-        window: bool,
-    ) -> u16 {
+    fn bg_tile_num_addr(&self, control: &LCDControl, pos: &ScreenPosition, x_pos: u8) -> u16 {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
         let scroll_x = pos.scroll_x;
+        let is_window = self.back.is_window_tile();
 
         // Determine which tile map is being used
-        let tile_map = if window {
+        let tile_map = if is_window {
             control.win_tile_map_addr()
         } else {
             control.bg_tile_map_addr()
@@ -675,8 +665,8 @@ impl PixelFetcher {
         // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
         // TODO: Is this necessary / important in other fetcher modes?
 
-        let scx_offset = if window { 0u16 } else { scroll_x as u16 / 8 } & 0x1F;
-        let y_offset = if window {
+        let scx_offset = if is_window { 0u16 } else { scroll_x as u16 / 8 } & 0x1F;
+        let y_offset = if is_window {
             self.back.window_line.count() as u16 / 8
         } else {
             ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
@@ -687,14 +677,10 @@ impl PixelFetcher {
         tile_map_addr + ((x_offset + y_offset) & 0x3FF)
     }
 
-    fn bg_byte_low_addr(
-        &mut self,
-        control: &LCDControl,
-        pos: &ScreenPosition,
-        window: bool,
-    ) -> u16 {
+    fn bg_byte_low_addr(&mut self, control: &LCDControl, pos: &ScreenPosition) -> u16 {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
+        let is_window = self.back.is_window_tile();
 
         let id = self.back.tile.id.expect("Tile Number unexpectedly missing");
 
@@ -703,7 +689,7 @@ impl PixelFetcher {
             TileDataAddress::X8000 => 0x8000 + (id as u16).wrapping_mul(16),
         };
 
-        let offset = if window {
+        let offset = if is_window {
             self.back.window_line.count() % 8
         } else {
             (line_y + scroll_y) % 8
@@ -757,10 +743,19 @@ struct BackgroundFetcher {
     state: FetcherState,
     tile: TileBuilder,
     window_line: WindowLineCounter,
+    is_window_title: bool,
     enabled: bool,
 }
 
 impl BackgroundFetcher {
+    fn should_render_window(&mut self, value: bool) {
+        self.is_window_title = value;
+    }
+
+    fn is_window_tile(&self) -> bool {
+        self.is_window_title
+    }
+
     fn pause(&mut self) {
         self.enabled = false;
     }
@@ -790,6 +785,8 @@ impl Fetcher for BackgroundFetcher {
 
     fn hblank_reset(&mut self) {
         self.reset();
+
+        self.is_window_title = false;
         self.window_line.hblank_reset();
 
         self.enabled = true;
@@ -801,6 +798,7 @@ impl Default for BackgroundFetcher {
         Self {
             state: Default::default(),
             tile: Default::default(),
+            is_window_title: Default::default(),
             window_line: Default::default(),
             enabled: true,
         }
