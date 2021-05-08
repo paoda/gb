@@ -245,12 +245,12 @@ impl Ppu {
                 ToFifoSleep => self.fetcher.obj.next(SendToFifoOne),
                 SendToFifoOne => {
                     // Load into Fifo
-                    let maybe_low = self.fetcher.obj.tile.low;
-                    let maybe_high = self.fetcher.obj.tile.high;
-
-                    let (low, high) = maybe_low
-                        .zip(maybe_high)
-                        .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
+                    let (high, low) = self
+                        .fetcher
+                        .obj
+                        .tile
+                        .bytes()
+                        .expect("Failed to unwrap Tile bytes");
 
                     let tbpp = Pixels::from_bytes(high, low);
 
@@ -707,12 +707,7 @@ impl PixelFetcher {
     }
 
     fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
-        let maybe_low = self.bg.tile.low;
-        let maybe_high = self.bg.tile.high;
-
-        let (low, high) = maybe_low
-            .zip(maybe_high)
-            .expect("Low & High Bytes in TileBuilder were unexpectedly missing.");
+        let (high, low) = self.bg.tile.bytes().expect("Failed to unwrap Tile bytes");
 
         let tbpp = Pixels::from_bytes(high, low);
 
@@ -935,6 +930,10 @@ impl TileBuilder {
 
     pub fn with_high_byte(&mut self, data: u8) {
         self.high = Some(data);
+    }
+
+    pub fn bytes(&self) -> Option<(u8, u8)> {
+        self.high.zip(self.low)
     }
 }
 
