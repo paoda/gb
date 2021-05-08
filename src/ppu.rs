@@ -85,8 +85,13 @@ impl Ppu {
                         // Done with rendering this frame,
                         // we can reset the ppu x_pos and fetcher state now
                         self.x_pos = 0;
+
                         self.fetch.hblank_reset();
+                        self.window_stat.hblank_reset();
                         self.obj_buffer.clear();
+
+                        self.fifo.back.clear();
+                        self.fifo.obj.clear();
 
                         self.stat.set_mode(PpuMode::HBlank);
                     } else if self.control.lcd_enabled() {
@@ -118,6 +123,8 @@ impl Ppu {
 
                             // Reset Window Line Counter in Fetcher
                             self.fetch.vblank_reset();
+                            // Reset WY=LY coincidence flag
+                            self.window_stat.vblank_reset();
 
                             if self.stat.vblank_int() {
                                 // Enable Vblank LCDStat Interrupt
@@ -161,7 +168,6 @@ impl Ppu {
                             }
 
                             self.scan_state.reset();
-                            self.window_stat.set_coincidence(false);
 
                             self.stat.set_mode(PpuMode::OamScan);
                         }
@@ -637,15 +643,13 @@ struct PixelFetcher {
 
 impl PixelFetcher {
     pub fn hblank_reset(&mut self) {
-        self.back.window_line.hblank_reset();
-
-        self.back.tile = Default::default();
-        self.back.state = Default::default();
+        self.back.hblank_reset();
+        self.obj.hblank_reset();
         self.x_pos = 0;
     }
 
     pub fn vblank_reset(&mut self) {
-        self.back.window_line.vblank_reset();
+        self.back.vblank_reset();
     }
 
     fn bg_tile_num_addr(
@@ -745,9 +749,7 @@ impl PixelFetcher {
 trait Fetcher {
     fn next(&mut self, state: FetcherState);
     fn reset(&mut self);
-    fn pause(&mut self);
-    fn resume(&mut self);
-    fn is_enabled(&self) -> bool;
+    fn hblank_reset(&mut self);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -756,6 +758,24 @@ struct BackgroundFetcher {
     tile: TileBuilder,
     window_line: WindowLineCounter,
     enabled: bool,
+}
+
+impl BackgroundFetcher {
+    fn pause(&mut self) {
+        self.enabled = false;
+    }
+
+    fn resume(&mut self) {
+        self.enabled = true;
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn vblank_reset(&mut self) {
+        self.window_line.vblank_reset();
+    }
 }
 
 impl Fetcher for BackgroundFetcher {
@@ -768,16 +788,11 @@ impl Fetcher for BackgroundFetcher {
         self.tile = Default::default();
     }
 
-    fn pause(&mut self) {
-        self.enabled = false;
-    }
+    fn hblank_reset(&mut self) {
+        self.reset();
+        self.window_line.hblank_reset();
 
-    fn resume(&mut self) {
         self.enabled = true;
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
     }
 }
 
@@ -796,7 +811,6 @@ impl Default for BackgroundFetcher {
 struct ObjectFetcher {
     state: FetcherState,
     tile: TileBuilder,
-    enabled: bool,
 }
 
 impl Fetcher for ObjectFetcher {
@@ -807,19 +821,11 @@ impl Fetcher for ObjectFetcher {
     fn reset(&mut self) {
         self.state = Default::default();
         self.tile = Default::default();
-        self.enabled = Default::default();
     }
 
-    fn pause(&mut self) {
-        self.enabled = false;
-    }
-
-    fn resume(&mut self) {
-        self.enabled = true;
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
+    fn hblank_reset(&mut self) {
+        self.state = Default::default();
+        self.tile = Default::default();
     }
 }
 
@@ -1012,5 +1018,13 @@ impl WindowStatus {
 
     pub fn set_coincidence(&mut self, value: bool) {
         self.coincidence = value;
+    }
+
+    fn hblank_reset(&mut self) {
+        self.should_draw = false;
+    }
+
+    fn vblank_reset(&mut self) {
+        self.coincidence = false;
     }
 }
