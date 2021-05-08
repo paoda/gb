@@ -40,7 +40,7 @@ pub struct Ppu {
     pub stat: LCDStatus,
     pub oam: ObjectAttributeTable,
     scan_state: OamScanState,
-    fetcher: PixelFetcher,
+    fetch: PixelFetcher,
     fifo: FifoRenderer,
     obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
@@ -85,7 +85,7 @@ impl Ppu {
                         // Done with rendering this frame,
                         // we can reset the ppu x_pos and fetcher state now
                         self.x_pos = 0;
-                        self.fetcher.hblank_reset();
+                        self.fetch.hblank_reset();
                         self.obj_buffer.clear();
 
                         self.stat.set_mode(PpuMode::HBlank);
@@ -117,7 +117,7 @@ impl Ppu {
                             self.int.set_vblank(true);
 
                             // Reset Window Line Counter in Fetcher
-                            self.fetcher.vblank_reset();
+                            self.fetch.vblank_reset();
 
                             if self.stat.vblank_int() {
                                 // Enable Vblank LCDStat Interrupt
@@ -203,8 +203,8 @@ impl Ppu {
             match iter.flatten().next() {
                 Some(attr) => {
                     if attr.x <= (self.x_pos + 8) {
-                        self.fetcher.bg.reset();
-                        self.fetcher.bg.pause();
+                        self.fetch.back.reset();
+                        self.fetch.back.pause();
                         self.fifo.pause();
 
                         break Some(*attr);
@@ -215,38 +215,38 @@ impl Ppu {
         };
 
         if let Some(attr) = obj_attr {
-            match self.fetcher.obj.state {
+            match self.fetch.obj.state {
                 TileNumber => {
-                    self.fetcher.obj.tile.with_id(attr.tile_index);
-                    self.fetcher.obj.next(ToLowByteSleep);
+                    self.fetch.obj.tile.with_id(attr.tile_index);
+                    self.fetch.obj.next(ToLowByteSleep);
                 }
-                ToLowByteSleep => self.fetcher.obj.next(TileLowByte),
+                ToLowByteSleep => self.fetch.obj.next(TileLowByte),
                 TileLowByte => {
                     let obj_size = self.control.obj_size();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr);
-                    self.fetcher.obj.tile.with_low_byte(byte);
+                    self.fetch.obj.tile.with_low_byte(byte);
 
-                    self.fetcher.obj.next(ToHighByteSleep);
+                    self.fetch.obj.next(ToHighByteSleep);
                 }
-                ToHighByteSleep => self.fetcher.obj.next(TileHighByte),
+                ToHighByteSleep => self.fetch.obj.next(TileHighByte),
                 TileHighByte => {
                     let obj_size = self.control.obj_size();
 
                     let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr + 1);
-                    self.fetcher.obj.tile.with_high_byte(byte);
+                    self.fetch.obj.tile.with_high_byte(byte);
 
-                    self.fetcher.obj.next(ToFifoSleep);
+                    self.fetch.obj.next(ToFifoSleep);
                 }
-                ToFifoSleep => self.fetcher.obj.next(SendToFifoOne),
+                ToFifoSleep => self.fetch.obj.next(SendToFifoOne),
                 SendToFifoOne => {
                     // Load into Fifo
                     let (high, low) = self
-                        .fetcher
+                        .fetch
                         .obj
                         .tile
                         .bytes()
@@ -279,69 +279,69 @@ impl Ppu {
                         self.fifo.object.push_back(fifo_info);
                     }
 
-                    self.fetcher.bg.resume();
+                    self.fetch.back.resume();
                     self.fifo.resume();
                     self.obj_buffer.remove(&attr);
 
-                    self.fetcher.obj.next(SendToFifoTwo);
+                    self.fetch.obj.next(SendToFifoTwo);
                 }
-                SendToFifoTwo => self.fetcher.obj.reset(),
+                SendToFifoTwo => self.fetch.obj.reset(),
             }
         }
 
-        if self.fetcher.bg.is_enabled() {
-            match self.fetcher.bg.state {
+        if self.fetch.back.is_enabled() {
+            match self.fetch.back.state {
                 TileNumber => {
-                    let x_pos = self.fetcher.x_pos;
+                    let x_pos = self.fetch.x_pos;
                     let window = self.window_stat.should_draw();
 
-                    let addr =
-                        self.fetcher
-                            .bg_tile_num_addr(&self.control, &self.pos, x_pos, window);
+                    let addr = self
+                        .fetch
+                        .bg_tile_num_addr(&self.control, &self.pos, x_pos, window);
 
                     let id = self.read_byte(addr);
-                    self.fetcher.bg.tile.with_id(id);
+                    self.fetch.back.tile.with_id(id);
 
                     // Move on to the Next state in 2 T-cycles
-                    self.fetcher.bg.next(ToLowByteSleep);
+                    self.fetch.back.next(ToLowByteSleep);
                 }
-                ToLowByteSleep => self.fetcher.bg.next(TileLowByte),
+                ToLowByteSleep => self.fetch.back.next(TileLowByte),
                 TileLowByte => {
                     let window = self.window_stat.should_draw();
 
                     let addr = self
-                        .fetcher
+                        .fetch
                         .bg_byte_low_addr(&self.control, &self.pos, window);
 
                     let low = self.read_byte(addr);
-                    self.fetcher.bg.tile.with_low_byte(low);
+                    self.fetch.back.tile.with_low_byte(low);
 
-                    self.fetcher.bg.next(ToHighByteSleep);
+                    self.fetch.back.next(ToHighByteSleep);
                 }
-                ToHighByteSleep => self.fetcher.bg.next(TileHighByte),
+                ToHighByteSleep => self.fetch.back.next(TileHighByte),
                 TileHighByte => {
                     let window = self.window_stat.should_draw();
 
                     let addr = self
-                        .fetcher
+                        .fetch
                         .bg_byte_low_addr(&self.control, &self.pos, window);
 
                     let high = self.read_byte(addr + 1);
-                    self.fetcher.bg.tile.with_high_byte(high);
+                    self.fetch.back.tile.with_high_byte(high);
 
-                    self.fetcher.bg.next(ToFifoSleep);
+                    self.fetch.back.next(ToFifoSleep);
                 }
-                ToFifoSleep => self.fetcher.bg.next(SendToFifoOne),
+                ToFifoSleep => self.fetch.back.next(SendToFifoOne),
                 SendToFifoOne => {
-                    self.fetcher.bg.next(SendToFifoTwo);
+                    self.fetch.back.next(SendToFifoTwo);
                 }
                 SendToFifoTwo => {
                     let palette = &self.monochrome.bg_palette;
-                    self.fetcher.send_to_fifo(&mut self.fifo, palette);
-                    self.fetcher.x_pos += 1;
+                    self.fetch.send_to_fifo(&mut self.fifo, palette);
+                    self.fetch.x_pos += 1;
 
-                    self.fetcher.bg.next(TileNumber);
-                    self.fetcher.bg.tile = Default::default();
+                    self.fetch.back.next(TileNumber);
+                    self.fetch.back.tile = Default::default();
                 }
             }
         }
@@ -383,8 +383,8 @@ impl Ppu {
                 // Increment Window line counter if scanline had any window pixels on it
                 // only increment once per scanline though
 
-                if self.window_stat.should_draw() && !self.fetcher.bg.window_line.checked() {
-                    self.fetcher.bg.window_line.increment();
+                if self.window_stat.should_draw() && !self.fetch.back.window_line.checked() {
+                    self.fetch.back.window_line.increment();
                 }
 
                 // Determine whether we should draw the window next frame
@@ -398,9 +398,9 @@ impl Ppu {
                 {
                     if !self.window_stat.should_draw() {
                         self.window_stat.set_should_draw(true);
-                        self.fetcher.bg.reset();
+                        self.fetch.back.reset();
+                        self.fetch.x_pos = 0;
                         self.fifo.background.clear();
-                        self.fetcher.x_pos = 0;
                     }
                 } else {
                     self.window_stat.set_should_draw(false);
@@ -420,8 +420,8 @@ impl Ppu {
         self.stat.set_mode(PpuMode::OamScan);
         self.pos.line_y = 0;
 
-        self.fetcher.bg.reset();
-        self.fetcher.obj.reset();
+        self.fetch.back.reset();
+        self.fetch.obj.reset();
         self.obj_buffer.clear();
     }
 
@@ -443,7 +443,7 @@ impl Default for Ppu {
             stat: Default::default(),
             oam: Default::default(),
             scan_state: Default::default(),
-            fetcher: Default::default(),
+            fetch: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
             window_stat: Default::default(),
@@ -629,21 +629,21 @@ impl Default for ObjectBuffer {
 #[derive(Debug, Clone, Copy, Default)]
 struct PixelFetcher {
     x_pos: u8,
-    bg: BackgroundFetcher,
+    back: BackgroundFetcher,
     obj: ObjectFetcher,
 }
 
 impl PixelFetcher {
     pub fn hblank_reset(&mut self) {
-        self.bg.window_line.hblank_reset();
+        self.back.window_line.hblank_reset();
 
-        self.bg.tile = Default::default();
-        self.bg.state = Default::default();
+        self.back.tile = Default::default();
+        self.back.state = Default::default();
         self.x_pos = 0;
     }
 
     pub fn vblank_reset(&mut self) {
-        self.bg.window_line.vblank_reset();
+        self.back.window_line.vblank_reset();
     }
 
     fn bg_tile_num_addr(
@@ -671,7 +671,7 @@ impl PixelFetcher {
 
         let scx_offset = if window { 0u16 } else { scroll_x as u16 / 8 } & 0x1F;
         let y_offset = if window {
-            self.bg.window_line.count() as u16 / 8
+            self.back.window_line.count() as u16 / 8
         } else {
             ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
         } * 32;
@@ -690,7 +690,7 @@ impl PixelFetcher {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
 
-        let id = self.bg.tile.id.expect("Tile Number unexpectedly missing");
+        let id = self.back.tile.id.expect("Tile Number unexpectedly missing");
 
         let tile_data_addr = match control.tile_data_addr() {
             TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as i8).wrapping_mul(16) as u16),
@@ -698,7 +698,7 @@ impl PixelFetcher {
         };
 
         let offset = if window {
-            self.bg.window_line.count() % 8
+            self.back.window_line.count() % 8
         } else {
             (line_y + scroll_y) % 8
         } * 2;
@@ -707,7 +707,7 @@ impl PixelFetcher {
     }
 
     fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
-        let (high, low) = self.bg.tile.bytes().expect("Failed to unwrap Tile bytes");
+        let (high, low) = self.back.tile.bytes().expect("Failed to unwrap Tile bytes");
 
         let tbpp = Pixels::from_bytes(high, low);
 
@@ -762,7 +762,7 @@ impl Fetcher for BackgroundFetcher {
     }
 
     fn reset(&mut self) {
-        self.state = FetcherState::TileNumber;
+        self.state = Default::default();
         self.tile = Default::default();
     }
 
@@ -803,7 +803,9 @@ impl Fetcher for ObjectFetcher {
     }
 
     fn reset(&mut self) {
-        self.state = FetcherState::TileNumber;
+        self.state = Default::default();
+        self.tile = Default::default();
+        self.enabled = Default::default();
     }
 
     fn pause(&mut self) {
