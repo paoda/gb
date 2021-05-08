@@ -259,7 +259,7 @@ impl Ppu {
                         ObjectPaletteId::One => self.monochrome.obj_palette_1,
                     };
 
-                    let end = Pixels::PIXEL_COUNT - self.fifo.object.len();
+                    let end = Pixels::PIXEL_COUNT - self.fifo.obj.len();
                     let start = Pixels::PIXEL_COUNT - end;
 
                     let x_flip = attr.flags.x_flip();
@@ -276,7 +276,7 @@ impl Ppu {
                             priority,
                         };
 
-                        self.fifo.object.push_back(fifo_info);
+                        self.fifo.obj.push_back(fifo_info);
                     }
 
                     self.fetch.back.resume();
@@ -352,24 +352,26 @@ impl Ppu {
             // FIXME: Is this the correct behaviour
             let bg_zero_colour = self.monochrome.bg_palette.i0_colour();
 
-            let maybe_rgba = self.fifo.background.pop_front().map(|bg_info| {
-                match self.fifo.object.pop_front() {
-                    Some(obj_info) => match obj_info.shade {
-                        Some(obj_shade) => match obj_info.priority {
-                            RenderPriority::BackgroundAndWindow => match bg_info.shade {
-                                GrayShade::White => obj_shade.into_rgba(),
-                                _ if bg_enabled => bg_info.shade.into_rgba(),
-                                _ => bg_zero_colour.into_rgba(),
+            let maybe_rgba =
+                self.fifo
+                    .back
+                    .pop_front()
+                    .map(|bg_info| match self.fifo.obj.pop_front() {
+                        Some(obj_info) => match obj_info.shade {
+                            Some(obj_shade) => match obj_info.priority {
+                                RenderPriority::BackgroundAndWindow => match bg_info.shade {
+                                    GrayShade::White => obj_shade.into_rgba(),
+                                    _ if bg_enabled => bg_info.shade.into_rgba(),
+                                    _ => bg_zero_colour.into_rgba(),
+                                },
+                                RenderPriority::Object => obj_shade.into_rgba(),
                             },
-                            RenderPriority::Object => obj_shade.into_rgba(),
+                            None if bg_enabled => bg_info.shade.into_rgba(),
+                            None => bg_zero_colour.into_rgba(),
                         },
                         None if bg_enabled => bg_info.shade.into_rgba(),
                         None => bg_zero_colour.into_rgba(),
-                    },
-                    None if bg_enabled => bg_info.shade.into_rgba(),
-                    None => bg_zero_colour.into_rgba(),
-                }
-            });
+                    });
 
             if let Some(rgba) = maybe_rgba.as_ref() {
                 let y = self.pos.line_y as usize;
@@ -400,7 +402,7 @@ impl Ppu {
                         self.window_stat.set_should_draw(true);
                         self.fetch.back.reset();
                         self.fetch.x_pos = 0;
-                        self.fifo.background.clear();
+                        self.fifo.back.clear();
                     }
                 } else {
                     self.window_stat.set_should_draw(false);
@@ -711,12 +713,12 @@ impl PixelFetcher {
 
         let tbpp = Pixels::from_bytes(high, low);
 
-        if fifo.background.is_empty() {
+        if fifo.back.is_empty() {
             for x in 0..Pixels::PIXEL_COUNT {
                 let shade = palette.shade(tbpp.shade_id(x));
 
                 let fifo_info = BackgroundFifoInfo { shade };
-                fifo.background.push_back(fifo_info);
+                fifo.back.push_back(fifo_info);
             }
         }
     }
@@ -885,8 +887,8 @@ struct ObjectFifoInfo {
 // really necessary here?
 #[derive(Debug, Clone)]
 struct FifoRenderer {
-    background: VecDeque<BackgroundFifoInfo>,
-    object: VecDeque<ObjectFifoInfo>,
+    back: VecDeque<BackgroundFifoInfo>,
+    obj: VecDeque<ObjectFifoInfo>,
     enabled: bool,
 }
 
@@ -907,8 +909,8 @@ impl FifoRenderer {
 impl Default for FifoRenderer {
     fn default() -> Self {
         Self {
-            background: VecDeque::with_capacity(8),
-            object: VecDeque::with_capacity(8),
+            back: VecDeque::with_capacity(8),
+            obj: VecDeque::with_capacity(8),
             enabled: true,
         }
     }
