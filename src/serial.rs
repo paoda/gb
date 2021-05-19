@@ -53,7 +53,7 @@ impl Default for ShiftClock {
 
 impl From<u8> for ShiftClock {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::External,
             0b01 => Self::Internal,
             _ => unreachable!("{:#04X} is not a valid value for ShiftClock", byte),
@@ -75,7 +75,7 @@ impl Default for ClockSpeed {
 
 impl From<u8> for ClockSpeed {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Normal,
             0b01 => Self::Fast,
             _ => unreachable!("{:#04X} is not a valid value for ClockSpeed", byte),

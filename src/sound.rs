@@ -93,7 +93,7 @@ enum FrequencyType {
 
 impl From<u8> for FrequencyType {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Counter,
             0b01 => Self::Consecutive,
             _ => unreachable!("{:#04X} is not a valid value for FrequencyType"),
@@ -191,7 +191,7 @@ enum EnvelopeDirection {
 
 impl From<u8> for EnvelopeDirection {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Decrease,
             0b01 => Self::Increase,
             _ => unreachable!("{:#04X} is not a valid value for EnvelopeDirection", byte),
@@ -259,7 +259,7 @@ impl From<WavePattern> for u8 {
 
 impl From<u8> for WavePattern {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b11 {
             0b00 => Self::OneEighth,
             0b01 => Self::OneQuarter,
             0b10 => Self::OneHalf,

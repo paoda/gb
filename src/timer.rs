@@ -84,7 +84,7 @@ pub enum TimerSpeed {
 
 impl From<u8> for TimerSpeed {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b11 {
             0b00 => Self::Hz4096,
             0b01 => Self::Hz262144,
             0b10 => Self::Hz65536,

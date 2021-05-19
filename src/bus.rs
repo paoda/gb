@@ -113,15 +113,15 @@ impl Bus {
                 self.var_ram.read_byte(addr)
             }
             0xE000..=0xFDFF => {
-                // Mirror of 0xC000 to 0xDDFF
-                // ECHO RAM
-
-                match addr {
-                    0xE000..=0xEFFF => {
+                // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
+                match addr & 0x1FFF {
+                    // 0xE000 ..= 0xEFFF
+                    0x0000..=0x0FFF => {
                         // 4KB Work RAM Bank 0
                         self.work_ram.read_byte(addr)
                     }
-                    0xF000..=0xFDFF => {
+                    // 0xF000 ..= 0xFDFF
+                    0x1000..=0x1DFF => {
                         // 4KB Work RAM Bank 1 -> N
                         self.var_ram.read_byte(addr)
                     }
@@ -139,33 +139,36 @@ impl Bus {
             }
             0xFF00..=0xFF7F => {
                 // IO Registers
-                match addr {
-                    0xFF00 => self.joypad.status.into(),
-                    0xFF01 => self.serial.next,
-                    0xFF02 => self.serial.control.into(),
-                    0xFF04 => (self.timer.divider >> 8) as u8,
-                    0xFF05 => self.timer.counter,
-                    0xFF06 => self.timer.modulo,
-                    0xFF07 => self.timer.control.into(),
-                    0xFF0F => self.interrupt_flag().into(),
-                    0xFF11 => self.sound.ch1.sound_duty.into(),
-                    0xFF12 => self.sound.ch1.vol_envelope.into(),
-                    0xFF14 => self.sound.ch1.freq_hi.into(),
-                    0xFF24 => self.sound.control.channel.into(),
-                    0xFF25 => self.sound.control.output.into(),
-                    0xFF26 => self.sound.control.status.into(),
-                    0xFF40 => self.ppu.control.into(),
-                    0xFF41 => self.ppu.stat.into(),
-                    0xFF42 => self.ppu.pos.scroll_y,
-                    0xFF43 => self.ppu.pos.scroll_x,
-                    0xFF44 => self.ppu.pos.line_y,
-                    0xFF45 => self.ppu.pos.ly_compare as u8,
-                    0xFF47 => self.ppu.monochrome.bg_palette.into(),
-                    0xFF48 => self.ppu.monochrome.obj_palette_0.into(),
-                    0xFF49 => self.ppu.monochrome.obj_palette_1.into(),
-                    0xFF4A => self.ppu.pos.window_y,
-                    0xFF4B => self.ppu.pos.window_x,
-                    0xFF4D => 0x00, // Reading from this address is useful on the CGB only
+
+                // Every address here starts with 0xFF so we can just check the
+                // low byte to figure out which register it is
+                match addr & 0x00FF {
+                    0x00 => self.joypad.status.into(),
+                    0x01 => self.serial.next,
+                    0x02 => self.serial.control.into(),
+                    0x04 => (self.timer.divider >> 8) as u8,
+                    0x05 => self.timer.counter,
+                    0x06 => self.timer.modulo,
+                    0x07 => self.timer.control.into(),
+                    0x0F => self.interrupt_flag().into(),
+                    0x11 => self.sound.ch1.sound_duty.into(),
+                    0x12 => self.sound.ch1.vol_envelope.into(),
+                    0x14 => self.sound.ch1.freq_hi.into(),
+                    0x24 => self.sound.control.channel.into(),
+                    0x25 => self.sound.control.output.into(),
+                    0x26 => self.sound.control.status.into(),
+                    0x40 => self.ppu.control.into(),
+                    0x41 => self.ppu.stat.into(),
+                    0x42 => self.ppu.pos.scroll_y,
+                    0x43 => self.ppu.pos.scroll_x,
+                    0x44 => self.ppu.pos.line_y,
+                    0x45 => self.ppu.pos.ly_compare as u8,
+                    0x47 => self.ppu.monochrome.bg_palette.into(),
+                    0x48 => self.ppu.monochrome.obj_palette_0.into(),
+                    0x49 => self.ppu.monochrome.obj_palette_1.into(),
+                    0x4A => self.ppu.pos.window_y,
+                    0x4B => self.ppu.pos.window_x,
+                    0x4D => 0x00, // Reading from this address is useful on the CGB only
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -216,15 +219,15 @@ impl Bus {
                 self.var_ram.write_byte(addr, byte);
             }
             0xE000..=0xFDFF => {
-                // Mirror of 0xC000 to 0xDDFF
-                // ECHO RAM
-
-                match addr {
-                    0xE000..=0xEFFF => {
+                // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
+                match addr & 0x1FFF {
+                    // 0xE000 ..= 0xEFFF
+                    0x0000..=0x0FFF => {
                         // 4KB Work RAM Bank 0
                         self.work_ram.write_byte(addr, byte);
                     }
-                    0xF000..=0xFDFF => {
+                    // 0xF000 ..= 0xFDFF
+                    0x1000..=0x1DFF => {
                         // 4KB Work RAM Bank 1 -> N
                         self.var_ram.write_byte(addr, byte);
                     }
@@ -241,28 +244,31 @@ impl Bus {
             }
             0xFF00..=0xFF7F => {
                 // IO Registers
-                match addr {
-                    0xFF00 => self.joypad.status.update(byte),
-                    0xFF01 => self.serial.next = byte,
-                    0xFF02 => self.serial.control = byte.into(),
-                    0xFF04 => self.timer.divider = 0x0000,
-                    0xFF05 => self.timer.counter = byte,
-                    0xFF06 => self.timer.modulo = byte,
-                    0xFF07 => self.timer.control = byte.into(),
-                    0xFF0F => self.set_interrupt_flag(byte),
-                    0xFF11 => self.sound.ch1.sound_duty = byte.into(),
-                    0xFF12 => self.sound.ch1.vol_envelope = byte.into(),
-                    0xFF13 => self.sound.ch1.freq_lo = byte.into(),
-                    0xFF14 => self.sound.ch1.freq_hi = byte.into(),
-                    0xFF24 => self.sound.control.channel = byte.into(),
-                    0xFF25 => self.sound.control.output = byte.into(),
-                    0xFF26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
-                    0xFF40 => self.ppu.control = byte.into(),
-                    0xFF41 => self.ppu.stat.update(byte),
-                    0xFF42 => self.ppu.pos.scroll_y = byte,
-                    0xFF43 => self.ppu.pos.scroll_x = byte,
-                    0xFF44 => self.ppu.pos.line_y = byte,
-                    0xFF45 => {
+
+                // Every address here starts with 0xFF so we can just check the
+                // low byte to figure out which register it is
+                match addr & 0x00FF {
+                    0x00 => self.joypad.status.update(byte),
+                    0x01 => self.serial.next = byte,
+                    0x02 => self.serial.control = byte.into(),
+                    0x04 => self.timer.divider = 0x0000,
+                    0x05 => self.timer.counter = byte,
+                    0x06 => self.timer.modulo = byte,
+                    0x07 => self.timer.control = byte.into(),
+                    0x0F => self.set_interrupt_flag(byte),
+                    0x11 => self.sound.ch1.sound_duty = byte.into(),
+                    0x12 => self.sound.ch1.vol_envelope = byte.into(),
+                    0x13 => self.sound.ch1.freq_lo = byte.into(),
+                    0x14 => self.sound.ch1.freq_hi = byte.into(),
+                    0x24 => self.sound.control.channel = byte.into(),
+                    0x25 => self.sound.control.output = byte.into(),
+                    0x26 => self.sound.control.status = byte.into(), // FIXME: Should we control which bytes are written to here?
+                    0x40 => self.ppu.control = byte.into(),
+                    0x41 => self.ppu.stat.update(byte),
+                    0x42 => self.ppu.pos.scroll_y = byte,
+                    0x43 => self.ppu.pos.scroll_x = byte,
+                    0x44 => self.ppu.pos.line_y = byte,
+                    0x45 => {
                         // Update LYC
                         self.ppu.pos.ly_compare = byte;
 
@@ -275,13 +281,13 @@ impl Bus {
                             self.ppu.int.set_lcd_stat(true);
                         }
                     }
-                    0xFF47 => self.ppu.monochrome.bg_palette = byte.into(),
-                    0xFF48 => self.ppu.monochrome.obj_palette_0 = byte.into(),
-                    0xFF49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
-                    0xFF4A => self.ppu.pos.window_y = byte,
-                    0xFF4B => self.ppu.pos.window_x = byte,
-                    0xFF4D => {} // Writing to this address is useful on the CGB only
-                    0xFF50 => {
+                    0x47 => self.ppu.monochrome.bg_palette = byte.into(),
+                    0x48 => self.ppu.monochrome.obj_palette_0 = byte.into(),
+                    0x49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
+                    0x4A => self.ppu.pos.window_y = byte,
+                    0x4B => self.ppu.pos.window_x = byte,
+                    0x4D => {} // Writing to this address is useful on the CGB only
+                    0x50 => {
                         // Disable Boot ROM
                         if byte != 0 {
                             self.boot = None;

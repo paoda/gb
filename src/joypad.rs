@@ -98,7 +98,7 @@ pub enum ButtonState {
 
 impl From<u8> for ButtonState {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Pressed,
             0b01 => Self::Released,
             _ => unreachable!("{:#04X} is not a valid value for ButtonStatus", byte),
@@ -129,7 +129,7 @@ enum RowState {
 
 impl From<u8> for RowState {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Selected,
             0b01 => Self::Deselected,
             _ => unreachable!("{:#04X} is not a valid value for ButtonRowStatus", byte),

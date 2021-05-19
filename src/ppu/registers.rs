@@ -52,7 +52,7 @@ pub enum PpuMode {
 
 impl From<u8> for PpuMode {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b11 {
             0b00 => Self::HBlank,
             0b01 => Self::VBlank,
             0b10 => Self::OamScan,
@@ -129,7 +129,7 @@ impl TileMapAddress {
 
 impl From<u8> for TileMapAddress {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::X9800,
             0b01 => Self::X9C00,
             _ => unreachable!("{:#04X} is not a valid value for TileMapRegister", byte),
@@ -157,7 +157,7 @@ pub enum TileDataAddress {
 
 impl From<u8> for TileDataAddress {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::X8800,
             0b01 => Self::X8000,
             _ => unreachable!("{:#04X} is not a valid value for TileDataRegister", byte),
@@ -196,7 +196,7 @@ impl ObjectSize {
 
 impl From<u8> for ObjectSize {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Eight,
             0b01 => Self::Sixteen,
             _ => unreachable!("{:#04X} is not a valid value for ObjSize", byte),
@@ -227,7 +227,7 @@ bitfield! {
 
 impl BackgroundPalette {
     pub fn shade(&self, id: u8) -> GrayShade {
-        match id {
+        match id & 0b11 {
             0b00 => self.i0_colour(),
             0b01 => self.i1_colour(),
             0b10 => self.i2_colour(),
@@ -272,7 +272,7 @@ bitfield! {
 
 impl ObjectPalette {
     pub fn shade(&self, id: u8) -> Option<GrayShade> {
-        match id {
+        match id & 0b11 {
             0b00 => None,
             0b01 => Some(self.i1_colour()),
             0b10 => Some(self.i2_colour()),
@@ -376,7 +376,7 @@ pub enum ObjectPaletteId {
 
 impl From<u8> for ObjectPaletteId {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => ObjectPaletteId::Zero,
             0b01 => ObjectPaletteId::One,
             _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
@@ -398,7 +398,7 @@ pub enum RenderPriority {
 
 impl From<u8> for RenderPriority {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b01 {
             0b00 => Self::Object,
             0b01 => Self::BackgroundAndWindow,
             _ => unreachable!("{:#04X} is not a valid value for RenderPriority", byte),
@@ -459,7 +459,7 @@ impl Default for GrayShade {
 
 impl From<u8> for GrayShade {
     fn from(byte: u8) -> Self {
-        match byte {
+        match byte & 0b11 {
             0b00 => GrayShade::White,
             0b01 => GrayShade::LightGray,
             0b10 => GrayShade::DarkGray,

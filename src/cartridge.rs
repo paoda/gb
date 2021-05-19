@@ -88,9 +88,11 @@ impl Cartridge {
 
 impl Cartridge {
     pub fn read_byte(&self, addr: u16) -> u8 {
+        use MbcResult::*;
+
         match self.mbc.handle_read(addr) {
-            MbcResult::Address(addr) => self.memory[addr as usize],
-            MbcResult::Value(byte) => byte,
+            Address(addr) => self.memory[addr as usize],
+            Value(byte) => byte,
         }
     }
     pub fn write_byte(&mut self, addr: u16, byte: u8) {
@@ -166,12 +168,14 @@ impl Mbc1 {
     }
 
     fn calc_ram_address(&self, addr: u16) -> u16 {
+        use RamSize::*;
+
         match self.ram_size {
-            RamSize::_2KB | RamSize::_8KB => {
+            _2KB | _8KB => {
                 let ram_size = self.ram_size.as_byte_count() as u16;
                 (addr - 0xA000) % ram_size
             }
-            RamSize::_32KB => {
+            _32KB => {
                 if self.mode {
                     0x2000 * self.ram_bank as u16 + (addr - 0xA000)
                 } else {
