@@ -93,7 +93,7 @@ fn main() -> Result<()> {
             }
 
             if let Some(size) = input.window_resized() {
-                pixels.resize(size.width, size.height);
+                pixels.resize_surface(size.width, size.height);
             }
 
             if active_gamepad.is_none() {
@@ -139,7 +139,7 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .build(&event_loop)?)
 }
 
-fn create_pixels(window: &Window) -> Result<Pixels<Window>> {
+fn create_pixels(window: &Window) -> Result<Pixels> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     Ok(Pixels::new(GB_WIDTH, GB_HEIGHT, surface_texture)?)
