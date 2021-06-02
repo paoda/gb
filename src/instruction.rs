@@ -1,7 +1,7 @@
 use super::cpu::{Cpu, Flags, HaltState, ImeState, Register, RegisterPair};
 use std::{convert::TryFrom, fmt::Debug};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Instruction {
     NOP,
@@ -93,7 +93,7 @@ pub enum InstrRegisterPair {
     DecrementHL,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum InstrRegister {
     A,
     B,
@@ -105,7 +105,7 @@ pub enum InstrRegister {
     IndirectHL, // (HL)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum JumpCondition {
     NotZero,
     Zero,
@@ -2017,15 +2017,15 @@ impl std::fmt::Debug for JPTarget {
 impl std::fmt::Debug for LDTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            LDTarget::IndirectC => f.write_str("IndirectC"),
+            LDTarget::IndirectC => f.write_str("(0xFF00 + C)"),
             LDTarget::Register(reg) => write!(f, "{:?}", reg),
-            LDTarget::IndirectRegister(pair) => write!(f, "[{:?}]", pair),
-            LDTarget::ByteAtAddress(addr) => write!(f, "[{:#06X}]", addr),
+            LDTarget::IndirectRegister(pair) => write!(f, "({:?})", pair),
+            LDTarget::ByteAtAddress(addr) => write!(f, "({:#06X})", addr),
             LDTarget::ImmediateWord(word) => write!(f, "{:#06X}", word),
             LDTarget::ImmediateByte(byte) => write!(f, "{:#04X}", byte),
             LDTarget::RegisterPair(pair) => write!(f, "{:?}", pair),
             LDTarget::ByteAtAddressWithOffset(byte) => {
-                write!(f, "[0xFF00 + {:#04X}]", byte)
+                write!(f, "(0xFF00 + {:#04X})", byte)
             }
         }
     }
@@ -2061,6 +2061,90 @@ impl std::fmt::Debug for Registers {
         match *self {
             Registers::Byte(reg) => write!(f, "{:?}", reg),
             Registers::Word(pair) => write!(f, "{:?}", pair),
+        }
+    }
+}
+
+impl std::fmt::Debug for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Instruction::*;
+
+        match *self {
+            NOP => f.write_str("NOP"),
+            LD(left, right) => write!(f, "LD {:?}, {:?}", left, right),
+            STOP => f.write_str("STOP"),
+            JR(cond, dist) => write!(f, "JR {:?}, {:?}", cond, dist),
+            ADD(left, right) => write!(f, "ADD {:?}, {:?}", left, right),
+            INC(register) => write!(f, "INC {:?}", register),
+            DEC(register) => write!(f, "DEC {:?}", register),
+            RLCA => f.write_str("RLCA"),
+            RRCA => f.write_str("RRCA"),
+            RLA => f.write_str("RLA"),
+            RRA => f.write_str("RRA"),
+            DAA => f.write_str("DAA"),
+            CPL => f.write_str("CPL"),
+            SCF => f.write_str("SCF"),
+            CCF => f.write_str("CCF"),
+            HALT => f.write_str("HALT"),
+            ADC(target) => write!(f, "ADC {:?}", target),
+            SUB(target) => write!(f, "SUB {:?}", target),
+            SBC(target) => write!(f, "SBC {:?}", target),
+            AND(target) => write!(f, "AND {:?}", target),
+            XOR(target) => write!(f, "XOR {:?}", target),
+            OR(target) => write!(f, "OR {:?}", target),
+            CP(target) => write!(f, "CP {:?}", target),
+            RET(cond) => write!(f, "RET {:?}", cond),
+            LDHL(value) => write!(f, "LDHL {:?}", value),
+            POP(pair) => write!(f, "POP {:?}", pair),
+            RETI => f.write_str("RETI"),
+            JP(cond, target) => write!(f, "JP {:?}, {:?}", cond, target),
+            DI => f.write_str("DI"),
+            EI => f.write_str("EI"),
+            CALL(cond, addr) => write!(f, "CALL {:?}, {:?}", cond, addr),
+            PUSH(pair) => write!(f, "PUSH {:?}", pair),
+            RST(vector) => write!(f, "RST {:?}", vector),
+            RLC(register) => write!(f, "RLC {:?}", register),
+            RRC(register) => write!(f, "RRC {:?}", register),
+            RL(register) => write!(f, "RL {:?}", register),
+            RR(register) => write!(f, "RR {:?}", register),
+            SLA(register) => write!(f, "SLA {:?}", register),
+            SRA(register) => write!(f, "SRA {:?}", register),
+            SWAP(register) => write!(f, "SWAP {:?}", register),
+            SRL(register) => write!(f, "SRL {:?}", register),
+            BIT(bit, register) => write!(f, "BIT {:?}, {:?}", bit, register),
+            RES(bit, register) => write!(f, "RES {:?}, {:?}", bit, register),
+            SET(bit, register) => write!(f, "SET {:?}, {:?}", bit, register),
+        }
+    }
+}
+
+impl std::fmt::Debug for JumpCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use JumpCondition::*;
+
+        match *self {
+            NotZero => f.write_str("NZ"),
+            Zero => f.write_str("Z"),
+            NotCarry => f.write_str("NC"),
+            Carry => f.write_str("C"),
+            Always => f.write_str(""),
+        }
+    }
+}
+
+impl std::fmt::Debug for InstrRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use InstrRegister::*;
+
+        match *self {
+            A => f.write_str("A"),
+            B => f.write_str("B"),
+            C => f.write_str("C"),
+            D => f.write_str("D"),
+            E => f.write_str("E"),
+            H => f.write_str("H"),
+            L => f.write_str("L"),
+            IndirectHL => f.write_str("(HL)"),
         }
     }
 }

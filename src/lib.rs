@@ -1,6 +1,10 @@
 pub use cpu::Cpu as LR35902;
+pub use gui::Egui;
 pub use instruction::Cycle;
 pub use joypad::ButtonState;
+
+#[cfg(feature = "debug")]
+pub use cpu::RegisterPair;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;
@@ -9,6 +13,7 @@ pub const LR35902_CLOCK_SPEED: u32 = 0x400000; // Hz | 4.194304Mhz
 mod bus;
 mod cartridge;
 mod cpu;
+mod gui;
 mod high_ram;
 mod instruction;
 mod interrupt;

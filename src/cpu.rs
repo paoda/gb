@@ -11,6 +11,7 @@ pub struct Cpu {
     reg: Registers,
     flags: Flags,
     ime: ImeState,
+    // TODO: Merge halted and state properties
     halted: Option<HaltState>,
     state: State,
 }
@@ -89,7 +90,10 @@ impl Cpu {
 
     pub fn step(&mut self) -> Cycle {
         // if !self.bus.boot_enabled() {
-        //     self.log_state().unwrap();
+        //     let out = std::io::stdout();
+        //     let handle = out.lock();
+
+        //     self.log_state(handle).unwrap();
         // }
 
         let cycles = match self.halted() {
@@ -123,13 +127,13 @@ impl Cpu {
 
 impl Cpu {
     pub fn read_imm_byte(&mut self, addr: u16) -> u8 {
-        self.inc_pc();
+        self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 1 after this function call
         self.bus.read_byte(addr)
     }
 
     pub fn read_imm_word(&mut self, addr: u16) -> u16 {
         self.inc_pc();
-        self.inc_pc();
+        self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 2 after this function call
         self.bus.read_word(addr)
     }
 
@@ -335,27 +339,22 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn log_state(&self) -> std::io::Result<()> {
-        use std::io::Write;
-
-        let out = std::io::stdout();
-        let mut handle = out.lock();
-
-        write!(handle, "A: {:02X} ", self.reg.a)?;
-        write!(handle, "F: {:02X} ", u8::from(self.flags))?;
-        write!(handle, "B: {:02X} ", self.reg.b)?;
-        write!(handle, "C: {:02X} ", self.reg.c)?;
-        write!(handle, "D: {:02X} ", self.reg.d)?;
-        write!(handle, "E: {:02X} ", self.reg.e)?;
-        write!(handle, "H: {:02X} ", self.reg.h)?;
-        write!(handle, "L: {:02X} ", self.reg.l)?;
-        write!(handle, "SP: {:04X} ", self.reg.sp)?;
-        write!(handle, "PC: 00:{:04X} ", self.reg.pc)?;
-        write!(handle, "({:02X} ", self.read_byte(self.reg.pc))?;
-        write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
-        write!(handle, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
-        writeln!(handle, "{:02X})", self.read_byte(self.reg.pc + 3))?;
-        handle.flush()?;
+    pub fn log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
+        write!(writer, "A: {:02X} ", self.reg.a)?;
+        write!(writer, "F: {:02X} ", u8::from(self.flags))?;
+        write!(writer, "B: {:02X} ", self.reg.b)?;
+        write!(writer, "C: {:02X} ", self.reg.c)?;
+        write!(writer, "D: {:02X} ", self.reg.d)?;
+        write!(writer, "E: {:02X} ", self.reg.e)?;
+        write!(writer, "H: {:02X} ", self.reg.h)?;
+        write!(writer, "L: {:02X} ", self.reg.l)?;
+        write!(writer, "SP: {:04X} ", self.reg.sp)?;
+        write!(writer, "PC: 00:{:04X} ", self.reg.pc)?;
+        write!(writer, "({:02X} ", self.read_byte(self.reg.pc))?;
+        write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
+        write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
+        writeln!(writer, "{:02X})", self.read_byte(self.reg.pc + 3))?;
+        writer.flush()?;
 
         Ok(())
     }

@@ -6,14 +6,21 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# default = ["debug"]
+debug = []
+
 [dependencies]
 anyhow = "^1.0"
 bitfield = "^0.13"
 clap = "^2.33"
 gilrs = "^0.8"
 pixels = "^0.3"
-winit = "^0.25"
-winit_input_helper = "^0.10"
+winit = "^0.24"
+winit_input_helper = "^0.9"
+egui = "^0.10"
+egui_wgpu_backend = { git = "https://github.com/hasenbanck/egui_wgpu_backend.git", rev = "9d03ad345d15d1e44165849b242d3562fdf3e859" }
+egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform.git", rev = "17298250e9721e8bf2c1d4a17b3e22777f8cb2e8" }
 
 [profile.release]
 debug = true
