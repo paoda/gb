@@ -72,6 +72,10 @@ impl Bus {
         self.timer.step(cycles);
         self.sound.step(cycles);
     }
+
+    pub fn timer(&self) -> Timer {
+        self.timer
+    }
 }
 
 impl Bus {

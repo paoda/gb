@@ -143,6 +143,30 @@ impl Egui {
                 });
             });
 
+        egui::Window::new("Timer").show(ctx, |ui| {
+            let timer = game_boy.bus.timer();
+
+            ui.horizontal(|ui| {
+                ui.label("DIV");
+                ui.monospace(format!("{:#06X}", timer.divider));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("TIMA");
+                ui.monospace(format!("{:#04X}", timer.counter));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("TMA");
+                ui.monospace(format!("{:#04X}", timer.modulo));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("TAC");
+                ui.monospace(format!("{:?}", timer.control));
+            });
+        });
+
         egui::Window::new("Registers")
             .open(&mut self.show_registers)
             .show(ctx, |ui| {
