@@ -346,33 +346,30 @@ impl Ppu {
         }
 
         if self.fifo.is_enabled() {
+            use RenderPriority::*;
+
             // Handle Background Pixel and Sprite FIFO
             let bg_enabled = self.control.bg_win_enabled();
+            let i0_colour = self.monochrome.bg_palette.i0_colour();
+
             // FIXME: Is this the correct behaviour
-            let bg_zero_colour = self.monochrome.bg_palette.i0_colour();
+            let rgba_opt = self.fifo.back.pop_front().map(|bg_info| {
+                let bg_shade = if bg_enabled { bg_info.shade } else { i0_colour };
 
-            let maybe_rgba =
-                self.fifo
-                    .back
-                    .pop_front()
-                    .map(|bg_info| match self.fifo.obj.pop_front() {
-                        Some(obj_info) => match obj_info.shade {
-                            Some(obj_shade) => match obj_info.priority {
-                                RenderPriority::BackgroundAndWindow => match bg_info.shade {
-                                    GrayShade::White => obj_shade.into_rgba(),
-                                    _ if bg_enabled => bg_info.shade.into_rgba(),
-                                    _ => bg_zero_colour.into_rgba(),
-                                },
-                                RenderPriority::Object => obj_shade.into_rgba(),
-                            },
-                            None if bg_enabled => bg_info.shade.into_rgba(),
-                            None => bg_zero_colour.into_rgba(),
+                match self.fifo.obj.pop_front() {
+                    Some(obj_info) => match (obj_info.shade, obj_info.priority) {
+                        (Some(obj_shade), BackgroundAndWindow) => match bg_info.shade {
+                            GrayShade::White => obj_shade.into_rgba(),
+                            _ => bg_shade.into_rgba(),
                         },
-                        None if bg_enabled => bg_info.shade.into_rgba(),
-                        None => bg_zero_colour.into_rgba(),
-                    });
+                        (Some(obj_shade), Object) => obj_shade.into_rgba(),
+                        (None, _) => bg_shade.into_rgba(),
+                    },
+                    None => bg_shade.into_rgba(),
+                }
+            });
 
-            if let Some(rgba) = maybe_rgba.as_ref() {
+            if let Some(rgba) = rgba_opt.as_ref() {
                 let y = self.pos.line_y as usize;
                 let x = self.x_pos as usize;
 
