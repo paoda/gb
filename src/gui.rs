@@ -24,6 +24,8 @@ pub struct Egui {
     show_flags: bool,
     show_cpu_info: bool,
     show_registers: bool,
+    show_int: bool,
+    show_timer: bool,
 
     #[cfg(feature = "debug")]
     show_disasm: bool,
@@ -60,6 +62,8 @@ impl Egui {
             show_flags: false,
             show_cpu_info: false,
             show_registers: false,
+            show_int: false,
+            show_timer: false,
             #[cfg(feature = "debug")]
             show_disasm: false,
             #[cfg(feature = "debug")]
@@ -143,29 +147,31 @@ impl Egui {
                 });
             });
 
-        egui::Window::new("Timer").show(ctx, |ui| {
-            let timer = game_boy.bus.timer();
+        egui::Window::new("Timer")
+            .open(&mut self.show_timer)
+            .show(ctx, |ui| {
+                let timer = game_boy.bus.timer();
 
-            ui.horizontal(|ui| {
-                ui.label("DIV");
-                ui.monospace(format!("{:#06X}", timer.divider));
-            });
+                ui.horizontal(|ui| {
+                    ui.label("DIV");
+                    ui.monospace(format!("{:#06X}", timer.divider));
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("TIMA");
-                ui.monospace(format!("{:#04X}", timer.counter));
-            });
+                ui.horizontal(|ui| {
+                    ui.label("TIMA");
+                    ui.monospace(format!("{:#04X}", timer.counter));
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("TMA");
-                ui.monospace(format!("{:#04X}", timer.modulo));
-            });
+                ui.horizontal(|ui| {
+                    ui.label("TMA");
+                    ui.monospace(format!("{:#04X}", timer.modulo));
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("TAC");
-                ui.monospace(format!("{:?}", timer.control));
+                ui.horizontal(|ui| {
+                    ui.label("TAC");
+                    ui.monospace(format!("{:?}", timer.control));
+                });
             });
-        });
 
         egui::Window::new("Registers")
             .open(&mut self.show_registers)
@@ -285,28 +291,30 @@ impl Egui {
             self.show_disasm = show_disasm;
         }
 
-        egui::Window::new("IRQ Information").show(ctx, |ui| {
-            let req = game_boy.read_byte(0xFF0F);
-            let enabled = game_boy.read_byte(0xFFFF);
+        egui::Window::new("IRQ Information")
+            .open(&mut self.show_int)
+            .show(ctx, |ui| {
+                let req = game_boy.read_byte(0xFF0F);
+                let enabled = game_boy.read_byte(0xFFFF);
 
-            ui.heading("Interrupt Requests");
-            ui.horizontal(|ui| {
-                let _ = ui.selectable_label(req & 0x01 == 0x01, "VBLANK");
-                let _ = ui.selectable_label((req >> 1) & 0x01 == 0x01, "LCD STAT");
-                let _ = ui.selectable_label((req >> 2) & 0x01 == 0x01, "TIMER");
-                let _ = ui.selectable_label((req >> 3) & 0x01 == 0x01, "SERIAL");
-                let _ = ui.selectable_label((req >> 4) & 0x01 == 0x01, "JOYPAD");
-            });
+                ui.heading("Interrupt Requests");
+                ui.horizontal(|ui| {
+                    let _ = ui.selectable_label(req & 0x01 == 0x01, "VBLANK");
+                    let _ = ui.selectable_label((req >> 1) & 0x01 == 0x01, "LCD STAT");
+                    let _ = ui.selectable_label((req >> 2) & 0x01 == 0x01, "TIMER");
+                    let _ = ui.selectable_label((req >> 3) & 0x01 == 0x01, "SERIAL");
+                    let _ = ui.selectable_label((req >> 4) & 0x01 == 0x01, "JOYPAD");
+                });
 
-            ui.heading("Interrupt Enable");
-            ui.horizontal(|ui| {
-                let _ = ui.selectable_label(enabled & 0x01 == 0x01, "VBLANK");
-                let _ = ui.selectable_label((enabled >> 1) & 0x01 == 0x01, "LCD STAT");
-                let _ = ui.selectable_label((enabled >> 2) & 0x01 == 0x01, "TIMER");
-                let _ = ui.selectable_label((enabled >> 3) & 0x01 == 0x01, "SERIAL");
-                let _ = ui.selectable_label((enabled >> 4) & 0x01 == 0x01, "JOYPAD");
+                ui.heading("Interrupt Enable");
+                ui.horizontal(|ui| {
+                    let _ = ui.selectable_label(enabled & 0x01 == 0x01, "VBLANK");
+                    let _ = ui.selectable_label((enabled >> 1) & 0x01 == 0x01, "LCD STAT");
+                    let _ = ui.selectable_label((enabled >> 2) & 0x01 == 0x01, "TIMER");
+                    let _ = ui.selectable_label((enabled >> 3) & 0x01 == 0x01, "SERIAL");
+                    let _ = ui.selectable_label((enabled >> 4) & 0x01 == 0x01, "JOYPAD");
+                });
             });
-        });
 
         #[cfg(feature = "debug")]
         let mut spacebar_step = self.config.spacebar_step;
