@@ -118,6 +118,7 @@ pub enum JumpCondition {
 struct Table;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[repr(transparent)]
 pub struct Cycle(u32);
 
 impl Instruction {
