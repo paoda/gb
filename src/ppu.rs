@@ -735,17 +735,17 @@ struct BackgroundFetcher {
     state: FetcherState,
     tile: TileBuilder,
     window_line: WindowLineCounter,
-    is_window_title: bool,
+    is_window_tile: bool,
     enabled: bool,
 }
 
 impl BackgroundFetcher {
     fn should_render_window(&mut self, value: bool) {
-        self.is_window_title = value;
+        self.is_window_tile = value;
     }
 
     fn is_window_tile(&self) -> bool {
-        self.is_window_title
+        self.is_window_tile
     }
 
     fn pause(&mut self) {
@@ -778,7 +778,7 @@ impl Fetcher for BackgroundFetcher {
     fn hblank_reset(&mut self) {
         self.reset();
 
-        self.is_window_title = false;
+        self.is_window_tile = false;
 
         self.enabled = true;
     }
@@ -789,7 +789,7 @@ impl Default for BackgroundFetcher {
         Self {
             state: Default::default(),
             tile: Default::default(),
-            is_window_title: Default::default(),
+            is_window_tile: Default::default(),
             window_line: Default::default(),
             enabled: true,
         }
