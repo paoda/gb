@@ -84,6 +84,13 @@ impl Ppu {
 
                         // Done with rendering this frame,
                         // we can reset the ppu x_pos and fetcher state now
+
+                        // Increment Window line counter if scanline had any window pixels on it
+                        // only increment once per scanline though
+                        if self.window_stat.should_draw() {
+                            self.fetch.back.window_line.increment();
+                        }
+
                         self.x_pos = 0;
 
                         self.fetch.hblank_reset();
@@ -179,8 +186,13 @@ impl Ppu {
 
     fn scan_oam(&mut self) {
         if self.scan_state.mode() == OamScanMode::Scan {
-            let sprite_height = self.control.obj_size().as_u8();
+            if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
+                // Determine whether we should draw the window next frame
+                self.window_stat
+                    .set_coincidence(self.pos.line_y == self.pos.window_y);
+            }
 
+            let sprite_height = self.control.obj_size().as_u8();
             let index = self.scan_state.count();
 
             let attr = self.oam.attribute(index as usize);
@@ -295,6 +307,17 @@ impl Ppu {
             }
         }
 
+        if self.control.window_enabled()
+            && !self.window_stat.should_draw()
+            && self.window_stat.coincidence()
+            && self.x_pos >= self.pos.window_x - 7
+        {
+            self.window_stat.set_should_draw(true);
+            self.fetch.back.reset();
+            self.fetch.x_pos = 0;
+            self.fifo.back.clear();
+        }
+
         if self.fetch.back.is_enabled() {
             match self.fetch.back.state {
                 TileNumber => {
@@ -377,34 +400,6 @@ impl Ppu {
                 self.frame_buf[i..(i + rgba.len())].copy_from_slice(rgba);
 
                 self.x_pos += 1;
-
-                // Increment Window line counter if scanline had any window pixels on it
-                // only increment once per scanline though
-
-                if self.window_stat.should_draw() && !self.fetch.back.window_line.checked() {
-                    self.fetch.back.window_line.increment();
-                }
-
-                // Determine whether we should draw the window next frame
-                if self.pos.line_y == self.pos.window_y {
-                    self.window_stat.set_coincidence(true);
-                }
-
-                if self.window_stat.coincidence()
-                    && self.control.window_enabled()
-                    && self.x_pos >= self.pos.window_x - 7
-                {
-                    if !self.window_stat.should_draw() {
-                        self.window_stat.set_should_draw(true);
-                        self.fetch.back.reset();
-                        self.fetch.x_pos = 0;
-                        self.fifo.back.clear();
-                    }
-                } else {
-                    if self.window_stat.should_draw() {
-                        self.window_stat.set_should_draw(false);
-                    }
-                }
             }
         }
     }
@@ -784,7 +779,6 @@ impl Fetcher for BackgroundFetcher {
         self.reset();
 
         self.is_window_title = false;
-        self.window_line.hblank_reset();
 
         self.enabled = true;
     }
@@ -827,26 +821,15 @@ impl Fetcher for ObjectFetcher {
 #[derive(Debug, Clone, Copy, Default)]
 struct WindowLineCounter {
     count: u8,
-    checked: bool,
 }
 
 impl WindowLineCounter {
-    pub fn checked(&self) -> bool {
-        self.checked
-    }
-
     pub fn increment(&mut self) {
         self.count += 1;
-        self.checked = true;
-    }
-
-    pub fn hblank_reset(&mut self) {
-        self.checked = false;
     }
 
     pub fn vblank_reset(&mut self) {
         self.count = 0;
-        self.checked = false;
     }
 
     pub fn count(&self) -> u8 {
