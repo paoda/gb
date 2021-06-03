@@ -373,6 +373,7 @@ impl Ppu {
 
             // Handle Background Pixel and Sprite FIFO
             let bg_enabled = self.control.bg_win_enabled();
+            let obj_enabled = self.control.obj_enabled();
             let i0_colour = self.monochrome.bg_palette.i0_colour();
 
             // FIXME: Is this the correct behaviour
@@ -380,14 +381,20 @@ impl Ppu {
                 let bg_shade = if bg_enabled { bg_info.shade } else { i0_colour };
 
                 match self.fifo.obj.pop_front() {
-                    Some(obj_info) => match (obj_info.shade, obj_info.priority) {
-                        (Some(obj_shade), BackgroundAndWindow) => match bg_info.shade {
-                            GrayShade::White => obj_shade.into_rgba(),
-                            _ => bg_shade.into_rgba(),
-                        },
-                        (Some(obj_shade), Object) => obj_shade.into_rgba(),
-                        (None, _) => bg_shade.into_rgba(),
-                    },
+                    Some(obj_info) => {
+                        if obj_enabled {
+                            match (obj_info.shade, obj_info.priority) {
+                                (Some(obj_shade), BackgroundAndWindow) => match bg_info.shade {
+                                    GrayShade::White => obj_shade.into_rgba(),
+                                    _ => bg_shade.into_rgba(),
+                                },
+                                (Some(obj_shade), Object) => obj_shade.into_rgba(),
+                                (None, _) => bg_shade.into_rgba(),
+                            }
+                        } else {
+                            bg_shade.into_rgba()
+                        }
+                    }
                     None => bg_shade.into_rgba(),
                 }
             });
