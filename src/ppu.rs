@@ -4,12 +4,12 @@ use crate::GB_WIDTH;
 use std::collections::VecDeque;
 use std::convert::TryInto;
 
-use self::registers::{
+use self::types::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
     ObjectPaletteId, ObjectSize, Pixels, PpuMode, RenderPriority, TileDataAddress,
 };
 
-mod registers;
+mod types;
 
 const VRAM_SIZE: usize = 0x2000;
 const OAM_SIZE: usize = 0xA0;
