@@ -242,7 +242,7 @@ impl Ppu {
                 TileLowByte => {
                     let obj_size = self.control.obj_size();
 
-                    let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr);
                     self.fetch.obj.tile.with_low_byte(byte);
@@ -253,7 +253,7 @@ impl Ppu {
                 TileHighByte => {
                     let obj_size = self.control.obj_size();
 
-                    let addr = PixelFetcher::get_obj_low_addr(&attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr + 1);
                     self.fetch.obj.tile.with_high_byte(byte);
@@ -705,22 +705,24 @@ impl PixelFetcher {
         }
     }
 
-    pub fn get_obj_low_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
+    pub fn get_obj_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
         let line_y = pos.line_y;
-        let scroll_y = pos.scroll_y;
 
-        let tile_number = match size {
-            ObjectSize::Eight => attr.tile_index,
-            ObjectSize::Sixteen => attr.tile_index & !0x01,
+        // TODO: Why is the offset 14 and 30 respectively?
+        let (id, flip_offset) = match size {
+            ObjectSize::Eight => (attr.tile_index, 14),
+            ObjectSize::Sixteen => (attr.tile_index & !0x01, 30),
         };
 
-        let offset = 2 * if attr.flags.y_flip() {
-            (size.as_u8() - 1) - (line_y + scroll_y) % 8
+        let offset = 2 * (line_y - (attr.y - 16));
+
+        let final_offset = if attr.flags.y_flip() {
+            flip_offset - offset
         } else {
-            (line_y + scroll_y) % 8
+            offset
         };
 
-        0x8000 + (tile_number as u16 * 16) + offset as u16
+        0x8000 + (id as u16 * 16) + final_offset as u16
     }
 }
 
