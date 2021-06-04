@@ -1,6 +1,7 @@
 use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
+use dma::DmaProcess;
 use std::collections::VecDeque;
 use std::convert::TryInto;
 
@@ -9,6 +10,7 @@ use self::types::{
     ObjectPaletteId, ObjectSize, Pixels, PpuMode, RenderPriority, TileDataAddress,
 };
 
+pub(crate) mod dma;
 mod types;
 
 const VRAM_SIZE: usize = 0x2000;
@@ -39,6 +41,7 @@ pub struct Ppu {
     pub vram: Box<[u8; VRAM_SIZE]>,
     pub stat: LCDStatus,
     pub oam: ObjectAttributeTable,
+    pub(crate) dma: DmaProcess,
     scan_state: OamScanState,
     fetch: PixelFetcher,
     fifo: FifoRenderer,
@@ -449,6 +452,7 @@ impl Default for Ppu {
             fifo: Default::default(),
             obj_buffer: Default::default(),
             window_stat: Default::default(),
+            dma: Default::default(),
             x_pos: 0,
         }
     }

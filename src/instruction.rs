@@ -2240,6 +2240,28 @@ impl std::ops::SubAssign<u32> for Cycle {
     }
 }
 
+impl PartialEq<u32> for Cycle {
+    fn eq(&self, other: &u32) -> bool {
+        self.0 == *other
+    }
+}
+
+impl std::ops::Div for Cycle {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::new(self.0 / rhs.0)
+    }
+}
+
+impl std::ops::Div<u32> for Cycle {
+    type Output = Self;
+
+    fn div(self, rhs: u32) -> Self::Output {
+        Self::new(self.0 / rhs)
+    }
+}
+
 impl From<u32> for Cycle {
     fn from(num: u32) -> Self {
         Self(num)

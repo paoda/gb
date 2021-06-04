@@ -68,6 +68,7 @@ impl Bus {
     }
 
     pub fn step(&mut self, cycles: Cycle) {
+        self.step_dma(cycles);
         self.ppu.step(cycles);
         self.timer.step(cycles);
         self.sound.step(cycles);
@@ -167,6 +168,7 @@ impl Bus {
                     0x43 => self.ppu.pos.scroll_x,
                     0x44 => self.ppu.pos.line_y,
                     0x45 => self.ppu.pos.ly_compare as u8,
+                    0x46 => self.ppu.dma.ctrl.repr,
                     0x47 => self.ppu.monochrome.bg_palette.into(),
                     0x48 => self.ppu.monochrome.obj_palette_0.into(),
                     0x49 => self.ppu.monochrome.obj_palette_1.into(),
@@ -285,6 +287,7 @@ impl Bus {
                             self.ppu.int.set_lcd_stat(true);
                         }
                     }
+                    0x46 => self.ppu.dma.ctrl.update(byte, &mut self.ppu.dma.state),
                     0x47 => self.ppu.monochrome.bg_palette = byte.into(),
                     0x48 => self.ppu.monochrome.obj_palette_0 = byte.into(),
                     0x49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
@@ -366,5 +369,21 @@ impl Bus {
 
     pub fn boot_enabled(&self) -> bool {
         self.boot.is_some()
+    }
+}
+
+impl Bus {
+    pub(crate) fn step_dma(&mut self, pending: Cycle) {
+        let pending_cycles: u32 = pending.into();
+
+        for _ in 0..pending_cycles {
+            match self.ppu.dma.clock() {
+                Some((src_addr, dest_addr)) => {
+                    let byte = self.read_byte(src_addr);
+                    self.write_byte(dest_addr, byte);
+                }
+                None => {}
+            }
+        }
     }
 }
