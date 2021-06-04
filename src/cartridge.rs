@@ -81,7 +81,7 @@ impl Cartridge {
             0x00 => MbcKind::None,
             0x01 => MbcKind::Mbc1,
             0x19 => MbcKind::Mbc5,
-            _ => unimplemented!("{} is the id of an unsupported memory bank controller", id),
+            _ => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
 }
