@@ -45,6 +45,10 @@ impl DmaProcess {
         }
     }
 
+    pub(crate) fn is_active(&self) -> bool {
+        self.state == DmaState::Transferring
+    }
+
     fn reset(&mut self) {
         self.cycle = Cycle::new(0);
         self.state = DmaState::Disabled;
@@ -84,14 +88,6 @@ impl Default for DmaControl {
 }
 
 impl DmaControl {
-    fn src(&self) -> Option<&Range<u16>> {
-        self.src.as_ref()
-    }
-
-    fn dest(&self) -> &Range<u16> {
-        &self.dest
-    }
-
     pub fn update(&mut self, byte: u8, state: &mut DmaState) {
         let left = (byte as u16) << 8 | 0x0000;
         let right = (byte as u16) << 8 | 0x009F;
@@ -116,12 +112,12 @@ mod tests {
         let mut dma_ctrl: DmaControl = Default::default();
         let mut state = DmaState::Disabled;
 
-        assert_eq!(dma_ctrl.src(), None);
-        assert_eq!(*dma_ctrl.dest(), 0xFE00..0xFE9F);
+        assert_eq!(dma_ctrl.src, None);
+        assert_eq!(dma_ctrl.dest, 0xFE00..0xFE9F);
 
         dma_ctrl.update(0xAB, &mut state);
-        assert_eq!(dma_ctrl.src(), Some(0xAB00..0xAB9F).as_ref());
-        assert_eq!(*dma_ctrl.dest(), 0xFE00..0xFE9F);
+        assert_eq!(dma_ctrl.src, Some(0xAB00..0xAB9F));
+        assert_eq!(dma_ctrl.dest, 0xFE00..0xFE9F);
     }
 
     #[test]
@@ -131,7 +127,7 @@ mod tests {
 
         bus.dma.ctrl.update(0xAB, &mut bus.dma.state);
 
-        assert_eq!(bus.dma.ctrl.src(), Some(0xAB00..0xAB9F).as_ref());
+        assert_eq!(bus.dma.ctrl.src, Some(0xAB00..0xAB9F));
         assert_eq!(bus.dma.state, DmaState::Pending);
     }
 }

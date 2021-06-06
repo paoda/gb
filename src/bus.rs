@@ -3,7 +3,7 @@ use super::high_ram::HighRam;
 use super::instruction::Cycle;
 use super::interrupt::{Interrupt, InterruptFlag};
 use super::joypad::Joypad;
-use super::ppu::Ppu;
+use super::ppu::{Ppu, PpuMode};
 use super::serial::Serial;
 use super::sound::Sound;
 use super::timer::Timer;
@@ -133,9 +133,13 @@ impl Bus {
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
             }
+            0xFE00..=0xFE9F if self.ppu.dma.is_active() => 0xFF,
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                self.ppu.oam.read_byte(addr)
+                match self.ppu.stat.mode() {
+                    PpuMode::HBlank | PpuMode::VBlank => self.ppu.oam.read_byte(addr),
+                    PpuMode::OamScan | PpuMode::Drawing => 0xFF,
+                }
             }
             0xFEA0..=0xFEFF => {
                 // eprintln!("Read from {:#06X}, which is prohibited", addr);
@@ -240,9 +244,14 @@ impl Bus {
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
             }
+
+            0xFE00..=0xFE9F if self.ppu.dma.is_active() => {}
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                self.ppu.oam.write_byte(addr, byte);
+                match self.ppu.stat.mode() {
+                    PpuMode::HBlank | PpuMode::VBlank => self.ppu.oam.write_byte(addr, byte),
+                    PpuMode::Drawing | PpuMode::OamScan => {}
+                }
             }
             0xFEA0..=0xFEFF => {
                 // eprintln!("Wrote {:#04X} to {:#06X}, which is prohibited", byte, addr);

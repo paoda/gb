@@ -4,10 +4,10 @@ use crate::GB_WIDTH;
 use dma::DmaProcess;
 use std::collections::VecDeque;
 use std::convert::TryInto;
-
-use self::types::{
+pub use types::PpuMode;
+use types::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, ObjectSize, Pixels, PpuMode, RenderPriority, TileDataAddress,
+    ObjectPaletteId, ObjectSize, Pixels, RenderPriority, TileDataAddress,
 };
 
 pub(crate) mod dma;
@@ -188,7 +188,7 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self) {
-        if self.scan_state.mode() == OamScanMode::Scan {
+        if self.scan_state.mode() == OamScanMode::Scan && self.dma.is_active() {
             if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
                 // Determine whether we should draw the window next frame
                 self.window_stat
