@@ -159,10 +159,14 @@ impl BusIo for Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                match self.ppu.stat.mode() {
-                    PpuMode::VBlank => 0xFF,
-                    _ => self.ppu.read_byte(addr),
-                }
+
+                // TODO: Fix Timing issues in PPU
+                // match self.ppu.stat.mode() {
+                //     PpuMode::VBlank => 0xFF,
+                //     _ => self.ppu.read_byte(addr),
+                // }
+
+                self.ppu.read_byte(addr)
             }
             0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
@@ -189,12 +193,16 @@ impl BusIo for Bus {
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                use PpuMode::{HBlank, VBlank};
 
-                match self.ppu.stat.mode() {
-                    HBlank | VBlank => self.ppu.oam.read_byte(addr),
-                    _ => 0xFF,
-                }
+                // TODO: Fix timing issues in the PPU
+                // use PpuMode::{HBlank, VBlank};
+
+                // match self.ppu.stat.mode() {
+                //     HBlank | VBlank => self.ppu.oam.read_byte(addr),
+                //     _ => 0xFF,
+                // }
+
+                self.ppu.oam.read_byte(addr)
             }
             0xFEA0..=0xFEFF => {
                 // Prohibited Memory
@@ -264,10 +272,14 @@ impl BusIo for Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                match self.ppu.stat.mode() {
-                    PpuMode::VBlank => {}
-                    _ => self.ppu.write_byte(addr, byte),
-                }
+
+                // TODO: Fix timing issues in the PPU
+                // match self.ppu.stat.mode() {
+                //     PpuMode::VBlank => {}
+                //     _ => self.ppu.write_byte(addr, byte),
+                // }
+
+                self.ppu.write_byte(addr, byte)
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -298,13 +310,12 @@ impl BusIo for Bus {
                 // Sprite Attribute Table
                 // use PpuMode::{HBlank, VBlank};
 
-                // FIXME: There is most definitely something wrong with the
-                // PPU Timing
-                //
+                // TODO: Fix Timing issues in the PPU
                 // match self.ppu.stat.mode() {
                 //     HBlank | VBlank => self.ppu.oam.write_byte(addr, byte),
                 //     _ => {}
                 // }
+
                 self.ppu.oam.write_byte(addr, byte)
             }
             0xFEA0..=0xFEFF => {} // TODO: As far as I know, writes to here do nothing.
