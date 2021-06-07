@@ -79,8 +79,8 @@ impl Bus {
 
         for _ in 0..pending_cycles {
             if let Some((src_addr, dest_addr)) = self.ppu.dma.clock() {
-                let byte = self.read_byte(src_addr);
-                self.write_byte(dest_addr, byte);
+                let byte = self.oam_read_byte(src_addr);
+                self.oam_write_byte(dest_addr, byte);
             }
         }
     }
@@ -90,11 +90,12 @@ impl Bus {
     }
 }
 
-impl BusIo for Bus {
-    fn read_byte(&self, addr: u16) -> u8 {
+impl Bus {
+    pub fn oam_read_byte(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x3FFF => {
-                // 16KB ROM bank 00
+            0x0000..=0x7FFF => {
+                // 16KB ROM bank 00 (ends at 0x3FFF)
+                // and 16KB ROM Bank 01 -> NN (switchable via MB)
                 if addr < 0x100 {
                     if let Some(boot) = self.boot {
                         return boot[addr as usize];
@@ -106,11 +107,56 @@ impl BusIo for Bus {
                     None => panic!("Tried to read from a non-existent cartridge"),
                 }
             }
-            0x4000..=0x7FFF => match self.cartridge.as_ref() {
-                // 16KB ROM Bank 01 -> NN (switchable via MB)
+            0x8000..=0x9FFF => self.ppu.read_byte(addr), // 8KB Video RAM
+            0xA000..=0xBFFF => match self.cartridge.as_ref() {
+                // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from a non-existent cartridge"),
             },
+            0xC000..=0xCFFF => self.work_ram.read_byte(addr), // 4KB Work RAM Bank 0
+            0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
+            0xE000..=0xFDFF => {
+                // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
+                match addr & 0x1FFF {
+                    // 0xE000 ..= 0xEFFF
+                    0x0000..=0x0FFF => {
+                        // 4KB Work RAM Bank 0
+                        self.work_ram.read_byte(addr)
+                    }
+                    // 0xF000 ..= 0xFDFF
+                    0x1000..=0x1DFF => {
+                        // 4KB Work RAM Bank 1 -> N
+                        self.var_ram.read_byte(addr)
+                    }
+                    _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
+                }
+            }
+            _ => panic!("OAM Transfer abnormally tried reading from {:#06X}", addr),
+        }
+    }
+
+    pub fn oam_write_byte(&mut self, addr: u16, byte: u8) {
+        self.ppu.oam.write_byte(addr, byte);
+    }
+}
+
+impl BusIo for Bus {
+    fn read_byte(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x7FFF => {
+                // 16KB ROM bank 00 (ends at 0x3FFF)
+                // and 16KB ROM Bank 01 -> NN (switchable via MB)
+                if addr < 0x100 {
+                    if let Some(boot) = self.boot {
+                        return boot[addr as usize];
+                    }
+                }
+
+                match self.cartridge.as_ref() {
+                    Some(cart) => cart.read_byte(addr),
+                    None => panic!("Tried to read from a non-existent cartridge"),
+                }
+            }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
                 match self.ppu.stat.mode() {
@@ -123,14 +169,8 @@ impl BusIo for Bus {
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from a non-existent cartridge"),
             },
-            0xC000..=0xCFFF => {
-                // 4KB Work RAM Bank 0
-                self.work_ram.read_byte(addr)
-            }
-            0xD000..=0xDFFF => {
-                // 4KB Work RAM Bank 1 -> N
-                self.var_ram.read_byte(addr)
-            }
+            0xC000..=0xCFFF => self.work_ram.read_byte(addr), // 4KB Work RAM Bank 0
+            0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
                 match addr & 0x1FFF {
@@ -152,7 +192,7 @@ impl BusIo for Bus {
                 use PpuMode::{HBlank, VBlank};
 
                 match self.ppu.stat.mode() {
-                    HBlank | VBlank if !self.ppu.dma.is_active() => self.ppu.oam.read_byte(addr),
+                    HBlank | VBlank => self.ppu.oam.read_byte(addr),
                     _ => 0xFF,
                 }
             }
@@ -214,15 +254,9 @@ impl BusIo for Bus {
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
-            0x0000..=0x3FFF => {
-                // 16KB ROM bank 00
-                match self.cartridge.as_mut() {
-                    Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent cartridge"),
-                }
-            }
-            0x4000..=0x7FFF => {
-                // 16KB ROM Bank 01 -> NN (switchable via MB)
+            0x0000..=0x7FFF => {
+                // 16KB ROM bank 00 (ends at 0x3FFF)
+                // and 16KB ROM Bank 01 -> NN (switchable via MB)
                 match self.cartridge.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
                     None => panic!("Tried to write into non-existent cartridge"),
@@ -242,14 +276,8 @@ impl BusIo for Bus {
                     None => panic!("Tried to write into non-existent cartridge"),
                 }
             }
-            0xC000..=0xCFFF => {
-                // 4KB Work RAM Bank 0
-                self.work_ram.write_byte(addr, byte);
-            }
-            0xD000..=0xDFFF => {
-                // 4KB Work RAM Bank 1 -> N
-                self.var_ram.write_byte(addr, byte);
-            }
+            0xC000..=0xCFFF => self.work_ram.write_byte(addr, byte), // 4KB Work RAM Bank 0
+            0xD000..=0xDFFF => self.var_ram.write_byte(addr, byte),  // 4KB Work RAM Bank 1 -> N
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
                 match addr & 0x1FFF {
@@ -268,14 +296,16 @@ impl BusIo for Bus {
             }
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
-                use PpuMode::{HBlank, VBlank};
+                // use PpuMode::{HBlank, VBlank};
 
-                match self.ppu.stat.mode() {
-                    HBlank | VBlank if !self.ppu.dma.is_active() => {
-                        self.ppu.oam.write_byte(addr, byte)
-                    }
-                    _ => {}
-                }
+                // FIXME: There is most definitely something wrong with the
+                // PPU Timing
+                //
+                // match self.ppu.stat.mode() {
+                //     HBlank | VBlank => self.ppu.oam.write_byte(addr, byte),
+                //     _ => {}
+                // }
+                self.ppu.oam.write_byte(addr, byte)
             }
             0xFEA0..=0xFEFF => {} // TODO: As far as I know, writes to here do nothing.
             0xFF00..=0xFF7F => {

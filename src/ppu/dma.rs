@@ -1,5 +1,4 @@
 use crate::instruction::Cycle;
-use std::ops::Range;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct DmaProcess {
@@ -10,8 +9,6 @@ pub(crate) struct DmaProcess {
 
 impl DmaProcess {
     pub(crate) fn clock(&mut self) -> Option<(u16, u16)> {
-        self.cycle += 1;
-
         match self.state {
             DmaState::Pending => {
                 self.cycle += 1;
@@ -26,20 +23,28 @@ impl DmaProcess {
                 None
             }
             DmaState::Transferring => {
-                if (self.cycle - 4) % 4 == 0 {
-                    let i = u32::from((self.cycle - 4) / 4) as usize;
-                    let dest = &mut self.ctrl.dest;
+                self.cycle += 1;
 
-                    match self.ctrl.src.as_mut() {
-                        Some(src_range) => src_range.nth(i).zip(dest.nth(i)),
-                        None => {
-                            self.reset();
-                            None
-                        }
-                    }
+                let src_addr = self
+                    .ctrl
+                    .src_addr
+                    .as_mut()
+                    .expect("DMA Transfer Attempted without a known source address");
+
+                let addresses = if (self.cycle - 4) % 4 == 0 {
+                    *src_addr += 1;
+                    Some((*src_addr, 0xFE00 | (*src_addr & 0x00FF)))
                 } else {
                     None
+                };
+
+                if self.cycle == 644 {
+                    self.reset();
+
+                    return None;
                 }
+
+                addresses
             }
             DmaState::Disabled => None,
         }
@@ -52,8 +57,7 @@ impl DmaProcess {
     fn reset(&mut self) {
         self.cycle = Cycle::new(0);
         self.state = DmaState::Disabled;
-        self.ctrl.src = None;
-        self.ctrl.repr = 0;
+        self.ctrl.src_addr = None;
     }
 }
 
@@ -73,61 +77,24 @@ impl Default for DmaState {
 #[derive(Debug, Clone)]
 pub(crate) struct DmaControl {
     pub(crate) repr: u8,
-    src: Option<Range<u16>>,
-    dest: Range<u16>,
+    src_addr: Option<u16>,
 }
 
 impl Default for DmaControl {
     fn default() -> Self {
         Self {
             repr: 0,
-            src: None,
-            dest: 0xFE00..0xFE9F,
+            src_addr: None,
         }
     }
 }
 
 impl DmaControl {
     pub(crate) fn update(&mut self, byte: u8, state: &mut DmaState) {
-        let left = (byte as u16) << 8;
-        let right = (byte as u16) << 8 | 0x009F;
+        let start = (byte as u16) << 8;
 
         self.repr = byte;
-        self.src = Some(left..right);
+        self.src_addr = Some(start);
         *state = DmaState::Pending;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{DmaControl, DmaProcess, DmaState};
-
-    #[derive(Debug, Default, Clone)]
-    struct MockBus {
-        dma: DmaProcess,
-    }
-
-    #[test]
-    fn dma_control_works() {
-        let mut dma_ctrl: DmaControl = Default::default();
-        let mut state = DmaState::Disabled;
-
-        assert_eq!(dma_ctrl.src, None);
-        assert_eq!(dma_ctrl.dest, 0xFE00..0xFE9F);
-
-        dma_ctrl.update(0xAB, &mut state);
-        assert_eq!(dma_ctrl.src, Some(0xAB00..0xAB9F));
-        assert_eq!(dma_ctrl.dest, 0xFE00..0xFE9F);
-    }
-
-    #[test]
-    fn ctrl_update_vs_borrow_checker() {
-        let mut bus: MockBus = Default::default();
-        assert_eq!(bus.dma.state, DmaState::Disabled);
-
-        bus.dma.ctrl.update(0xAB, &mut bus.dma.state);
-
-        assert_eq!(bus.dma.ctrl.src, Some(0xAB00..0xAB9F));
-        assert_eq!(bus.dma.state, DmaState::Pending);
     }
 }

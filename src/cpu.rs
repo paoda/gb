@@ -114,8 +114,6 @@ impl Cpu {
         //     self.log_state(handle).unwrap();
         // }
 
-        self.handle_interrupts();
-
         let cycles = match self.halted() {
             Some(state) => {
                 use HaltState::*;
@@ -140,6 +138,8 @@ impl Cpu {
 
         self.bus.step(cycles);
         self.bus.step_dma(cycles);
+
+        self.handle_interrupts();
 
         cycles
     }

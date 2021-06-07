@@ -189,7 +189,7 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self) {
-        if self.scan_state.mode() == OamScanMode::Scan && self.dma.is_active() {
+        if self.scan_state.mode() == OamScanMode::Scan {
             if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
                 // Determine whether we should draw the window next frame
                 self.window_stat
