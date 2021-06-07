@@ -19,7 +19,7 @@ pub struct Egui {
     render_pass: RenderPass,
     paint_jobs: Vec<ClippedMesh>,
 
-    pub config: Configuration,
+    pub(crate) config: Configuration,
 
     show_flags: bool,
     show_cpu_info: bool,
@@ -30,7 +30,7 @@ pub struct Egui {
     #[cfg(feature = "debug")]
     show_disasm: bool,
     #[cfg(feature = "debug")]
-    pub break_point: Option<u16>,
+    pub(crate) break_point: Option<u16>,
 }
 
 impl Egui {
@@ -367,14 +367,14 @@ impl Egui {
     }
 }
 
-pub struct Configuration {
+pub(crate) struct Configuration {
     /// Show Configuration egui menu
     show: bool,
 
     /// How many [`LR35902`] .step() do we want to do at once
     /// when pressing the spacebar key?
     #[cfg(feature = "debug")]
-    pub spacebar_step: u16,
+    pub(crate) spacebar_step: u16,
 }
 
 impl Default for Configuration {

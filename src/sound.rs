@@ -1,22 +1,22 @@
 use crate::instruction::Cycle;
 use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Sound {
-    pub control: SoundControl,
-    pub ch1: Channel1,
+pub(crate) struct Sound {
+    pub(crate) control: SoundControl,
+    pub(crate) ch1: Channel1,
 }
 
 impl Sound {
-    pub fn step(&mut self, _cycles: Cycle) {
+    pub(crate) fn step(&mut self, _cycles: Cycle) {
         //
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SoundControl {
-    pub channel: ChannelControl,
-    pub output: SoundOutput,
-    pub status: SoundStatus,
+pub(crate) struct SoundControl {
+    pub(crate) channel: ChannelControl,
+    pub(crate) output: SoundOutput,
+    pub(crate) status: SoundStatus,
 }
 
 // TODO: What to do about the separation of freq bits
@@ -79,7 +79,7 @@ impl From<u8> for FrequencyLow {
     }
 }
 
-pub fn get_11bit_freq(low: &FrequencyLow, high: FrequencyHigh) -> u16 {
+pub(crate) fn get_11bit_freq(low: &FrequencyLow, high: FrequencyHigh) -> u16 {
     let high_bits = high.0 & 0b111;
 
     (low.0 as u16) << 8 | ((high_bits as u16) << 4)
@@ -143,11 +143,11 @@ impl From<SoundStatus> for u8 {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Channel1 {
-    pub sound_duty: SoundDuty,
-    pub vol_envelope: VolumeEnvelope,
-    pub freq_hi: FrequencyHigh,
-    pub freq_lo: FrequencyLow,
+pub(crate) struct Channel1 {
+    pub(crate) sound_duty: SoundDuty,
+    pub(crate) vol_envelope: VolumeEnvelope,
+    pub(crate) freq_hi: FrequencyHigh,
+    pub(crate) freq_lo: FrequencyLow,
 }
 
 bitfield! {
@@ -206,10 +206,10 @@ impl Default for EnvelopeDirection {
 }
 
 bitfield! {
-    pub struct SoundDuty(u8);
+   pub struct SoundDuty(u8);
     impl Debug;
-    pub from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
-    pub _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
+   pub from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
+   pub _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
 }
 
 impl Copy for SoundDuty {}

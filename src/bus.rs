@@ -46,7 +46,7 @@ impl Default for Bus {
 }
 
 impl Bus {
-    pub fn with_boot(path: &str) -> anyhow::Result<Self> {
+    pub(crate) fn with_boot(path: &str) -> anyhow::Result<Self> {
         let mut file = File::open(path)?;
         let mut boot_rom = [0u8; 256];
 
@@ -58,29 +58,29 @@ impl Bus {
         })
     }
 
-    pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
+    pub(crate) fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
         self.cartridge = Some(Cartridge::new(path)?);
         Ok(())
     }
 
-    pub fn rom_title(&self) -> Option<&str> {
+    pub(crate) fn rom_title(&self) -> Option<&str> {
         self.cartridge.as_ref()?.title()
     }
 
-    pub fn step(&mut self, cycles: Cycle) {
+    pub(crate) fn step(&mut self, cycles: Cycle) {
         self.step_dma(cycles);
         self.ppu.step(cycles);
         self.timer.step(cycles);
         self.sound.step(cycles);
     }
 
-    pub fn timer(&self) -> Timer {
+    pub(crate) fn timer(&self) -> Timer {
         self.timer
     }
 }
 
 impl Bus {
-    pub fn read_byte(&self, addr: u16) -> u8 {
+    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
@@ -193,7 +193,7 @@ impl Bus {
         }
     }
 
-    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
@@ -323,11 +323,11 @@ impl Bus {
         }
     }
 
-    pub fn read_word(&self, addr: u16) -> u16 {
+    pub(crate) fn read_word(&self, addr: u16) -> u16 {
         (self.read_byte(addr + 1) as u16) << 8 | self.read_byte(addr) as u16
     }
 
-    pub fn write_word(&mut self, addr: u16, word: u16) {
+    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
         self.write_byte(addr + 1, (word >> 8) as u8);
         self.write_byte(addr, (word & 0x00FF) as u8);
     }
@@ -376,7 +376,7 @@ impl Bus {
         self.timer.set_interrupt(timer);
     }
 
-    pub fn boot_enabled(&self) -> bool {
+    pub(crate) fn boot_enabled(&self) -> bool {
         self.boot.is_some()
     }
 }

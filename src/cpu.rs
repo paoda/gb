@@ -42,15 +42,15 @@ impl Cpu {
         })
     }
 
-    pub fn ime(&self) -> ImeState {
+    pub(crate) fn ime(&self) -> ImeState {
         self.ime
     }
 
-    pub fn set_ime(&mut self, state: ImeState) {
+    pub(crate) fn set_ime(&mut self, state: ImeState) {
         self.ime = state;
     }
 
-    pub fn halt(&mut self, state: HaltState) {
+    pub(crate) fn halt(&mut self, state: HaltState) {
         self.halted = Some(state);
     }
 
@@ -58,11 +58,11 @@ impl Cpu {
         self.halted = None;
     }
 
-    pub fn halted(&self) -> Option<HaltState> {
+    pub(crate) fn halted(&self) -> Option<HaltState> {
         self.halted
     }
 
-    pub fn inc_pc(&mut self) {
+    pub(crate) fn inc_pc(&mut self) {
         self.reg.pc += 1;
     }
 
@@ -76,15 +76,15 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn fetch(&self) -> u8 {
+    pub(crate) fn fetch(&self) -> u8 {
         self.bus.read_byte(self.reg.pc)
     }
 
-    pub fn decode(&mut self, opcode: u8) -> Instruction {
+    pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
         Instruction::from_byte(self, opcode)
     }
 
-    pub fn execute(&mut self, instruction: Instruction) -> Cycle {
+    pub(crate) fn execute(&mut self, instruction: Instruction) -> Cycle {
         Instruction::execute(self, instruction)
     }
 
@@ -128,30 +128,30 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn read_imm_byte(&mut self, addr: u16) -> u8 {
+    pub(crate) fn read_imm_byte(&mut self, addr: u16) -> u8 {
         self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 1 after this function call
         self.bus.read_byte(addr)
     }
 
-    pub fn read_imm_word(&mut self, addr: u16) -> u16 {
+    pub(crate) fn read_imm_word(&mut self, addr: u16) -> u16 {
         self.inc_pc();
         self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 2 after this function call
         self.bus.read_word(addr)
     }
 
-    pub fn read_byte(&self, addr: u16) -> u8 {
+    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
         self.bus.read_byte(addr)
     }
 
-    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
         self.bus.write_byte(addr, byte);
     }
 
-    pub fn read_word(&mut self, addr: u16) -> u16 {
+    pub(crate) fn read_word(&mut self, addr: u16) -> u16 {
         self.bus.read_word(addr)
     }
 
-    pub fn write_word(&mut self, addr: u16, word: u16) {
+    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
         self.bus.write_word(addr, word)
     }
 }
@@ -260,7 +260,7 @@ impl Default for State {
 }
 
 impl Cpu {
-    pub fn set_register(&mut self, register: Register, value: u8) {
+    pub(crate) fn set_register(&mut self, register: Register, value: u8) {
         use Register::*;
 
         match register {
@@ -275,7 +275,7 @@ impl Cpu {
         }
     }
 
-    pub fn register(&self, register: Register) -> u8 {
+    pub(crate) fn register(&self, register: Register) -> u8 {
         use Register::*;
 
         match register {
@@ -290,7 +290,7 @@ impl Cpu {
         }
     }
 
-    pub fn register_pair(&self, pair: RegisterPair) -> u16 {
+    pub(crate) fn register_pair(&self, pair: RegisterPair) -> u16 {
         use RegisterPair::*;
 
         match pair {
@@ -303,7 +303,7 @@ impl Cpu {
         }
     }
 
-    pub fn set_register_pair(&mut self, pair: RegisterPair, value: u16) {
+    pub(crate) fn set_register_pair(&mut self, pair: RegisterPair, value: u16) {
         use RegisterPair::*;
 
         let high = (value >> 8) as u8;
@@ -331,17 +331,17 @@ impl Cpu {
         }
     }
 
-    pub fn flags(&self) -> &Flags {
+    pub(crate) fn flags(&self) -> &Flags {
         &self.flags
     }
 
-    pub fn set_flags(&mut self, flags: Flags) {
+    pub(crate) fn set_flags(&mut self, flags: Flags) {
         self.flags = flags;
     }
 }
 
 impl Cpu {
-    pub fn log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
+    pub(crate) fn log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
         write!(writer, "A: {:02X} ", self.reg.a)?;
         write!(writer, "F: {:02X} ", u8::from(self.flags))?;
         write!(writer, "B: {:02X} ", self.reg.b)?;
@@ -363,7 +363,7 @@ impl Cpu {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum Register {
+pub(crate) enum Register {
     A,
     B,
     C,
@@ -375,7 +375,7 @@ pub enum Register {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum RegisterPair {
+pub(crate) enum RegisterPair {
     AF,
     BC,
     DE,
@@ -407,7 +407,7 @@ bitfield! {
 }
 
 impl Flags {
-    pub fn update(&mut self, z: bool, n: bool, h: bool, c: bool) {
+    pub(crate) fn update(&mut self, z: bool, n: bool, h: bool, c: bool) {
         self.set_z(z);
         self.set_n(n);
         self.set_h(h);
@@ -469,14 +469,14 @@ impl From<u8> for Flags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum HaltState {
+pub(crate) enum HaltState {
     ImeEnabled,
     NonePending,
     SomePending,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ImeState {
+pub(crate) enum ImeState {
     Disabled,
     Pending,
     PendingEnd,

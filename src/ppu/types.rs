@@ -14,7 +14,7 @@ bitfield! {
 }
 
 impl LCDStatus {
-    pub fn update(&mut self, byte: u8) {
+    pub(crate) fn update(&mut self, byte: u8) {
         // Bytes 2 -> 0 are read only
         let mask = 0b00000111;
 
@@ -119,7 +119,7 @@ pub enum TileMapAddress {
 }
 
 impl TileMapAddress {
-    pub fn into_address(self) -> u16 {
+    pub(crate) fn into_address(self) -> u16 {
         match self {
             TileMapAddress::X9800 => 0x9800,
             TileMapAddress::X9C00 => 0x9C00,
@@ -184,7 +184,7 @@ pub enum ObjectSize {
 }
 
 impl ObjectSize {
-    pub fn as_u8(&self) -> u8 {
+    pub(crate) fn as_u8(&self) -> u8 {
         use ObjectSize::*;
 
         match self {
@@ -226,7 +226,7 @@ bitfield! {
 }
 
 impl BackgroundPalette {
-    pub fn shade(&self, id: u8) -> GrayShade {
+    pub(crate) fn shade(&self, id: u8) -> GrayShade {
         match id & 0b11 {
             0b00 => self.i0_colour(),
             0b01 => self.i1_colour(),
@@ -271,7 +271,7 @@ bitfield! {
 }
 
 impl ObjectPalette {
-    pub fn shade(&self, id: u8) -> Option<GrayShade> {
+    pub(crate) fn shade(&self, id: u8) -> Option<GrayShade> {
         match id & 0b11 {
             0b00 => None,
             0b01 => Some(self.i1_colour()),
@@ -307,16 +307,16 @@ impl From<ObjectPalette> for u8 {
     }
 }
 
-pub struct Pixels(u8, u8);
+pub(crate) struct Pixels(u8, u8);
 
 impl Pixels {
-    pub const PIXEL_COUNT: usize = 8;
+    pub(crate) const PIXEL_COUNT: usize = 8;
 
-    pub fn from_bytes(higher: u8, lower: u8) -> Self {
+    pub(crate) fn from_bytes(higher: u8, lower: u8) -> Self {
         Self(higher, lower)
     }
 
-    pub fn shade_id(&self, x: usize) -> u8 {
+    pub(crate) fn shade_id(&self, x: usize) -> u8 {
         let bit = 7 - x;
 
         let higher = self.0 >> bit;
@@ -427,7 +427,7 @@ pub enum GrayShade {
 }
 
 impl GrayShade {
-    pub fn into_rgba(self) -> [u8; 4] {
+    pub(crate) fn into_rgba(self) -> [u8; 4] {
         match self {
             GrayShade::White => WHITE,
             GrayShade::LightGray => LIGHT_GRAY,
@@ -436,7 +436,7 @@ impl GrayShade {
         }
     }
 
-    pub fn from_rgba(slice: &[u8]) -> Self {
+    pub(crate) fn from_rgba(slice: &[u8]) -> Self {
         let rgba: [u8; 4] = slice
             .try_into()
             .expect("Unable to interpret &[u8] as [u8; 4]");

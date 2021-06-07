@@ -1,9 +1,9 @@
 use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Serial {
-    pub next: u8,
-    pub control: SerialControl,
+pub(crate) struct Serial {
+    pub(crate) next: u8,
+    pub(crate) control: SerialControl,
 }
 
 bitfield! {

@@ -3,7 +3,7 @@ use std::{convert::TryFrom, fmt::Debug};
 
 #[derive(Copy, Clone)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum Instruction {
+pub(crate) enum Instruction {
     NOP,
     LD(LDTarget, LDTarget),
     STOP,
@@ -51,26 +51,26 @@ pub enum Instruction {
 }
 
 #[derive(Copy, Clone)]
-pub enum JPTarget {
+pub(crate) enum JPTarget {
     RegisterPair(RegisterPair),
     ImmediateWord(u16),
 }
 
 #[derive(Copy, Clone)]
-pub enum Registers {
+pub(crate) enum Registers {
     Byte(InstrRegister),
     Word(RegisterPair),
 }
 
 #[derive(Copy, Clone)]
-pub enum MATHTarget {
+pub(crate) enum MATHTarget {
     Register(InstrRegister),
     RegisterPair(RegisterPair),
     ImmediateByte(u8),
 }
 
 #[derive(Copy, Clone)]
-pub enum LDTarget {
+pub(crate) enum LDTarget {
     IndirectC,
     Register(InstrRegister),
     IndirectRegister(InstrRegisterPair),
@@ -82,7 +82,7 @@ pub enum LDTarget {
 }
 
 #[derive(Copy, Clone)]
-pub enum InstrRegisterPair {
+pub(crate) enum InstrRegisterPair {
     AF,
     BC,
     DE,
@@ -94,7 +94,7 @@ pub enum InstrRegisterPair {
 }
 
 #[derive(Copy, Clone)]
-pub enum InstrRegister {
+pub(crate) enum InstrRegister {
     A,
     B,
     C,
@@ -106,7 +106,7 @@ pub enum InstrRegister {
 }
 
 #[derive(Copy, Clone)]
-pub enum JumpCondition {
+pub(crate) enum JumpCondition {
     NotZero,
     Zero,
     NotCarry,
@@ -122,7 +122,7 @@ struct Table;
 pub struct Cycle(u32);
 
 impl Instruction {
-    pub fn execute(cpu: &mut Cpu, instruction: Self) -> Cycle {
+    pub(crate) fn execute(cpu: &mut Cpu, instruction: Self) -> Cycle {
         match instruction {
             Instruction::NOP => Cycle::new(4),
             Instruction::LD(lhs, rhs) => match (lhs, rhs) {
@@ -1608,7 +1608,7 @@ impl Instruction {
         (lower << 4) | upper
     }
 
-    pub fn reset(cpu: &mut Cpu, vector: u8) -> Cycle {
+    pub(crate) fn reset(cpu: &mut Cpu, vector: u8) -> Cycle {
         let addr = cpu.register_pair(RegisterPair::PC);
         Self::push(cpu, addr);
         cpu.set_register_pair(RegisterPair::PC, vector as u16);
@@ -1617,7 +1617,7 @@ impl Instruction {
 }
 
 impl Instruction {
-    pub fn from_byte(cpu: &mut Cpu, byte: u8) -> Self {
+    pub(crate) fn from_byte(cpu: &mut Cpu, byte: u8) -> Self {
         if byte == 0xCB {
             Self::from_prefixed_byte(cpu)
         } else {
@@ -1911,7 +1911,7 @@ impl TryFrom<InstrRegister> for Register {
 }
 
 impl Table {
-    pub fn r(index: u8) -> InstrRegister {
+    pub(crate) fn r(index: u8) -> InstrRegister {
         match index {
             0 => InstrRegister::B,
             1 => InstrRegister::C,
@@ -1925,7 +1925,7 @@ impl Table {
         }
     }
 
-    pub fn rp2(index: u8) -> RegisterPair {
+    pub(crate) fn rp2(index: u8) -> RegisterPair {
         match index {
             0 => RegisterPair::BC,
             1 => RegisterPair::DE,
@@ -1935,7 +1935,7 @@ impl Table {
         }
     }
 
-    pub fn rp(index: u8) -> RegisterPair {
+    pub(crate) fn rp(index: u8) -> RegisterPair {
         match index {
             0 => RegisterPair::BC,
             1 => RegisterPair::DE,
@@ -1945,7 +1945,7 @@ impl Table {
         }
     }
 
-    pub fn cc(index: u8) -> JumpCondition {
+    pub(crate) fn cc(index: u8) -> JumpCondition {
         match index {
             0 => JumpCondition::NotZero,
             1 => JumpCondition::Zero,
@@ -1955,7 +1955,7 @@ impl Table {
         }
     }
 
-    pub fn x2_alu(index: u8, r_index: u8) -> Instruction {
+    pub(crate) fn x2_alu(index: u8, r_index: u8) -> Instruction {
         match index {
             0 => Instruction::ADD(
                 // ADD A, r[z]
@@ -1973,7 +1973,7 @@ impl Table {
         }
     }
 
-    pub fn x3_alu(index: u8, n: u8) -> Instruction {
+    pub(crate) fn x3_alu(index: u8, n: u8) -> Instruction {
         match index {
             0 => Instruction::ADD(
                 // ADD A, n
@@ -1991,7 +1991,7 @@ impl Table {
         }
     }
 
-    pub fn rot(index: u8, r_index: u8) -> Instruction {
+    pub(crate) fn rot(index: u8, r_index: u8) -> Instruction {
         match index {
             0 => Instruction::RLC(Self::r(r_index)),  // RLC r[z]
             1 => Instruction::RRC(Self::r(r_index)),  // RRC r[z]
@@ -2275,13 +2275,13 @@ impl From<Cycle> for u32 {
 }
 
 impl InstrRegisterPair {
-    pub fn to_register_pair(self) -> RegisterPair {
+    pub(crate) fn to_register_pair(self) -> RegisterPair {
         RegisterPair::try_from(self).expect("Failed to convert InstrRegisterPair to RegisterPair")
     }
 }
 
 impl InstrRegister {
-    pub fn to_register(self) -> Register {
+    pub(crate) fn to_register(self) -> Register {
         Register::try_from(self).expect("Failed to convert from InstrRegister to Register")
     }
 }

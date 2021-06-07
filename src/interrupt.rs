@@ -1,19 +1,19 @@
 use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Interrupt {
-    pub flag: InterruptFlag,
-    pub enable: InterruptEnable,
+pub(crate) struct Interrupt {
+    pub(crate) flag: InterruptFlag,
+    pub(crate) enable: InterruptEnable,
 }
 
 bitfield! {
-    pub struct InterruptEnable(u8);
+   pub struct InterruptEnable(u8);
     impl Debug;
-    pub vblank, set_vblank: 0;
-    pub lcd_stat, set_lcd_stat: 1;
-    pub timer, set_timer: 2;
-    pub serial, set_serial: 3;
-    pub joypad, set_joypad: 4;
+   pub vblank, set_vblank: 0;
+   pub lcd_stat, set_lcd_stat: 1;
+   pub timer, set_timer: 2;
+   pub serial, set_serial: 3;
+   pub joypad, set_joypad: 4;
 }
 
 impl Copy for InterruptEnable {}

@@ -7,14 +7,14 @@ const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
 
 #[derive(Debug, Clone, Default)]
-pub struct Cartridge {
+pub(crate) struct Cartridge {
     memory: Vec<u8>,
     title: Option<String>,
     mbc: Box<dyn MemoryBankController>,
 }
 
 impl Cartridge {
-    pub fn new<P: AsRef<Path> + ?Sized>(path: &P) -> io::Result<Self> {
+    pub(crate) fn new<P: AsRef<Path> + ?Sized>(path: &P) -> io::Result<Self> {
         let mut memory = vec![];
         let mut rom = File::open(path)?;
         rom.read_to_end(&mut memory)?;
@@ -59,7 +59,7 @@ impl Cartridge {
         str_with_nulls.map(|s| s.trim_matches('\0').to_string())
     }
 
-    pub fn title(&self) -> Option<&str> {
+    pub(crate) fn title(&self) -> Option<&str> {
         self.title.as_deref()
     }
 
@@ -87,7 +87,7 @@ impl Cartridge {
 }
 
 impl Cartridge {
-    pub fn read_byte(&self, addr: u16) -> u8 {
+    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
         use MbcResult::*;
 
         match self.mbc.handle_read(addr) {
@@ -95,15 +95,15 @@ impl Cartridge {
             Value(byte) => byte,
         }
     }
-    pub fn write_byte(&mut self, addr: u16, byte: u8) {
+    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
         self.mbc.handle_write(addr, byte);
     }
 
-    pub fn read_word(&self, addr: u16) -> u16 {
+    pub(crate) fn read_word(&self, addr: u16) -> u16 {
         (self.read_byte(addr + 1) as u16) << 8 | self.read_byte(addr) as u16
     }
 
-    pub fn write_word(&mut self, addr: u16, word: u16) {
+    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
         self.write_byte(addr + 1, (word >> 8) as u8);
         self.write_byte(addr, (word & 0x00FF) as u8);
     }
@@ -294,7 +294,7 @@ enum RamSize {
 }
 
 impl RamSize {
-    pub fn as_byte_count(&self) -> u32 {
+    pub(crate) fn as_byte_count(&self) -> u32 {
         use RamSize::*;
 
         match *self {
@@ -354,7 +354,7 @@ impl Default for BankCount {
 
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    pub fn to_byte_count(self) -> u32 {
+    pub(crate) fn to_byte_count(self) -> u32 {
         use BankCount::*;
 
         match self {

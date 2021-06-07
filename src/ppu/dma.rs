@@ -88,7 +88,7 @@ impl Default for DmaControl {
 }
 
 impl DmaControl {
-    pub fn update(&mut self, byte: u8, state: &mut DmaState) {
+    pub(crate) fn update(&mut self, byte: u8, state: &mut DmaState) {
         let left = (byte as u16) << 8 | 0x0000;
         let right = (byte as u16) << 8 | 0x009F;
 

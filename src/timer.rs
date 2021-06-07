@@ -2,17 +2,17 @@ use crate::Cycle;
 use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy)]
-pub struct Timer {
-    pub control: TimerControl,
-    pub counter: u8,
-    pub modulo: u8,
-    pub divider: u16,
+pub(crate) struct Timer {
+    pub(crate) control: TimerControl,
+    pub(crate) counter: u8,
+    pub(crate) modulo: u8,
+    pub(crate) divider: u16,
     prev_and_result: Option<u8>,
     interrupt: bool,
 }
 
 impl Timer {
-    pub fn step(&mut self, cycles: Cycle) {
+    pub(crate) fn step(&mut self, cycles: Cycle) {
         use TimerSpeed::*;
 
         for _ in 0..cycles.into() {
@@ -52,11 +52,11 @@ impl Timer {
         }
     }
 
-    pub fn interrupt(&self) -> bool {
+    pub(crate) fn interrupt(&self) -> bool {
         self.interrupt
     }
 
-    pub fn set_interrupt(&mut self, value: bool) {
+    pub(crate) fn set_interrupt(&mut self, value: bool) {
         self.interrupt = value;
     }
 }

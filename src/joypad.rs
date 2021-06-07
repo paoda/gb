@@ -7,11 +7,11 @@ pub struct Joypad {
 }
 
 impl Joypad {
-    pub fn interrupt(&self) -> bool {
+    pub(crate) fn interrupt(&self) -> bool {
         self.interrupt
     }
 
-    pub fn set_interrupt(&mut self, value: bool) {
+    pub(crate) fn set_interrupt(&mut self, value: bool) {
         self.interrupt = value;
     }
 }
