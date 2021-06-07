@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::Egui;
 use gb::LR35902_CLOCK_SPEED;
-use gb::{ButtonState, Cycle, LR35902};
-use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType, Gilrs};
+use gb::{handle_gamepad_input, Cycle, LR35902};
+use gilrs::Gilrs;
 use pixels::{Pixels, SurfaceTexture};
 use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
@@ -168,7 +168,7 @@ fn main() -> Result<()> {
 
             while elapsed_cycles <= pending_cycles {
                 if let Some(event) = gilrs.next_event() {
-                    handle_gamepad_input(&mut game_boy, event);
+                    handle_gamepad_input(&mut game_boy.bus.joypad, event);
                 }
 
                 elapsed_cycles += game_boy.step();
@@ -206,44 +206,4 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_inner_size(size)
         .with_min_inner_size(size)
         .build(event_loop)?)
-}
-
-fn handle_gamepad_input(game_boy: &mut LR35902, event: GamepadEvent) {
-    use GamepadEventType::*;
-    let joypad_status = &mut game_boy.bus.joypad.status;
-    let interrupt = &mut game_boy.bus.joypad.interrupt;
-
-    match event.event {
-        ButtonPressed(button, _) => match button {
-            Button::DPadDown | Button::Start => {
-                joypad_status.set_down_start(ButtonState::Pressed, interrupt)
-            }
-            Button::DPadUp | Button::Select => {
-                joypad_status.set_up_select(ButtonState::Pressed, interrupt)
-            }
-            Button::DPadLeft | Button::South => {
-                joypad_status.set_left_b(ButtonState::Pressed, interrupt)
-            }
-            Button::DPadRight | Button::East => {
-                joypad_status.set_right_a(ButtonState::Pressed, interrupt)
-            }
-            _ => {}
-        },
-        ButtonReleased(button, _) => match button {
-            Button::DPadDown | Button::Start => {
-                joypad_status.set_down_start(ButtonState::Released, interrupt)
-            }
-            Button::DPadUp | Button::Select => {
-                joypad_status.set_up_select(ButtonState::Released, interrupt)
-            }
-            Button::DPadLeft | Button::South => {
-                joypad_status.set_left_b(ButtonState::Released, interrupt)
-            }
-            Button::DPadRight | Button::East => {
-                joypad_status.set_right_a(ButtonState::Released, interrupt)
-            }
-            _ => {}
-        },
-        _ => {}
-    }
 }

@@ -1,9 +1,20 @@
-use bitfield::bitfield;
+use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType};
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Joypad {
-    pub status: JoypadStatus,
-    pub interrupt: bool,
+    pub(crate) status: u8,
+    ext: JoypadState,
+    interrupt: bool,
+}
+
+impl Default for Joypad {
+    fn default() -> Self {
+        Self {
+            status: 0xFF,
+            ext: Default::default(),
+            interrupt: Default::default(),
+        }
+    }
 }
 
 impl Joypad {
@@ -14,131 +25,119 @@ impl Joypad {
     pub(crate) fn set_interrupt(&mut self, value: bool) {
         self.interrupt = value;
     }
-}
 
-bitfield! {
-    pub struct JoypadStatus(u8);
-    impl Debug;
-    from into RowState, action_row, set_action_row: 5, 5;
-    from into RowState, direction_row, set_direction_row: 4, 4;
-    from into ButtonState, down_start, _set_down_start: 3, 3;
-    from into ButtonState, up_select, _set_up_select: 2, 2;
-    from into ButtonState, left_b, _set_left_b: 1, 1;
-    from into ButtonState, right_a, _set_right_a: 0, 0;
-}
-
-impl JoypadStatus {
     pub(crate) fn update(&mut self, byte: u8) {
-        // Bytes 3 -> 0 are Read Only
-        let mask = 0b00001111;
+        let direction_row = (byte >> 4) & 0x01 == 0x00;
+        let action_row = (byte >> 5) & 0x01 == 0x00;
 
-        let read_only = self.0 & mask;
-        self.0 = (byte & !mask) | read_only;
+        let updated = match (direction_row, action_row) {
+            (true, false) => (byte & 0x30) | self.ext.as_direction_bits(),
+            (false, true) => (byte & 0x30) | self.ext.as_action_bits(),
+            _ => {
+                // TODO: What if both or no rows are selected?
+
+                let merge = self.ext.as_action_bits() | self.ext.as_action_bits();
+
+                (byte & 0x30) | merge
+            }
+        };
+
+        self.status = updated
     }
 }
 
-impl JoypadStatus {
-    pub fn set_down_start(&mut self, state: ButtonState, int: &mut bool) {
-        if !(*int) {
-            *int = self.down_start() == ButtonState::Released && state == ButtonState::Pressed;
-        }
-
-        self._set_down_start(state);
-    }
-
-    pub fn set_up_select(&mut self, state: ButtonState, int: &mut bool) {
-        if !(*int) {
-            *int = self.up_select() == ButtonState::Released && state == ButtonState::Pressed;
-        }
-
-        self._set_up_select(state);
-    }
-
-    pub fn set_left_b(&mut self, state: ButtonState, int: &mut bool) {
-        if !(*int) {
-            *int = self.left_b() == ButtonState::Released && state == ButtonState::Pressed;
-        }
-
-        self._set_left_b(state);
-    }
-
-    pub fn set_right_a(&mut self, state: ButtonState, int: &mut bool) {
-        if !(*int) {
-            *int = self.right_a() == ButtonState::Released && state == ButtonState::Pressed;
-        }
-
-        self._set_right_a(state);
-    }
+#[derive(Debug, Clone, Copy, Default)]
+struct JoypadState {
+    // Direction Row
+    dpad_down: ButtonEvent,
+    dpad_up: ButtonEvent,
+    dpad_left: ButtonEvent,
+    dpad_right: ButtonEvent,
+    // Action Row
+    start: ButtonEvent,
+    select: ButtonEvent,
+    south: ButtonEvent,
+    east: ButtonEvent,
 }
 
-impl Default for JoypadStatus {
-    fn default() -> Self {
-        Self(0xFF)
+impl JoypadState {
+    fn as_direction_bits(&self) -> u8 {
+        (self.dpad_down as u8) << 3
+            | (self.dpad_up as u8) << 2
+            | (self.dpad_left as u8) << 1
+            | self.dpad_right as u8
     }
-}
 
-impl Copy for JoypadStatus {}
-impl Clone for JoypadStatus {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl From<JoypadStatus> for u8 {
-    fn from(status: JoypadStatus) -> Self {
-        status.0
+    fn as_action_bits(&self) -> u8 {
+        (self.start as u8) << 3
+            | (self.select as u8) << 2
+            | (self.south as u8) << 1
+            | self.east as u8
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ButtonState {
+enum ButtonEvent {
     Pressed = 0,
-    Released = 1,
+    Standby = 1,
 }
 
-impl From<u8> for ButtonState {
-    fn from(byte: u8) -> Self {
-        match byte & 0b01 {
-            0b00 => Self::Pressed,
-            0b01 => Self::Released,
-            _ => unreachable!("{:#04X} is not a valid value for ButtonStatus", byte),
-        }
-    }
-}
-
-impl From<ButtonState> for u8 {
-    fn from(status: ButtonState) -> Self {
-        status as u8
-    }
-}
-
-impl From<bool> for ButtonState {
+// used in the context of is_pressed: bool
+impl From<bool> for ButtonEvent {
     fn from(value: bool) -> Self {
         match value {
             true => Self::Pressed,
-            false => Self::Released,
+            false => Self::Standby,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum RowState {
-    Selected,
-    Deselected,
+impl Default for ButtonEvent {
+    fn default() -> Self {
+        Self::Standby
+    }
 }
 
-impl From<u8> for RowState {
-    fn from(byte: u8) -> Self {
-        match byte & 0b01 {
-            0b00 => Self::Selected,
-            0b01 => Self::Deselected,
-            _ => unreachable!("{:#04X} is not a valid value for ButtonRowStatus", byte),
+impl ButtonEvent {
+    fn update(&mut self, is_pressed: bool, irq: &mut bool) {
+        *self = is_pressed.into();
+
+        if let ButtonEvent::Pressed = *self {
+            *irq = true;
         }
     }
 }
 
-impl From<RowState> for u8 {
-    fn from(status: RowState) -> Self {
-        status as u8
+pub fn handle_gamepad_input(pad: &mut Joypad, event: GamepadEvent) {
+    use Button::*;
+    use GamepadEventType::*;
+
+    let state = &mut pad.ext;
+    let irq = &mut pad.interrupt;
+
+    match event.event {
+        ButtonPressed(btn, _) => match btn {
+            DPadDown => state.dpad_down.update(true, irq),
+            DPadUp => state.dpad_up.update(true, irq),
+            DPadLeft => state.dpad_left.update(true, irq),
+            DPadRight => state.dpad_right.update(true, irq),
+            Start => state.start.update(true, irq),
+            Select => state.select.update(true, irq),
+            South => state.south.update(true, irq),
+            East => state.east.update(true, irq),
+            _ => {}
+        },
+        ButtonReleased(btn, _) => match btn {
+            DPadDown => state.dpad_down.update(false, irq),
+            DPadUp => state.dpad_up.update(false, irq),
+            DPadLeft => state.dpad_left.update(false, irq),
+            DPadRight => state.dpad_right.update(false, irq),
+            Start => state.start.update(false, irq),
+            Select => state.select.update(false, irq),
+            South => state.south.update(false, irq),
+            East => state.east.update(false, irq),
+            _ => {}
+        },
+        _ => {}
     }
 }

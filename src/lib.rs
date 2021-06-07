@@ -1,7 +1,7 @@
 pub use cpu::Cpu as LR35902;
 pub use gui::Egui;
 pub use instruction::Cycle;
-pub use joypad::ButtonState;
+pub use joypad::handle_gamepad_input;
 
 #[cfg(feature = "debug")]
 pub use cpu::RegisterPair;

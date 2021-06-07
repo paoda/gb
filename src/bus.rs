@@ -225,7 +225,7 @@ impl BusIo for Bus {
                 // Every address here starts with 0xFF so we can just check the
                 // low byte to figure out which register it is
                 match addr & 0x00FF {
-                    0x00 => self.joypad.status.into(),
+                    0x00 => self.joypad.status,
                     0x01 => self.serial.next,
                     0x02 => self.serial.control.into(),
                     0x04 => (self.timer.divider >> 8) as u8,
@@ -334,7 +334,7 @@ impl BusIo for Bus {
                 // Every address here starts with 0xFF so we can just check the
                 // low byte to figure out which register it is
                 match addr & 0x00FF {
-                    0x00 => self.joypad.status.update(byte),
+                    0x00 => self.joypad.update(byte),
                     0x01 => self.serial.next = byte,
                     0x02 => self.serial.control = byte.into(),
                     0x04 => self.timer.divider = 0x0000,
