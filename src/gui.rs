@@ -126,6 +126,14 @@ impl Egui {
                     if ui.button("Registers").clicked() {
                         self.show_registers = true;
                     }
+
+                    if ui.button("Interrupts").clicked() {
+                        self.show_int = true;
+                    }
+
+                    if ui.button("Timer").clicked() {
+                        self.show_timer = true;
+                    }
                 });
 
                 #[cfg(feature = "debug")]
