@@ -1,13 +1,13 @@
-use super::cartridge::Cartridge;
-use super::high_ram::HighRam;
-use super::instruction::Cycle;
-use super::interrupt::{Interrupt, InterruptFlag};
-use super::joypad::Joypad;
-use super::ppu::{Ppu, PpuMode};
-use super::serial::Serial;
-use super::sound::Sound;
-use super::timer::Timer;
-use super::work_ram::{VariableWorkRam, WorkRam};
+use crate::cartridge::Cartridge;
+use crate::high_ram::HighRam;
+use crate::instruction::Cycle;
+use crate::interrupt::{Interrupt, InterruptFlag};
+use crate::joypad::Joypad;
+use crate::ppu::{Ppu, PpuMode};
+use crate::serial::Serial;
+use crate::sound::Sound;
+use crate::timer::Timer;
+use crate::work_ram::{VariableWorkRam, WorkRam};
 use std::{fs::File, io::Read};
 
 const BOOT_ROM_SIZE: usize = 0x100;
@@ -73,14 +73,27 @@ impl Bus {
         self.timer.step(cycles);
         self.sound.step(cycles);
     }
+    pub(crate) fn step_dma(&mut self, pending: Cycle) {
+        let pending_cycles: u32 = pending.into();
+
+        for _ in 0..pending_cycles {
+            match self.ppu.dma.clock() {
+                Some((src_addr, dest_addr)) => {
+                    let byte = self.read_byte(src_addr);
+                    self.write_byte(dest_addr, byte);
+                }
+                None => {}
+            }
+        }
+    }
 
     pub(crate) fn timer(&self) -> Timer {
         self.timer
     }
 }
 
-impl Bus {
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+impl BusIo for Bus {
+    fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
@@ -193,7 +206,7 @@ impl Bus {
         }
     }
 
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
             0x0000..=0x3FFF => {
                 // 16KB ROM bank 00
@@ -322,7 +335,9 @@ impl Bus {
             }
         }
     }
+}
 
+impl Bus {
     pub(crate) fn read_word(&self, addr: u16) -> u16 {
         (self.read_byte(addr + 1) as u16) << 8 | self.read_byte(addr) as u16
     }
@@ -375,24 +390,9 @@ impl Bus {
         // Update the Timer's instance of the following interrupts
         self.timer.set_interrupt(timer);
     }
-
-    pub(crate) fn boot_enabled(&self) -> bool {
-        self.boot.is_some()
-    }
 }
 
-impl Bus {
-    pub(crate) fn step_dma(&mut self, pending: Cycle) {
-        let pending_cycles: u32 = pending.into();
-
-        for _ in 0..pending_cycles {
-            match self.ppu.dma.clock() {
-                Some((src_addr, dest_addr)) => {
-                    let byte = self.read_byte(src_addr);
-                    self.write_byte(dest_addr, byte);
-                }
-                None => {}
-            }
-        }
-    }
+pub(crate) trait BusIo {
+    fn read_byte(&self, addr: u16) -> u8;
+    fn write_byte(&mut self, addr: u16, byte: u8);
 }

@@ -1,7 +1,7 @@
-use super::bus::Bus;
-use super::instruction::{Cycle, Instruction};
-use super::interrupt::{InterruptEnable, InterruptFlag};
-use super::ppu::Ppu;
+use crate::bus::{Bus, BusIo};
+use crate::instruction::{Cycle, Instruction};
+use crate::interrupt::{InterruptEnable, InterruptFlag};
+use crate::ppu::Ppu;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -62,7 +62,13 @@ impl Cpu {
         self.halted
     }
 
+    #[cfg(feature = "debug")]
     pub(crate) fn inc_pc(&mut self) {
+        self.reg.pc += 1;
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn inc_pc(&mut self) {
         self.reg.pc += 1;
     }
 
@@ -76,15 +82,27 @@ impl Cpu {
 }
 
 impl Cpu {
+    #[cfg(feature = "debug")]
     pub(crate) fn fetch(&self) -> u8 {
         self.bus.read_byte(self.reg.pc)
     }
 
+    #[cfg(not(feature = "debug"))]
+    fn fetch(&self) -> u8 {
+        self.bus.read_byte(self.reg.pc)
+    }
+
+    #[cfg(feature = "debug")]
     pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
         Instruction::from_byte(self, opcode)
     }
 
-    pub(crate) fn execute(&mut self, instruction: Instruction) -> Cycle {
+    #[cfg(not(feature = "debug"))]
+    pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
+        Instruction::from_byte(self, opcode)
+    }
+
+    fn execute(&mut self, instruction: Instruction) -> Cycle {
         Instruction::execute(self, instruction)
     }
 
@@ -127,6 +145,16 @@ impl Cpu {
     }
 }
 
+impl BusIo for Cpu {
+    fn read_byte(&self, addr: u16) -> u8 {
+        self.bus.read_byte(addr)
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.bus.write_byte(addr, byte);
+    }
+}
+
 impl Cpu {
     pub(crate) fn read_imm_byte(&mut self, addr: u16) -> u8 {
         self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 1 after this function call
@@ -136,18 +164,6 @@ impl Cpu {
     pub(crate) fn read_imm_word(&mut self, addr: u16) -> u16 {
         self.inc_pc();
         self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 2 after this function call
-        self.bus.read_word(addr)
-    }
-
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
-        self.bus.read_byte(addr)
-    }
-
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.bus.write_byte(addr, byte);
-    }
-
-    pub(crate) fn read_word(&mut self, addr: u16) -> u16 {
         self.bus.read_word(addr)
     }
 
@@ -290,6 +306,21 @@ impl Cpu {
         }
     }
 
+    #[cfg(feature = "debug")]
+    pub fn register_pair(&self, pair: RegisterPair) -> u16 {
+        use RegisterPair::*;
+
+        match pair {
+            AF => (self.reg.a as u16) << 8 | u8::from(self.flags) as u16,
+            BC => (self.reg.b as u16) << 8 | self.reg.c as u16,
+            DE => (self.reg.d as u16) << 8 | self.reg.e as u16,
+            HL => (self.reg.h as u16) << 8 | self.reg.l as u16,
+            SP => self.reg.sp,
+            PC => self.reg.pc,
+        }
+    }
+
+    #[cfg(not(feature = "debug"))]
     pub(crate) fn register_pair(&self, pair: RegisterPair) -> u16 {
         use RegisterPair::*;
 
@@ -341,7 +372,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
+    fn _log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
         write!(writer, "A: {:02X} ", self.reg.a)?;
         write!(writer, "F: {:02X} ", u8::from(self.flags))?;
         write!(writer, "B: {:02X} ", self.reg.b)?;
@@ -374,6 +405,18 @@ pub(crate) enum Register {
     Flag,
 }
 
+#[cfg(feature = "debug")]
+#[derive(Debug, Copy, Clone)]
+pub enum RegisterPair {
+    AF,
+    BC,
+    DE,
+    HL,
+    SP,
+    PC,
+}
+
+#[cfg(not(feature = "debug"))]
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum RegisterPair {
     AF,

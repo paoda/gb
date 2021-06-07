@@ -1,3 +1,4 @@
+use crate::bus::BusIo;
 use crate::cpu::Register;
 use crate::cpu::RegisterPair;
 use crate::LR35902;
@@ -19,7 +20,7 @@ pub struct Egui {
     render_pass: RenderPass,
     paint_jobs: Vec<ClippedMesh>,
 
-    pub(crate) config: Configuration,
+    pub config: Configuration,
 
     show_flags: bool,
     show_cpu_info: bool,
@@ -30,7 +31,7 @@ pub struct Egui {
     #[cfg(feature = "debug")]
     show_disasm: bool,
     #[cfg(feature = "debug")]
-    pub(crate) break_point: Option<u16>,
+    pub break_point: Option<u16>,
 }
 
 impl Egui {
@@ -320,9 +321,9 @@ impl Egui {
         let mut spacebar_step = self.config.spacebar_step;
         egui::Window::new("Configuration")
             .open(&mut self.config.show)
-            .show(ctx, |ui| {
+            .show(ctx, |_ui| {
                 #[cfg(feature = "debug")]
-                ui.horizontal(|ui| {
+                _ui.horizontal(|ui| {
                     ui.label("Spacebar Steps");
                     ui.add(egui::Slider::u16(&mut spacebar_step, 0..=std::u16::MAX));
                 });
@@ -367,14 +368,14 @@ impl Egui {
     }
 }
 
-pub(crate) struct Configuration {
+pub struct Configuration {
     /// Show Configuration egui menu
     show: bool,
 
     /// How many [`LR35902`] .step() do we want to do at once
     /// when pressing the spacebar key?
     #[cfg(feature = "debug")]
-    pub(crate) spacebar_step: u16,
+    pub spacebar_step: u16,
 }
 
 impl Default for Configuration {

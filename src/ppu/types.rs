@@ -1,6 +1,5 @@
 use super::{BLACK, DARK_GRAY, LIGHT_GRAY, WHITE};
 use bitfield::bitfield;
-use std::convert::TryInto;
 
 bitfield! {
     pub struct LCDStatus(u8);
@@ -433,20 +432,6 @@ impl GrayShade {
             GrayShade::LightGray => LIGHT_GRAY,
             GrayShade::DarkGray => DARK_GRAY,
             GrayShade::Black => BLACK,
-        }
-    }
-
-    pub(crate) fn from_rgba(slice: &[u8]) -> Self {
-        let rgba: [u8; 4] = slice
-            .try_into()
-            .expect("Unable to interpret &[u8] as [u8; 4]");
-
-        match rgba {
-            WHITE => GrayShade::White,
-            LIGHT_GRAY => GrayShade::LightGray,
-            DARK_GRAY => GrayShade::DarkGray,
-            BLACK => GrayShade::Black,
-            _ => panic!("{:#04X?} is not a colour the DMG-01 supports", rgba),
         }
     }
 }

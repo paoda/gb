@@ -1,3 +1,4 @@
+use crate::bus::BusIo;
 use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
@@ -10,7 +11,7 @@ use types::{
     ObjectPaletteId, ObjectSize, Pixels, RenderPriority, TileDataAddress,
 };
 
-pub(crate) mod dma;
+mod dma;
 mod types;
 
 const VRAM_SIZE: usize = 0x2000;
@@ -38,7 +39,7 @@ pub struct Ppu {
     pub(crate) control: LCDControl,
     pub(crate) monochrome: Monochrome,
     pub(crate) pos: ScreenPosition,
-    pub(crate) vram: Box<[u8; VRAM_SIZE]>,
+    vram: Box<[u8; VRAM_SIZE]>,
     pub(crate) stat: LCDStatus,
     pub(crate) oam: ObjectAttributeTable,
     pub(crate) dma: DmaProcess,
@@ -52,12 +53,12 @@ pub struct Ppu {
     cycle: Cycle,
 }
 
-impl Ppu {
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+impl BusIo for Ppu {
+    fn read_byte(&self, addr: u16) -> u8 {
         self.vram[addr as usize - PPU_START_ADDRESS]
     }
 
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         self.vram[addr as usize - PPU_START_ADDRESS] = byte;
     }
 }
@@ -504,18 +505,20 @@ pub(crate) struct ObjectAttributeTable {
     buf: Box<[u8; OAM_SIZE]>,
 }
 
-impl ObjectAttributeTable {
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+impl BusIo for ObjectAttributeTable {
+    fn read_byte(&self, addr: u16) -> u8 {
         let index = (addr - 0xFE00) as usize;
         self.buf[index]
     }
 
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         let index = (addr - 0xFE00) as usize;
         self.buf[index] = byte;
     }
+}
 
-    pub(crate) fn attribute(&self, index: usize) -> ObjectAttribute {
+impl ObjectAttributeTable {
+    fn attribute(&self, index: usize) -> ObjectAttribute {
         let start = index * 4;
 
         let slice: &[u8; 4] = self.buf[start..(start + 4)]
@@ -535,7 +538,7 @@ impl Default for ObjectAttributeTable {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct ObjectAttribute {
+struct ObjectAttribute {
     y: u8,
     x: u8,
     tile_index: u8,
@@ -571,7 +574,7 @@ struct ObjectBuffer {
 }
 
 impl ObjectBuffer {
-    pub(crate) fn iter(&self) -> std::slice::Iter<'_, Option<ObjectAttribute>> {
+    fn iter(&self) -> std::slice::Iter<'_, Option<ObjectAttribute>> {
         self.into_iter()
     }
 }
@@ -597,21 +600,21 @@ impl<'a> IntoIterator for &'a mut ObjectBuffer {
 }
 
 impl ObjectBuffer {
-    pub(crate) fn is_full(&self) -> bool {
+    fn is_full(&self) -> bool {
         self.len == OBJECT_LIMIT
     }
 
-    pub(crate) fn clear(&mut self) {
+    fn clear(&mut self) {
         self.buf = [Default::default(); 10];
         self.len = 0;
     }
 
-    pub(crate) fn add(&mut self, attr: ObjectAttribute) {
+    fn add(&mut self, attr: ObjectAttribute) {
         self.buf[self.len] = Some(attr);
         self.len += 1;
     }
 
-    pub(crate) fn remove(&mut self, attr: &ObjectAttribute) {
+    fn remove(&mut self, attr: &ObjectAttribute) {
         let maybe_index = self.buf.iter().position(|maybe_attr| match maybe_attr {
             Some(other_attr) => attr == other_attr,
             None => false,
@@ -640,13 +643,13 @@ struct PixelFetcher {
 }
 
 impl PixelFetcher {
-    pub(crate) fn hblank_reset(&mut self) {
+    fn hblank_reset(&mut self) {
         self.back.hblank_reset();
         self.obj.hblank_reset();
         self.x_pos = 0;
     }
 
-    pub(crate) fn vblank_reset(&mut self) {
+    fn vblank_reset(&mut self) {
         self.back.vblank_reset();
     }
 
@@ -716,11 +719,7 @@ impl PixelFetcher {
         }
     }
 
-    pub(crate) fn get_obj_addr(
-        attr: &ObjectAttribute,
-        pos: &ScreenPosition,
-        size: ObjectSize,
-    ) -> u16 {
+    fn get_obj_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
         let line_y = pos.line_y;
 
         // TODO: Why is the offset 14 and 30 respectively?
@@ -841,21 +840,21 @@ struct WindowLineCounter {
 }
 
 impl WindowLineCounter {
-    pub(crate) fn increment(&mut self) {
+    fn increment(&mut self) {
         self.count += 1;
     }
 
-    pub(crate) fn vblank_reset(&mut self) {
+    fn vblank_reset(&mut self) {
         self.count = 0;
     }
 
-    pub(crate) fn count(&self) -> u8 {
+    fn count(&self) -> u8 {
         self.count
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum FetcherState {
+enum FetcherState {
     TileNumber,
     ToLowByteSleep,
     TileLowByte,
@@ -894,15 +893,15 @@ struct FifoRenderer {
 }
 
 impl FifoRenderer {
-    pub(crate) fn is_enabled(&self) -> bool {
+    fn is_enabled(&self) -> bool {
         self.enabled
     }
 
-    pub(crate) fn pause(&mut self) {
+    fn pause(&mut self) {
         self.enabled = false;
     }
 
-    pub(crate) fn resume(&mut self) {
+    fn resume(&mut self) {
         self.enabled = true;
     }
 }
@@ -925,19 +924,19 @@ struct TileBuilder {
 }
 
 impl TileBuilder {
-    pub(crate) fn with_id(&mut self, id: u8) {
+    fn with_id(&mut self, id: u8) {
         self.id = Some(id);
     }
 
-    pub(crate) fn with_low_byte(&mut self, data: u8) {
+    fn with_low_byte(&mut self, data: u8) {
         self.low = Some(data);
     }
 
-    pub(crate) fn with_high_byte(&mut self, data: u8) {
+    fn with_high_byte(&mut self, data: u8) {
         self.high = Some(data);
     }
 
-    pub(crate) fn bytes(&self) -> Option<(u8, u8)> {
+    fn bytes(&self) -> Option<(u8, u8)> {
         self.high.zip(self.low)
     }
 }
@@ -949,25 +948,25 @@ struct OamScanState {
 }
 
 impl OamScanState {
-    pub(crate) fn increase(&mut self) {
+    fn increase(&mut self) {
         self.count += 1;
         self.count %= 40;
     }
 
-    pub(crate) fn reset(&mut self) {
+    fn reset(&mut self) {
         self.count = Default::default();
         self.mode = Default::default();
     }
 
-    pub(crate) fn count(&self) -> u8 {
+    fn count(&self) -> u8 {
         self.count
     }
 
-    pub(crate) fn mode(&self) -> OamScanMode {
+    fn mode(&self) -> OamScanMode {
         self.mode
     }
 
-    pub(crate) fn next(&mut self) {
+    fn next(&mut self) {
         use OamScanMode::*;
 
         self.mode = match self.mode {
@@ -999,19 +998,19 @@ struct WindowStatus {
 }
 
 impl WindowStatus {
-    pub(crate) fn should_draw(&self) -> bool {
+    fn should_draw(&self) -> bool {
         self.should_draw
     }
 
-    pub(crate) fn coincidence(&self) -> bool {
+    fn coincidence(&self) -> bool {
         self.coincidence
     }
 
-    pub(crate) fn set_should_draw(&mut self, value: bool) {
+    fn set_should_draw(&mut self, value: bool) {
         self.should_draw = value;
     }
 
-    pub(crate) fn set_coincidence(&mut self, value: bool) {
+    fn set_coincidence(&mut self, value: bool) {
         self.coincidence = value;
     }
 

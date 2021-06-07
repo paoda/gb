@@ -1,3 +1,5 @@
+use crate::bus::BusIo;
+
 const HIGH_RAM_SIZE: usize = 0x7F;
 const HIGH_RAM_START_ADDRESS: usize = 0xFF80;
 
@@ -14,12 +16,12 @@ impl Default for HighRam {
     }
 }
 
-impl HighRam {
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+impl BusIo for HighRam {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         self.buf[addr as usize - HIGH_RAM_START_ADDRESS] = byte;
     }
 
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&self, addr: u16) -> u8 {
         self.buf[addr as usize - HIGH_RAM_START_ADDRESS]
     }
 }

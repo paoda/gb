@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+use crate::bus::BusIo;
+
 const RAM_SIZE_ADDRESS: usize = 0x0149;
 const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
@@ -86,8 +88,8 @@ impl Cartridge {
     }
 }
 
-impl Cartridge {
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+impl BusIo for Cartridge {
+    fn read_byte(&self, addr: u16) -> u8 {
         use MbcResult::*;
 
         match self.mbc.handle_read(addr) {
@@ -95,17 +97,9 @@ impl Cartridge {
             Value(byte) => byte,
         }
     }
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         self.mbc.handle_write(addr, byte);
-    }
-
-    pub(crate) fn read_word(&self, addr: u16) -> u16 {
-        (self.read_byte(addr + 1) as u16) << 8 | self.read_byte(addr) as u16
-    }
-
-    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
-        self.write_byte(addr + 1, (word >> 8) as u8);
-        self.write_byte(addr, (word & 0x00FF) as u8);
     }
 }
 
@@ -294,7 +288,7 @@ enum RamSize {
 }
 
 impl RamSize {
-    pub(crate) fn as_byte_count(&self) -> u32 {
+    fn as_byte_count(&self) -> u32 {
         use RamSize::*;
 
         match *self {
@@ -354,7 +348,7 @@ impl Default for BankCount {
 
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    pub(crate) fn to_byte_count(self) -> u32 {
+    fn to_byte_count(self) -> u32 {
         use BankCount::*;
 
         match self {

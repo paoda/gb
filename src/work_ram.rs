@@ -1,3 +1,5 @@
+use crate::bus::BusIo;
+
 const WORK_RAM_SIZE: usize = 0x1000;
 const VARIABLE_WORK_RAM_SIZE: usize = WORK_RAM_SIZE;
 const WORK_RAM_START_ADDRESS: usize = 0xC000;
@@ -8,12 +10,12 @@ pub(crate) struct WorkRam {
     bank: Box<[u8; WORK_RAM_SIZE]>,
 }
 
-impl WorkRam {
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+impl BusIo for WorkRam {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         self.bank[addr as usize - WORK_RAM_START_ADDRESS] = byte;
     }
 
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&self, addr: u16) -> u8 {
         self.bank[addr as usize - WORK_RAM_START_ADDRESS]
     }
 }
@@ -27,7 +29,7 @@ impl Default for WorkRam {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum BankNumber {
+enum BankNumber {
     One = 1,
     Two = 2,
     Three = 3,
@@ -53,19 +55,21 @@ impl Default for VariableWorkRam {
 }
 
 impl VariableWorkRam {
-    pub(crate) fn set_current_bank(&mut self, bank: BankNumber) {
+    fn set_current_bank(&mut self, bank: BankNumber) {
         self.current = bank;
     }
 
-    pub(crate) fn get_current_bank(&self) -> BankNumber {
+    fn get_current_bank(&self) -> BankNumber {
         self.current
     }
+}
 
-    pub(crate) fn write_byte(&mut self, addr: u16, byte: u8) {
+impl BusIo for VariableWorkRam {
+    fn write_byte(&mut self, addr: u16, byte: u8) {
         self.bank_n[self.current as usize][addr as usize - VARIABLE_WORK_RAM_START_ADDRESS] = byte;
     }
 
-    pub(crate) fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&self, addr: u16) -> u8 {
         self.bank_n[self.current as usize][addr as usize - VARIABLE_WORK_RAM_START_ADDRESS]
     }
 }

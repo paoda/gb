@@ -79,12 +79,6 @@ impl From<u8> for FrequencyLow {
     }
 }
 
-pub(crate) fn get_11bit_freq(low: &FrequencyLow, high: FrequencyHigh) -> u16 {
-    let high_bits = high.0 & 0b111;
-
-    (low.0 as u16) << 8 | ((high_bits as u16) << 4)
-}
-
 #[derive(Debug, Clone, Copy)]
 enum FrequencyType {
     Counter = 0,
