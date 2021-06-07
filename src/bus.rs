@@ -117,16 +117,19 @@ impl Bus {
             0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
-                match addr & 0x1FFF {
+                let masked_addr = addr & 0x1FFF;
+                let equiv_addr = 0xC000 + masked_addr;
+
+                match masked_addr {
                     // 0xE000 ..= 0xEFFF
                     0x0000..=0x0FFF => {
                         // 4KB Work RAM Bank 0
-                        self.work_ram.read_byte(addr)
+                        self.work_ram.read_byte(equiv_addr)
                     }
                     // 0xF000 ..= 0xFDFF
                     0x1000..=0x1DFF => {
                         // 4KB Work RAM Bank 1 -> N
-                        self.var_ram.read_byte(addr)
+                        self.var_ram.read_byte(equiv_addr)
                     }
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
@@ -177,16 +180,19 @@ impl BusIo for Bus {
             0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
-                match addr & 0x1FFF {
+                let masked_addr = addr & 0x1FFF;
+                let equiv_addr = 0xC000 + masked_addr;
+
+                match masked_addr {
                     // 0xE000 ..= 0xEFFF
                     0x0000..=0x0FFF => {
                         // 4KB Work RAM Bank 0
-                        self.work_ram.read_byte(addr)
+                        self.work_ram.read_byte(equiv_addr)
                     }
                     // 0xF000 ..= 0xFDFF
                     0x1000..=0x1DFF => {
                         // 4KB Work RAM Bank 1 -> N
-                        self.var_ram.read_byte(addr)
+                        self.var_ram.read_byte(equiv_addr)
                     }
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
@@ -292,16 +298,19 @@ impl BusIo for Bus {
             0xD000..=0xDFFF => self.var_ram.write_byte(addr, byte),  // 4KB Work RAM Bank 1 -> N
             0xE000..=0xFDFF => {
                 // Mirror of 0xC000 to 0xDDFF (ECHO RAM)
-                match addr & 0x1FFF {
+                let masked_addr = addr & 0x1FFF;
+                let equiv_addr = 0xC000 + masked_addr;
+
+                match masked_addr {
                     // 0xE000 ..= 0xEFFF
                     0x0000..=0x0FFF => {
                         // 4KB Work RAM Bank 0
-                        self.work_ram.write_byte(addr, byte);
+                        self.work_ram.write_byte(equiv_addr, byte);
                     }
                     // 0xF000 ..= 0xFDFF
                     0x1000..=0x1DFF => {
                         // 4KB Work RAM Bank 1 -> N
-                        self.var_ram.write_byte(addr, byte);
+                        self.var_ram.write_byte(equiv_addr, byte);
                     }
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
