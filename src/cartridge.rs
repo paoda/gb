@@ -29,9 +29,9 @@ impl Cartridge {
     }
 
     fn detect_mbc(memory: &[u8]) -> Box<dyn MemoryBankController> {
-        let ram_size = Self::find_ram_size(&memory);
-        let bank_count = Self::find_bank_count(&memory);
-        let mbc_kind = Self::find_mbc(&memory);
+        let ram_size = Self::find_ram_size(memory);
+        let bank_count = Self::find_bank_count(memory);
+        let mbc_kind = Self::find_mbc(memory);
         let ram_byte_count = ram_size.as_byte_count();
 
         match mbc_kind {

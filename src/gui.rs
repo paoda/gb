@@ -182,8 +182,7 @@ impl Egui {
                     ui.monospace(format!("{:#04X}", game_boy.register(Register::A)));
 
                     ui.label("F");
-                    let flag: u8 = game_boy.register(Register::Flag).into();
-                    ui.monospace(format!("{:#04X}", flag));
+                    ui.monospace(format!("{:#04X}", game_boy.register(Register::Flag)));
                 });
 
                 ui.horizontal(|ui| {

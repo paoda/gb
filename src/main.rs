@@ -67,7 +67,7 @@ fn main() -> Result<()> {
         .expect("Failed to load ROM");
 
     let default_title = "DMG-01 Emulator";
-    let cartridge_title = game_boy.rom_title().unwrap_or(&default_title);
+    let cartridge_title = game_boy.rom_title().unwrap_or(default_title);
 
     // Initialize Gamepad Support
     let mut gilrs = Gilrs::new().expect("Failed to initialize Gilrs");
@@ -205,7 +205,7 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_title(title)
         .with_inner_size(size)
         .with_min_inner_size(size)
-        .build(&event_loop)?)
+        .build(event_loop)?)
 }
 
 fn handle_gamepad_input(game_boy: &mut LR35902, event: GamepadEvent) {

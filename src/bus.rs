@@ -73,16 +73,14 @@ impl Bus {
         self.timer.step(cycles);
         self.sound.step(cycles);
     }
+
     pub(crate) fn step_dma(&mut self, pending: Cycle) {
         let pending_cycles: u32 = pending.into();
 
         for _ in 0..pending_cycles {
-            match self.ppu.dma.clock() {
-                Some((src_addr, dest_addr)) => {
-                    let byte = self.read_byte(src_addr);
-                    self.write_byte(dest_addr, byte);
-                }
-                None => {}
+            if let Some((src_addr, dest_addr)) = self.ppu.dma.clock() {
+                let byte = self.read_byte(src_addr);
+                self.write_byte(dest_addr, byte);
             }
         }
     }
