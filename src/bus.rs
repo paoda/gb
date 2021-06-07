@@ -115,7 +115,10 @@ impl BusIo for Bus {
             },
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.ppu.read_byte(addr)
+                match self.ppu.stat.mode() {
+                    PpuMode::VBlank => 0xFF,
+                    _ => self.ppu.read_byte(addr),
+                }
             }
             0xA000..=0xBFFF => match self.cartridge.as_ref() {
                 // 8KB External RAM
@@ -146,18 +149,23 @@ impl BusIo for Bus {
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
             }
-            0xFE00..=0xFE9F if self.ppu.dma.is_active() => 0xFF,
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
+                use PpuMode::{HBlank, VBlank};
+
                 match self.ppu.stat.mode() {
-                    PpuMode::HBlank | PpuMode::VBlank => self.ppu.oam.read_byte(addr),
-                    PpuMode::OamScan | PpuMode::Drawing => 0xFF,
+                    HBlank | VBlank if !self.ppu.dma.is_active() => self.ppu.oam.read_byte(addr),
+                    _ => 0xFF,
                 }
             }
             0xFEA0..=0xFEFF => {
-                // eprintln!("Read from {:#06X}, which is prohibited", addr);
-                // TODO: Properly Emulate what can happen here
-                0x00
+                // Prohibited Memory
+                use PpuMode::{HBlank, VBlank};
+
+                match self.ppu.stat.mode() {
+                    HBlank | VBlank => 0x00,
+                    _ => 0xFF, // TODO: OAM Sprite bug now occurs on the DMG
+                }
             }
             0xFF00..=0xFF7F => {
                 // IO Registers
@@ -224,7 +232,10 @@ impl BusIo for Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-                self.ppu.write_byte(addr, byte);
+                match self.ppu.stat.mode() {
+                    PpuMode::VBlank => {}
+                    _ => self.ppu.write_byte(addr, byte),
+                }
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -257,19 +268,18 @@ impl BusIo for Bus {
                     _ => unreachable!("{:#06X} was incorrectly handled by ECHO RAM", addr),
                 }
             }
-
-            0xFE00..=0xFE9F if self.ppu.dma.is_active() => {}
             0xFE00..=0xFE9F => {
                 // Sprite Attribute Table
+                use PpuMode::{HBlank, VBlank};
+
                 match self.ppu.stat.mode() {
-                    PpuMode::HBlank | PpuMode::VBlank => self.ppu.oam.write_byte(addr, byte),
-                    PpuMode::Drawing | PpuMode::OamScan => {}
+                    HBlank | VBlank if !self.ppu.dma.is_active() => {
+                        self.ppu.oam.write_byte(addr, byte)
+                    }
+                    _ => {}
                 }
             }
-            0xFEA0..=0xFEFF => {
-                // eprintln!("Wrote {:#04X} to {:#06X}, which is prohibited", byte, addr);
-                // TODO: Properly emulate what can happen here
-            }
+            0xFEA0..=0xFEFF => {} // TODO: As far as I know, writes to here do nothing.
             0xFF00..=0xFF7F => {
                 // IO Registers
 
