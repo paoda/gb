@@ -148,7 +148,7 @@ fn main() -> Result<()> {
             if step_mode {
                 if input.key_pressed(VirtualKeyCode::Space) {
                     if let Some(event) = gilrs.next_event() {
-                        handle_gamepad_input(&mut game_boy, event);
+                        handle_gamepad_input(&mut game_boy.bus.joypad, event);
                     }
 
                     for _ in 0..egui.config.spacebar_step {
