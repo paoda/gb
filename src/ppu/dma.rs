@@ -1,13 +1,14 @@
 use crate::instruction::Cycle;
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct DmaProcess {
+pub(crate) struct DirectMemoryAccess {
     pub(crate) state: DmaState,
     cycle: Cycle,
-    pub(crate) ctrl: DmaControl,
+    /// 0xFF46 | DMA - Transfer and Start Address
+    pub(crate) start: DmaAddress,
 }
 
-impl DmaProcess {
+impl DirectMemoryAccess {
     pub(crate) fn clock(&mut self) -> Option<(u16, u16)> {
         match self.state {
             DmaState::Pending => {
@@ -26,8 +27,8 @@ impl DmaProcess {
                 self.cycle += 1;
 
                 let src_addr = self
-                    .ctrl
-                    .src_addr
+                    .start
+                    .addr
                     .as_mut()
                     .expect("DMA Transfer Attempted without a known source address");
 
@@ -57,7 +58,7 @@ impl DmaProcess {
     fn reset(&mut self) {
         self.cycle = Cycle::new(0);
         self.state = DmaState::Disabled;
-        self.ctrl.src_addr = None;
+        self.start.addr = None;
     }
 }
 
@@ -74,27 +75,28 @@ impl Default for DmaState {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct DmaControl {
-    pub(crate) repr: u8,
-    src_addr: Option<u16>,
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct DmaAddress {
+    /// The current *source* address of the DMA Transfer
+    ///
+    /// NB: Will be None if no DMA Transfer is in progress
+    addr: Option<u16>,
 }
 
-impl Default for DmaControl {
-    fn default() -> Self {
-        Self {
-            repr: 0,
-            src_addr: None,
-        }
-    }
-}
-
-impl DmaControl {
+impl DmaAddress {
     pub(crate) fn update(&mut self, byte: u8, state: &mut DmaState) {
         let start = (byte as u16) << 8;
 
-        self.repr = byte;
-        self.src_addr = Some(start);
+        self.addr = Some(start);
         *state = DmaState::Pending;
+    }
+}
+
+impl From<DmaAddress> for u8 {
+    fn from(ctrl: DmaAddress) -> Self {
+        match ctrl.addr {
+            Some(addr) => (addr >> 8) as u8,
+            None => 0xFF, // TODO: What garbage value should be here?
+        }
     }
 }

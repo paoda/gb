@@ -2,7 +2,7 @@ use crate::bus::BusIo;
 use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
-use dma::DmaProcess;
+use dma::DirectMemoryAccess;
 use std::collections::VecDeque;
 use std::convert::TryInto;
 pub(crate) use types::PpuMode;
@@ -36,13 +36,15 @@ const BLACK: [u8; 4] = 0x202020FFu32.to_be_bytes();
 #[derive(Debug, Clone)]
 pub struct Ppu {
     pub(crate) int: Interrupt,
-    pub(crate) control: LCDControl,
+    /// 0xFF40 | LCDC - LCD Control
+    pub(crate) ctrl: LCDControl,
+    /// 0xFF41 | STAT - LCD Status
+    pub(crate) stat: LCDStatus,
     pub(crate) monochrome: Monochrome,
     pub(crate) pos: ScreenPosition,
     vram: Box<[u8; VRAM_SIZE]>,
-    pub(crate) stat: LCDStatus,
     pub(crate) oam: ObjectAttributeTable,
-    pub(crate) dma: DmaProcess,
+    pub(crate) dma: DirectMemoryAccess,
     scan_state: OamScanState,
     fetch: PixelFetcher,
     fifo: FifoRenderer,
@@ -105,7 +107,7 @@ impl Ppu {
                         self.fifo.obj.clear();
 
                         self.stat.set_mode(PpuMode::HBlank);
-                    } else if self.control.lcd_enabled() {
+                    } else if self.ctrl.lcd_enabled() {
                         // Only Draw when the LCD Is Enabled
                         self.draw(self.cycle.into());
                     } else {
@@ -196,7 +198,7 @@ impl Ppu {
                     .set_coincidence(self.pos.line_y == self.pos.window_y);
             }
 
-            let sprite_height = self.control.obj_size().as_u8();
+            let sprite_height = self.ctrl.obj_size().as_u8();
             let index = self.scan_state.count();
 
             let attr = self.oam.attribute(index as usize);
@@ -244,7 +246,7 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetch.obj.next(TileLowByte),
                 TileLowByte => {
-                    let obj_size = self.control.obj_size();
+                    let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
 
@@ -255,7 +257,7 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetch.obj.next(TileHighByte),
                 TileHighByte => {
-                    let obj_size = self.control.obj_size();
+                    let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
 
@@ -311,7 +313,7 @@ impl Ppu {
             }
         }
 
-        if self.control.window_enabled()
+        if self.ctrl.window_enabled()
             && !self.window_stat.should_draw()
             && self.window_stat.coincidence()
             && self.x_pos >= self.pos.window_x - 7
@@ -331,7 +333,7 @@ impl Ppu {
                         .back
                         .should_render_window(self.window_stat.should_draw());
 
-                    let addr = self.fetch.bg_tile_num_addr(&self.control, &self.pos, x_pos);
+                    let addr = self.fetch.bg_tile_num_addr(&self.ctrl, &self.pos, x_pos);
 
                     let id = self.read_byte(addr);
                     self.fetch.back.tile.with_id(id);
@@ -341,7 +343,7 @@ impl Ppu {
                 }
                 ToLowByteSleep => self.fetch.back.next(TileLowByte),
                 TileLowByte => {
-                    let addr = self.fetch.bg_byte_addr(&self.control, &self.pos);
+                    let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let low = self.read_byte(addr);
                     self.fetch.back.tile.with_low_byte(low);
@@ -350,7 +352,7 @@ impl Ppu {
                 }
                 ToHighByteSleep => self.fetch.back.next(TileHighByte),
                 TileHighByte => {
-                    let addr = self.fetch.bg_byte_addr(&self.control, &self.pos);
+                    let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let high = self.read_byte(addr + 1);
                     self.fetch.back.tile.with_high_byte(high);
@@ -376,8 +378,8 @@ impl Ppu {
             use RenderPriority::*;
 
             // Handle Background Pixel and Sprite FIFO
-            let bg_enabled = self.control.bg_win_enabled();
-            let obj_enabled = self.control.obj_enabled();
+            let bg_enabled = self.ctrl.bg_win_enabled();
+            let obj_enabled = self.ctrl.obj_enabled();
             let i0_colour = self.monochrome.bg_palette.i0_colour();
 
             // FIXME: Is this the correct behaviour
@@ -443,7 +445,7 @@ impl Default for Ppu {
             cycle: Cycle::new(0),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
-            control: Default::default(),
+            ctrl: Default::default(),
             monochrome: Default::default(),
             pos: Default::default(),
             stat: Default::default(),
@@ -485,18 +487,27 @@ impl Interrupt {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct ScreenPosition {
+    /// 0xFF42 | SCY - Scroll Y
     pub(crate) scroll_y: u8,
+    /// 0xFF43 | SCX - Scroll X
     pub(crate) scroll_x: u8,
+    /// 0xFF44 | LY - LCD Y Coordinate
     pub(crate) line_y: u8,
+    /// 0xFF45 | LYC - LY Compare
     pub(crate) ly_compare: u8,
+    /// 0xFF4A | WY - Window Y Position
     pub(crate) window_y: u8,
+    /// 0xFF4B | WX - Window X Position
     pub(crate) window_x: u8,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Monochrome {
+    /// 0xFF47 | BGP - Background Palette Data
     pub(crate) bg_palette: BackgroundPalette,
+    /// 0xFF48 | OBP0 - Object Palette 0 Data
     pub(crate) obj_palette_0: ObjectPalette,
+    /// 0xFF49 | OBP1 - Object Palette 1 Data
     pub(crate) obj_palette_1: ObjectPalette,
 }
 

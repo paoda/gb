@@ -2,8 +2,10 @@ use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Serial {
+    /// 0xFF01 | SB - Serial Transfer Data
     pub(crate) next: u8,
-    pub(crate) control: SerialControl,
+    /// 0xFF02 | SC - Serial Transfer Control
+    pub(crate) ctrl: SerialControl,
 }
 
 bitfield! {

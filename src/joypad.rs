@@ -2,7 +2,8 @@ use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Joypad {
-    pub(crate) status: u8,
+    /// 0xFF00 | P1/JOYP - Player 1 Joypad
+    pub(crate) p1: u8,
     ext: JoypadState,
     interrupt: bool,
 }
@@ -10,7 +11,7 @@ pub struct Joypad {
 impl Default for Joypad {
     fn default() -> Self {
         Self {
-            status: 0xFF,
+            p1: 0xFF,
             ext: Default::default(),
             interrupt: Default::default(),
         }
@@ -42,7 +43,7 @@ impl Joypad {
             }
         };
 
-        self.status = updated
+        self.p1 = updated
     }
 }
 

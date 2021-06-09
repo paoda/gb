@@ -3,9 +3,13 @@ use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Timer {
-    pub(crate) control: TimerControl,
+    /// 0xFF07 | TAC - Timer Control
+    pub(crate) ctrl: TimerControl,
+    /// 0xFF05 | TIMA - Timer Counter
     pub(crate) counter: u8,
+    /// 0xFF06 | TMA - Timer Modulo
     pub(crate) modulo: u8,
+    /// 0xFF04 | DIV - Divider Register
     pub(crate) divider: u16,
     prev_and_result: Option<u8>,
     interrupt: bool,
@@ -19,7 +23,7 @@ impl Timer {
             self.divider = self.divider.wrapping_add(1);
 
             // Get Bit Position
-            let bit = match self.control.speed() {
+            let bit = match self.ctrl.speed() {
                 Hz4096 => 9,
                 Hz262144 => 3,
                 Hz65536 => 5,
@@ -27,7 +31,7 @@ impl Timer {
             };
 
             let bit = (self.divider >> bit) as u8 & 0x01;
-            let timer_enable = self.control.enabled() as u8;
+            let timer_enable = self.ctrl.enabled() as u8;
             let and_result = bit & timer_enable;
 
             if let Some(previous) = self.prev_and_result {
@@ -64,7 +68,7 @@ impl Timer {
 impl Default for Timer {
     fn default() -> Self {
         Self {
-            control: Default::default(),
+            ctrl: Default::default(),
             counter: 0,
             modulo: 0,
             divider: 0,

@@ -14,8 +14,11 @@ impl Sound {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct SoundControl {
+    /// 0xFF24 | NR50 - Channel Control
     pub(crate) channel: ChannelControl,
+    /// 0xFF25 | NR51 - Selection of Sound output terminal
     pub(crate) output: SoundOutput,
+    /// 0xFF26 | NR52 - Sound On/Off
     pub(crate) status: SoundStatus,
 }
 
@@ -138,10 +141,14 @@ impl From<SoundStatus> for u8 {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel1 {
+    /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) sound_duty: SoundDuty,
+    /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) vol_envelope: VolumeEnvelope,
-    pub(crate) freq_hi: FrequencyHigh,
+    /// 0xFF13 | NR13 - Channel 1 Frequency Low (Lower 8 bits only)
     pub(crate) freq_lo: FrequencyLow,
+    /// 0xFF14 | NR14 - Channel 1 Frequency High
+    pub(crate) freq_hi: FrequencyHigh,
 }
 
 bitfield! {

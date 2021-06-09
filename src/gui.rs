@@ -178,7 +178,7 @@ impl Egui {
 
                 ui.horizontal(|ui| {
                     ui.label("TAC");
-                    ui.monospace(format!("{:?}", timer.control));
+                    ui.monospace(format!("{:?}", timer.ctrl));
                 });
             });
 
