@@ -67,21 +67,17 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
-    pub(crate) fn step(&mut self, cycles: Cycle) {
-        self.step_dma(cycles);
-        self.ppu.step(cycles);
-        self.timer.step(cycles);
-        self.sound.step(cycles);
+    pub(crate) fn clock(&mut self) {
+        self.ppu.clock();
+        self.timer.clock();
+        self.sound.clock();
+        self.clock_dma();
     }
 
-    pub(crate) fn step_dma(&mut self, pending: Cycle) {
-        let pending_cycles: u32 = pending.into();
-
-        for _ in 0..pending_cycles {
-            if let Some((src_addr, dest_addr)) = self.ppu.dma.clock() {
-                let byte = self.oam_read_byte(src_addr);
-                self.oam_write_byte(dest_addr, byte);
-            }
+    fn clock_dma(&mut self) {
+        if let Some((src_addr, dest_addr)) = self.ppu.dma.clock() {
+            let byte = self.oam_read_byte(src_addr);
+            self.oam_write_byte(dest_addr, byte);
         }
     }
 

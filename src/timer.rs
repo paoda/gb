@@ -16,33 +16,31 @@ pub(crate) struct Timer {
 }
 
 impl Timer {
-    pub(crate) fn step(&mut self, cycles: Cycle) {
+    pub(crate) fn clock(&mut self) {
         use TimerSpeed::*;
 
-        for _ in 0..cycles.into() {
-            self.divider = self.divider.wrapping_add(1);
+        self.divider = self.divider.wrapping_add(1);
 
-            // Get Bit Position
-            let bit = match self.ctrl.speed() {
-                Hz4096 => 9,
-                Hz262144 => 3,
-                Hz65536 => 5,
-                Hz16384 => 7,
-            };
+        // Get Bit Position
+        let bit = match self.ctrl.speed() {
+            Hz4096 => 9,
+            Hz262144 => 3,
+            Hz65536 => 5,
+            Hz16384 => 7,
+        };
 
-            let bit = (self.divider >> bit) as u8 & 0x01;
-            let timer_enable = self.ctrl.enabled() as u8;
-            let and_result = bit & timer_enable;
+        let bit = (self.divider >> bit) as u8 & 0x01;
+        let timer_enable = self.ctrl.enabled() as u8;
+        let and_result = bit & timer_enable;
 
-            if let Some(previous) = self.prev_and_result {
-                if previous == 0x01 && and_result == 0x00 {
-                    // Falling Edge, increase TIMA Register
-                    self.increment_tima();
-                }
+        if let Some(previous) = self.prev_and_result {
+            if previous == 0x01 && and_result == 0x00 {
+                // Falling Edge, increase TIMA Register
+                self.increment_tima();
             }
-
-            self.prev_and_result = Some(and_result);
         }
+
+        self.prev_and_result = Some(and_result);
     }
 
     fn increment_tima(&mut self) {

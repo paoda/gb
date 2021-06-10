@@ -7,7 +7,7 @@ pub(crate) struct Sound {
 }
 
 impl Sound {
-    pub(crate) fn step(&mut self, _cycles: Cycle) {
+    pub(crate) fn clock(&mut self) {
         //
     }
 }

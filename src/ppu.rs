@@ -66,124 +66,119 @@ impl BusIo for Ppu {
 }
 
 impl Ppu {
-    pub(crate) fn step(&mut self, cycles: Cycle) {
-        let start: u32 = self.cycle.into();
-        let end: u32 = cycles.into();
+    pub(crate) fn clock(&mut self) {
+        self.cycle += 1;
 
-        for _ in start..(start + end) {
-            self.cycle += 1;
+        match self.stat.mode() {
+            PpuMode::OamScan => {
+                if self.cycle >= 80.into() {
+                    self.stat.set_mode(PpuMode::Drawing);
+                }
 
-            match self.stat.mode() {
-                PpuMode::OamScan => {
-                    if self.cycle >= 80.into() {
-                        self.stat.set_mode(PpuMode::Drawing);
+                self.scan_oam();
+            }
+            PpuMode::Drawing => {
+                if self.x_pos >= 160 {
+                    if self.stat.hblank_int() {
+                        // Enable HBlank LCDStat Interrupt
+                        self.int.set_lcd_stat(true);
                     }
 
-                    self.scan_oam();
+                    // Done with rendering this frame,
+                    // we can reset the ppu x_pos and fetcher state now
+
+                    // Increment Window line counter if scanline had any window pixels on it
+                    // only increment once per scanline though
+                    if self.window_stat.should_draw() {
+                        self.fetch.back.window_line.increment();
+                    }
+
+                    self.x_pos = 0;
+
+                    self.fetch.hblank_reset();
+                    self.window_stat.hblank_reset();
+                    self.obj_buffer.clear();
+
+                    self.fifo.back.clear();
+                    self.fifo.obj.clear();
+
+                    self.stat.set_mode(PpuMode::HBlank);
+                } else if self.ctrl.lcd_enabled() {
+                    // Only Draw when the LCD Is Enabled
+                    self.draw(self.cycle.into());
+                } else {
+                    self.reset();
                 }
-                PpuMode::Drawing => {
-                    if self.x_pos >= 160 {
-                        if self.stat.hblank_int() {
-                            // Enable HBlank LCDStat Interrupt
+            }
+            PpuMode::HBlank => {
+                // This mode will always end at 456 cycles
+
+                if self.cycle >= 456.into() {
+                    self.cycle %= 456;
+                    self.pos.line_y += 1;
+
+                    // Update LY==LYC bit
+                    let are_equal = self.pos.line_y == self.pos.ly_compare;
+                    self.stat.set_coincidence(are_equal);
+
+                    // Request LCD STAT interrupt if conditions met
+                    if self.stat.coincidence_int() && are_equal {
+                        self.int.set_lcd_stat(true);
+                    }
+
+                    let next_mode = if self.pos.line_y >= 144 {
+                        // Request VBlank Interrupt
+                        self.int.set_vblank(true);
+
+                        // Reset Window Line Counter in Fetcher
+                        self.fetch.vblank_reset();
+                        // Reset WY=LY coincidence flag
+                        self.window_stat.vblank_reset();
+
+                        if self.stat.vblank_int() {
+                            // Enable Vblank LCDStat Interrupt
                             self.int.set_lcd_stat(true);
                         }
 
-                        // Done with rendering this frame,
-                        // we can reset the ppu x_pos and fetcher state now
-
-                        // Increment Window line counter if scanline had any window pixels on it
-                        // only increment once per scanline though
-                        if self.window_stat.should_draw() {
-                            self.fetch.back.window_line.increment();
-                        }
-
-                        self.x_pos = 0;
-
-                        self.fetch.hblank_reset();
-                        self.window_stat.hblank_reset();
-                        self.obj_buffer.clear();
-
-                        self.fifo.back.clear();
-                        self.fifo.obj.clear();
-
-                        self.stat.set_mode(PpuMode::HBlank);
-                    } else if self.ctrl.lcd_enabled() {
-                        // Only Draw when the LCD Is Enabled
-                        self.draw(self.cycle.into());
+                        PpuMode::VBlank
                     } else {
-                        self.reset();
-                    }
-                }
-                PpuMode::HBlank => {
-                    // This mode will always end at 456 cycles
-
-                    if self.cycle >= 456.into() {
-                        self.cycle %= 456;
-                        self.pos.line_y += 1;
-
-                        // Update LY==LYC bit
-                        let are_equal = self.pos.line_y == self.pos.ly_compare;
-                        self.stat.set_coincidence(are_equal);
-
-                        // Request LCD STAT interrupt if conditions met
-                        if self.stat.coincidence_int() && are_equal {
+                        if self.stat.oam_int() {
+                            // Enable OAM LCDStat Interrupt
                             self.int.set_lcd_stat(true);
                         }
 
-                        let next_mode = if self.pos.line_y >= 144 {
-                            // Request VBlank Interrupt
-                            self.int.set_vblank(true);
+                        self.scan_state.reset();
+                        PpuMode::OamScan
+                    };
 
-                            // Reset Window Line Counter in Fetcher
-                            self.fetch.vblank_reset();
-                            // Reset WY=LY coincidence flag
-                            self.window_stat.vblank_reset();
-
-                            if self.stat.vblank_int() {
-                                // Enable Vblank LCDStat Interrupt
-                                self.int.set_lcd_stat(true);
-                            }
-
-                            PpuMode::VBlank
-                        } else {
-                            if self.stat.oam_int() {
-                                // Enable OAM LCDStat Interrupt
-                                self.int.set_lcd_stat(true);
-                            }
-
-                            self.scan_state.reset();
-                            PpuMode::OamScan
-                        };
-
-                        self.stat.set_mode(next_mode);
-                    }
+                    self.stat.set_mode(next_mode);
                 }
-                PpuMode::VBlank => {
-                    if self.cycle > 456.into() {
-                        self.cycle %= 456;
-                        self.pos.line_y += 1;
+            }
+            PpuMode::VBlank => {
+                if self.cycle > 456.into() {
+                    self.cycle %= 456;
+                    self.pos.line_y += 1;
 
-                        // Update LY==LYC bit
-                        let are_equal = self.pos.line_y == self.pos.ly_compare;
-                        self.stat.set_coincidence(are_equal);
+                    // Update LY==LYC bit
+                    let are_equal = self.pos.line_y == self.pos.ly_compare;
+                    self.stat.set_coincidence(are_equal);
 
-                        // Request LCD STAT interrupt if conditions met
-                        if self.stat.coincidence_int() && are_equal {
+                    // Request LCD STAT interrupt if conditions met
+                    if self.stat.coincidence_int() && are_equal {
+                        self.int.set_lcd_stat(true);
+                    }
+
+                    if self.pos.line_y == 154 {
+                        self.pos.line_y = 0;
+
+                        if self.stat.oam_int() {
+                            // Enable OAM LCDStat Interrupt
                             self.int.set_lcd_stat(true);
                         }
 
-                        if self.pos.line_y == 154 {
-                            self.pos.line_y = 0;
+                        self.scan_state.reset();
 
-                            if self.stat.oam_int() {
-                                // Enable OAM LCDStat Interrupt
-                                self.int.set_lcd_stat(true);
-                            }
-
-                            self.scan_state.reset();
-
-                            self.stat.set_mode(PpuMode::OamScan);
-                        }
+                        self.stat.set_mode(PpuMode::OamScan);
                     }
                 }
             }

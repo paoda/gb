@@ -136,8 +136,10 @@ impl Cpu {
             }
         };
 
-        self.bus.step(cycles);
-        self.bus.step_dma(cycles);
+        let pending: u32 = cycles.into();
+        for _ in 0..pending {
+            self.bus.clock();
+        }
 
         self.handle_interrupts();
 
