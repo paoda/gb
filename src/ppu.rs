@@ -67,6 +67,10 @@ impl BusIo for Ppu {
 
 impl Ppu {
     pub(crate) fn clock(&mut self) {
+        if !self.ctrl.lcd_enabled() {
+            return;
+        }
+
         self.cycle += 1;
 
         match self.stat.mode() {
@@ -78,7 +82,14 @@ impl Ppu {
                 self.scan_oam();
             }
             PpuMode::Drawing => {
-                if self.x_pos >= 160 {
+                if self.ctrl.lcd_enabled() {
+                    // Only Draw when the LCD Is Enabled
+                    self.draw(self.cycle.into());
+                } else {
+                    self.reset();
+                }
+
+                if self.x_pos == 160 {
                     if self.stat.hblank_int() {
                         // Enable HBlank LCDStat Interrupt
                         self.int.set_lcd_stat(true);
@@ -103,11 +114,6 @@ impl Ppu {
                     self.fifo.obj.clear();
 
                     self.stat.set_mode(PpuMode::HBlank);
-                } else if self.ctrl.lcd_enabled() {
-                    // Only Draw when the LCD Is Enabled
-                    self.draw(self.cycle.into());
-                } else {
-                    self.reset();
                 }
             }
             PpuMode::HBlank => {
@@ -413,19 +419,12 @@ impl Ppu {
     }
 
     fn reset(&mut self) {
-        // FIXME: Discover what actually is supposed to be reset here
-
-        self.scan_state = Default::default();
-        self.cycle = Cycle::new(0);
-
-        self.x_pos = 0;
-        self.window_stat = Default::default();
-        self.stat.set_mode(PpuMode::OamScan);
         self.pos.line_y = 0;
+        self.stat.set_mode(PpuMode::HBlank);
 
-        self.fetch.back.reset();
-        self.fetch.obj.reset();
-        self.obj_buffer.clear();
+        // TODO: Is this an unnecessary performance hit?
+        let mut blank = WHITE.repeat(self.frame_buf.len() / 4);
+        self.frame_buf.swap_with_slice(&mut blank);
     }
 
     pub fn copy_to_gui(&self, frame: &mut [u8]) {

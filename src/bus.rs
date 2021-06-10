@@ -1,6 +1,5 @@
 use crate::cartridge::Cartridge;
 use crate::high_ram::HighRam;
-use crate::instruction::Cycle;
 use crate::interrupt::{Interrupt, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::{Ppu, PpuMode};
@@ -159,7 +158,7 @@ impl BusIo for Bus {
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
                 match self.ppu.stat.mode() {
-                    PpuMode::VBlank => 0xFF,
+                    PpuMode::Drawing => 0xFF,
                     _ => self.ppu.read_byte(addr),
                 }
             }
@@ -266,14 +265,10 @@ impl BusIo for Bus {
             }
             0x8000..=0x9FFF => {
                 // 8KB Video RAM
-
-                // TODO: Fix timing issues in the PPU
-                // match self.ppu.stat.mode() {
-                //     PpuMode::VBlank => {}
-                //     _ => self.ppu.write_byte(addr, byte),
-                // }
-
-                self.ppu.write_byte(addr, byte)
+                match self.ppu.stat.mode() {
+                    PpuMode::Drawing => {}
+                    _ => self.ppu.write_byte(addr, byte),
+                }
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
@@ -365,7 +360,7 @@ impl BusIo for Bus {
                             self.boot = None;
                         }
                     }
-                    _ => {} // unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
+                    _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
             0xFF80..=0xFFFE => {
