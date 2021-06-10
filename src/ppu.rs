@@ -696,7 +696,7 @@ impl PixelFetcher {
         let id = self.back.tile.id.expect("Tile Number unexpectedly missing");
 
         let tile_data_addr = match control.tile_data_addr() {
-            TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as u16) * 16),
+            TileDataAddress::X8800 => 0x9000u16.wrapping_add(((id as i8) as i16 * 16) as u16),
             TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
         };
 
