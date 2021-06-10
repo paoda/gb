@@ -46,6 +46,25 @@ impl Cartridge {
 
                 Box::new(mbc)
             }
+            MbcKind::Mbc3WithBattery => {
+                // TODO: Implement Saving
+                let mbc = MBC3 {
+                    ram_size,
+                    ram: vec![0; ram_byte_count as usize],
+                    ..Default::default()
+                };
+
+                Box::new(mbc)
+            }
+            MbcKind::Mbc3 => {
+                let mbc = MBC3 {
+                    ram_size,
+                    ram: vec![0; ram_byte_count as usize],
+                    ..Default::default()
+                };
+
+                Box::new(mbc)
+            }
             MbcKind::Mbc5 => todo!("Implement MBC5"),
         }
     }
@@ -83,6 +102,8 @@ impl Cartridge {
             0x00 => MbcKind::None,
             0x01 => MbcKind::Mbc1,
             0x19 => MbcKind::Mbc5,
+            0x13 => MbcKind::Mbc3WithBattery,
+            0x11 => MbcKind::Mbc3,
             _ => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
@@ -93,7 +114,7 @@ impl BusIo for Cartridge {
         use MbcResult::*;
 
         match self.mbc.handle_read(addr) {
-            Address(addr) => self.memory[addr as usize],
+            Address(addr) => self.memory[addr],
             Value(byte) => byte,
         }
     }
@@ -189,14 +210,14 @@ impl MemoryBankController for Mbc1 {
             0x0000..=0x3FFF => {
                 if self.mode {
                     let zero_bank = self.calc_zero_bank_number() as u16;
-                    Address(0x4000 * zero_bank + addr)
+                    Address(0x4000 * zero_bank as usize + addr as usize)
                 } else {
-                    Address(addr)
+                    Address(addr as usize)
                 }
             }
             0x4000..=0x7FFF => {
                 let high_bank = self.calc_high_bank_number() as u16;
-                Address(0x4000 * high_bank + (addr - 0x4000))
+                Address(0x4000 * high_bank as usize + (addr as usize - 0x4000))
             }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
@@ -228,12 +249,87 @@ impl MemoryBankController for Mbc1 {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+enum MBC3Device {
+    ExternalRam,
+    RealTimeClock,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MBC3 {
+    /// 7-bit Number
+    rom_bank: u8,
+    /// 2-bit Number
+    ram_bank: u8,
+
+    devices_enabled: bool,
+    currently_mapped: Option<MBC3Device>,
+    ram_size: RamSize,
+    ram: Vec<u8>,
+}
+
+impl MemoryBankController for MBC3 {
+    fn handle_read(&self, addr: u16) -> MbcResult {
+        use MbcResult::*;
+
+        let res = match addr {
+            0x0000..=0x3FFF => Address(addr as usize),
+            0x4000..=0x7FFF => Address(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
+            0xA000..=0xBFFF => match self.currently_mapped {
+                Some(MBC3Device::ExternalRam) if self.devices_enabled => {
+                    Value(self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
+                }
+                Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
+                    unimplemented!("Reading from MBC3 RTC is currently unsupported")
+                }
+                _ => Value(0xFF),
+            },
+            _ => unreachable!("A read from {:#06X} should not be handled by MBC3", addr),
+        };
+
+        res
+    }
+
+    fn handle_write(&mut self, addr: u16, byte: u8) {
+        match addr {
+            0x000..=0x1FFF => self.devices_enabled = (byte & 0x0F) == 0x0A, // Enable External RAM and Access to RTC if there is one
+            0x2000..=0x3FFF => match byte {
+                0x00 => self.rom_bank = 0x01,
+                byte => self.rom_bank = byte & 0x7F,
+            },
+            0x4000..=0x5FFF => match byte {
+                0x00 | 0x01 | 0x02 | 0x03 => {
+                    self.ram_bank = byte & 0x03;
+                    self.currently_mapped = Some(MBC3Device::ExternalRam);
+                }
+                0x08 | 0x09 | 0x0A | 0x0B | 0x0C => {
+                    self.currently_mapped = Some(MBC3Device::RealTimeClock);
+                    unimplemented!("RTC in MBC3 is currently unimplemented")
+                }
+                _ => {}
+            },
+            0x6000..=0x7FFF => unimplemented!("RTC Data Latch is currently unimplemented"),
+            0xA000..=0xBFFF => match self.currently_mapped {
+                Some(MBC3Device::ExternalRam) if self.devices_enabled => {
+                    self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
+                }
+                Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
+                    unimplemented!("Writing to MBC3 RTC is currently unsupported")
+                }
+                _ => {}
+            },
+            _ => unreachable!("A write to {:#06X} should not be handled by MBC3", addr),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct NoMbc {}
 
 impl MemoryBankController for NoMbc {
     fn handle_read(&self, addr: u16) -> MbcResult {
-        MbcResult::Address(addr)
+        MbcResult::Address(addr as usize)
     }
 
     fn handle_write(&mut self, _addr: u16, _byte: u8) {
@@ -259,8 +355,9 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum MbcResult {
-    Address(u16),
+    Address(usize),
     Value(u8),
 }
 
@@ -269,6 +366,8 @@ enum MbcKind {
     None,
     Mbc1,
     Mbc5,
+    Mbc3WithBattery,
+    Mbc3,
 }
 
 impl Default for MbcKind {
