@@ -192,28 +192,31 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self) {
-        if self.scan_state.mode() == OamScanMode::Scan {
-            if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
-                // Determine whether we should draw the window next frame
-                self.window_stat
-                    .set_coincidence(self.pos.line_y == self.pos.window_y);
+        match self.scan_state.mode() {
+            OamScanMode::Scan if !self.dma.is_active() => {
+                if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
+                    // Determine whether we should draw the window next frame
+                    self.window_stat
+                        .set_coincidence(self.pos.line_y == self.pos.window_y);
+                }
+
+                let sprite_height = self.ctrl.obj_size().as_u8();
+                let index = self.scan_state.count();
+
+                let attr = self.oam.attribute(index as usize);
+                let line_y = self.pos.line_y + 16;
+
+                if attr.x > 0
+                    && line_y >= attr.y
+                    && line_y < (attr.y + sprite_height)
+                    && !self.obj_buffer.is_full()
+                {
+                    self.obj_buffer.add(attr);
+                }
+
+                self.scan_state.increase();
             }
-
-            let sprite_height = self.ctrl.obj_size().as_u8();
-            let index = self.scan_state.count();
-
-            let attr = self.oam.attribute(index as usize);
-            let line_y = self.pos.line_y + 16;
-
-            if attr.x > 0
-                && line_y >= attr.y
-                && line_y < (attr.y + sprite_height)
-                && !self.obj_buffer.is_full()
-            {
-                self.obj_buffer.add(attr);
-            }
-
-            self.scan_state.increase();
+            _ => {}
         }
 
         self.scan_state.next();
