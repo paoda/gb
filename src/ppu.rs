@@ -381,6 +381,15 @@ impl Ppu {
         if self.fifo.is_enabled() {
             use RenderPriority::*;
 
+            if self.x_pos == 0 {
+                // Start of a Scanline
+                let discarded_count = self.pos.scroll_x % 8;
+
+                for _ in 0..discarded_count {
+                    let _ = self.fifo.back.pop_back();
+                }
+            }
+
             // Handle Background Pixel and Sprite FIFO
             let bg_enabled = self.ctrl.bg_win_enabled();
             let obj_enabled = self.ctrl.obj_enabled();
