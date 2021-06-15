@@ -1,9 +1,17 @@
 use bitfield::bitfield;
+
+const WAVE_PATTERN_RAM_LEN: usize = 0x10;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Sound {
     pub(crate) ctrl: SoundControl,
+    /// Tone & Sweep
     pub(crate) ch1: Channel1,
+    /// Tone
     pub(crate) ch2: Channel2,
+    /// Wave
+    pub(crate) ch3: Channel3,
+    // pub(crate) ch4: Channel4,
 }
 
 impl Sound {
@@ -54,31 +62,6 @@ impl From<u8> for FrequencyHigh {
 impl From<FrequencyHigh> for u8 {
     fn from(freq: FrequencyHigh) -> Self {
         freq.0 & 0x40 // Only bit 6 can be read
-    }
-}
-
-bitfield! {
-    pub struct FrequencyLow(u8);
-    impl Debug;
-    pub _, set_freq_bits: 7, 0;
-}
-
-impl Copy for FrequencyLow {}
-impl Clone for FrequencyLow {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for FrequencyLow {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for FrequencyLow {
-    fn from(byte: u8) -> Self {
-        Self(byte)
     }
 }
 
@@ -148,7 +131,7 @@ pub(crate) struct Channel1 {
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
-    pub(crate) freq_lo: FrequencyLow,
+    pub(crate) freq_lo: u8,
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) freq_hi: FrequencyHigh,
 }
@@ -215,7 +198,7 @@ pub(crate) struct Channel2 {
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
-    pub(crate) freq_lo: FrequencyLow,
+    pub(crate) freq_lo: u8,
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) freq_hi: FrequencyHigh,
 }
@@ -336,6 +319,61 @@ impl From<u8> for WavePattern {
             0b11 => Self::ThreeQuarters,
             _ => unreachable!("{:#04X} is not a valid value for WavePattern", byte),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Channel3 {
+    /// 0xFF1A | NR30 - Channel 3 Sound on/off
+    enabled: bool,
+    /// 0xFF1B | NR31 - Sound Length
+    pub(crate) len: u8,
+    /// 0xFF1C | NR32 - Channel 3 Volume
+    volume: Channel3Volume,
+    /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
+    pub(crate) freq_lo: u8,
+    /// 0xFF1E | NR34 - Channel 3 Frequency high
+    pub(crate) freq_hi: FrequencyHigh,
+    pub(crate) ram: [u8; WAVE_PATTERN_RAM_LEN],
+}
+
+impl Channel3 {
+    pub fn enabled(&self) -> u8 {
+        self.enabled as u8
+    }
+
+    pub fn set_enabled(&mut self, byte: u8) {
+        self.enabled = (byte >> 7) & 0x01 == 0x01;
+    }
+
+    pub fn volume(&self) -> u8 {
+        (self.volume as u8) << 5
+    }
+
+    pub fn set_volume(&mut self, byte: u8) {
+        use Channel3Volume::*;
+
+        self.volume = match (byte >> 5) & 0x03 {
+            0b00 => Mute,
+            0b01 => Full,
+            0b10 => Half,
+            0b11 => Quarter,
+            _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
+        };
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Channel3Volume {
+    Mute = 0,
+    Full = 1,
+    Half = 2,
+    Quarter = 3,
+}
+
+impl Default for Channel3Volume {
+    fn default() -> Self {
+        Self::Mute
     }
 }
 
