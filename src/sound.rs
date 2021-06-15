@@ -11,7 +11,8 @@ pub(crate) struct Sound {
     pub(crate) ch2: Channel2,
     /// Wave
     pub(crate) ch3: Channel3,
-    // pub(crate) ch4: Channel4,
+    /// Noise
+    pub(crate) ch4: Channel4,
 }
 
 impl Sound {
@@ -78,6 +79,12 @@ impl From<u8> for FrequencyType {
             0b01 => Self::Consecutive,
             _ => unreachable!("{:#04X} is not a valid value for FrequencyType"),
         }
+    }
+}
+
+impl From<FrequencyType> for u8 {
+    fn from(freq_type: FrequencyType) -> Self {
+        freq_type as u8
     }
 }
 
@@ -374,6 +381,115 @@ enum Channel3Volume {
 impl Default for Channel3Volume {
     fn default() -> Self {
         Self::Mute
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Channel4 {
+    /// 0xFF20 | NR41 - Channel 4 Sound Length
+    len: u8,
+    /// 0xFF21 | NR42 - Channel 4 Volume Envelope
+    pub(crate) envelope: VolumeEnvelope,
+    /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
+    pub(crate) poly: PolynomialCounter,
+    /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
+    pub(crate) freq_data: Channel4Frequency,
+}
+
+impl Channel4 {
+    pub(crate) fn len(&self) -> u8 {
+        self.len & 0x3F
+    }
+
+    pub(crate) fn set_len(&mut self, byte: u8) {
+        self.len = byte & 0x3F;
+    }
+}
+
+bitfield! {
+    pub struct PolynomialCounter(u8);
+    impl Debug;
+    freq, set_freq: 7, 4;
+    from into CounterWidth, counter_width, set_counter_width: 3, 3;
+    div_ratio, set_div_ratio: 2, 0;
+}
+
+impl Copy for PolynomialCounter {}
+impl Clone for PolynomialCounter {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for PolynomialCounter {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for PolynomialCounter {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+impl From<PolynomialCounter> for u8 {
+    fn from(poly: PolynomialCounter) -> Self {
+        poly.0
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CounterWidth {
+    Long,  // 15 bits long
+    Short, // 7 bits long
+}
+
+impl From<u8> for CounterWidth {
+    fn from(byte: u8) -> Self {
+        match byte & 0x01 {
+            0b00 => Self::Short,
+            0b01 => Self::Long,
+            _ => unreachable!("{:#04X} is not a valid value for CounterWidth"),
+        }
+    }
+}
+
+impl From<CounterWidth> for u8 {
+    fn from(counter_width: CounterWidth) -> Self {
+        counter_width as u8
+    }
+}
+
+bitfield! {
+    pub struct Channel4Frequency(u8);
+    impl Debug;
+    _, set_initial: 7;
+    from into FrequencyType, freq_type, set_freq_type: 6, 6;
+}
+
+impl Copy for Channel4Frequency {}
+impl Clone for Channel4Frequency {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for Channel4Frequency {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for Channel4Frequency {
+    fn from(byte: u8) -> Self {
+        Self(byte & 0xC0) // Only bits 7 and 6 hold anything of value
+    }
+}
+
+impl From<Channel4Frequency> for u8 {
+    fn from(state: Channel4Frequency) -> Self {
+        state.0 & 0x40 // Only bit 6 holds anything of value
     }
 }
 
