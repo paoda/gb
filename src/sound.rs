@@ -141,6 +141,8 @@ impl From<SoundStatus> for u8 {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel1 {
+    /// 0xFF10 | NR10 - Channel 1 Sweep Register
+    pub(crate) sweep: Sweep,
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) duty: SoundDuty,
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
@@ -149,6 +151,61 @@ pub(crate) struct Channel1 {
     pub(crate) freq_lo: FrequencyLow,
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) freq_hi: FrequencyHigh,
+}
+
+bitfield! {
+    pub struct Sweep(u8);
+    impl Debug;
+    time, set_time: 6, 4;
+    from into SweepChange, change, set_change: 3, 3;
+    shift_count, set_shift_count: 2, 0;
+}
+
+impl Copy for Sweep {}
+impl Clone for Sweep {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for Sweep {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u8> for Sweep {
+    fn from(byte: u8) -> Self {
+        Self(byte)
+    }
+}
+
+impl From<Sweep> for u8 {
+    fn from(sweep: Sweep) -> Self {
+        sweep.0
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SweepChange {
+    Additive = 0,
+    Subtractive = 1,
+}
+
+impl From<u8> for SweepChange {
+    fn from(byte: u8) -> Self {
+        match byte & 0x01 {
+            0b00 => Self::Additive,
+            0b01 => Self::Subtractive,
+            _ => unreachable!("{:04X} is not a valid value for SweepChange", byte),
+        }
+    }
+}
+
+impl From<SweepChange> for u8 {
+    fn from(change: SweepChange) -> Self {
+        change as u8
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
