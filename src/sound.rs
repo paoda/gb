@@ -1,9 +1,9 @@
-use crate::instruction::Cycle;
 use bitfield::bitfield;
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Sound {
-    pub(crate) control: SoundControl,
+    pub(crate) ctrl: SoundControl,
     pub(crate) ch1: Channel1,
+    pub(crate) ch2: Channel2,
 }
 
 impl Sound {
@@ -53,7 +53,7 @@ impl From<u8> for FrequencyHigh {
 
 impl From<FrequencyHigh> for u8 {
     fn from(freq: FrequencyHigh) -> Self {
-        freq.0
+        freq.0 & 0x40 // Only bit 6 can be read
     }
 }
 
@@ -142,12 +142,24 @@ impl From<SoundStatus> for u8 {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel1 {
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
-    pub(crate) sound_duty: SoundDuty,
+    pub(crate) duty: SoundDuty,
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
-    pub(crate) vol_envelope: VolumeEnvelope,
-    /// 0xFF13 | NR13 - Channel 1 Frequency Low (Lower 8 bits only)
+    pub(crate) envelope: VolumeEnvelope,
+    /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
     pub(crate) freq_lo: FrequencyLow,
-    /// 0xFF14 | NR14 - Channel 1 Frequency High
+    /// 0xFF14 | NR14 - Channel 1 Frequency high
+    pub(crate) freq_hi: FrequencyHigh,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Channel2 {
+    /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
+    pub(crate) duty: SoundDuty,
+    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    pub(crate) envelope: VolumeEnvelope,
+    /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
+    pub(crate) freq_lo: FrequencyLow,
+    /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) freq_hi: FrequencyHigh,
 }
 
@@ -234,7 +246,7 @@ impl From<u8> for SoundDuty {
 
 impl From<SoundDuty> for u8 {
     fn from(duty: SoundDuty) -> Self {
-        duty.0
+        duty.0 & 0xC0 // Only bits 7 and 6 can be read
     }
 }
 
