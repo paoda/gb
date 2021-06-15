@@ -387,6 +387,7 @@ impl BusIo for Bus {
                             self.boot = None;
                         }
                     }
+                    0x7F => {} // Tetris tries to write to this non-existent IO Address
                     _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
                 };
             }
