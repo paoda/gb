@@ -320,7 +320,7 @@ impl Ppu {
         if self.ctrl.window_enabled()
             && !self.window_stat.should_draw()
             && self.window_stat.coincidence()
-            && self.x_pos >= self.pos.window_x - 7
+            && self.x_pos as i16 >= self.pos.window_x as i16 - 7
         {
             self.window_stat.set_should_draw(true);
             self.fetch.back.reset();
