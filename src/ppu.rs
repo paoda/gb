@@ -381,12 +381,11 @@ impl Ppu {
         if self.fifo.is_enabled() {
             use RenderPriority::*;
 
-            if self.x_pos == 0 {
-                // Start of a Scanline
-                let discarded_count = self.pos.scroll_x % 8;
+            if self.x_pos == 0 && !self.fifo.back.is_empty() {
+                let to_discard = self.pos.scroll_x % 8;
 
-                for _ in 0..discarded_count {
-                    let _ = self.fifo.back.pop_back();
+                for _ in 0..to_discard {
+                    let _ = self.fifo.back.pop_front();
                 }
             }
 
