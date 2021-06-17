@@ -713,12 +713,12 @@ impl PixelFetcher {
         };
 
         let offset = if is_window {
-            self.back.window_line.count() % 8
+            self.back.window_line.count() as u16 % 8
         } else {
-            (line_y + scroll_y) % 8
+            (line_y as u16 + scroll_y as u16) % 8
         };
 
-        tile_data_addr + (2 * offset as u16)
+        tile_data_addr + (offset * 2)
     }
 
     fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
