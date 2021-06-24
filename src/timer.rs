@@ -33,8 +33,8 @@ impl Timer {
         let timer_enable = self.ctrl.enabled() as u8;
         let and_result = bit & timer_enable;
 
-        if let Some(previous) = self.prev_and_result {
-            if previous == 0x01 && and_result == 0x00 {
+        if let Some(0x01) = self.prev_and_result {
+            if and_result == 0x00 {
                 // Falling Edge, increase TIMA Register
                 self.increment_tima();
             }
