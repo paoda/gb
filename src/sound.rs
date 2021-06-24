@@ -143,7 +143,7 @@ enum FrameSequencerState {
 }
 
 impl FrameSequencerState {
-    pub fn step(&mut self) {
+    fn step(&mut self) {
         use FrameSequencerState::*;
 
         *self = match *self {
@@ -399,7 +399,7 @@ impl From<Sweep> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum SweepDirection {
+enum SweepDirection {
     Increase = 0,
     Decrease = 1,
 }
@@ -594,19 +594,34 @@ pub(crate) struct Channel3 {
 }
 
 impl Channel3 {
-    pub fn enabled(&self) -> u8 {
+    /// 0xFF1E | NR34 - Channel 3 Frequency high
+    pub(crate) fn freq_hi(&self) -> u8 {
+        self.freq_hi.into()
+    }
+
+    /// 0xFF1E | NR34 - Channel 3 Frequency high
+    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
+        self.freq_hi = byte.into();
+
+        if self.freq_hi.initial() {
+            // Length behaviour during trigger event
+            self.length_timer = 64; // This is just a magic value...
+        }
+    }
+
+    pub(crate) fn enabled(&self) -> u8 {
         self.enabled as u8
     }
 
-    pub fn set_enabled(&mut self, byte: u8) {
+    pub(crate) fn set_enabled(&mut self, byte: u8) {
         self.enabled = (byte >> 7) & 0x01 == 0x01;
     }
 
-    pub fn volume(&self) -> u8 {
+    pub(crate) fn volume(&self) -> u8 {
         (self.volume as u8) << 5
     }
 
-    pub fn set_volume(&mut self, byte: u8) {
+    pub(crate) fn set_volume(&mut self, byte: u8) {
         use Channel3Volume::*;
 
         self.volume = match (byte >> 5) & 0x03 {
@@ -710,7 +725,7 @@ impl From<PolynomialCounter> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CounterWidth {
+enum CounterWidth {
     Long,  // 15 bits long
     Short, // 7 bits long
 }
