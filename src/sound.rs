@@ -749,6 +749,9 @@ pub(crate) struct Channel4 {
 
     // Length Functionality
     length_timer: u16,
+
+    /// Linear Feedback Shift Register (15-bit)
+    lfsr: u16,
 }
 
 impl Channel4 {
@@ -781,6 +784,9 @@ impl Channel4 {
             if self.length_timer == 0 {
                 self.length_timer = 64;
             }
+
+            // LFSR behaviour during trigger event
+            self.lfsr = 0x7FFF;
         }
     }
 }
