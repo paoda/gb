@@ -32,14 +32,14 @@ impl Sound {
                 self.frame_seq_state.step();
 
                 match self.frame_seq_state {
-                    Step0Length => todo!(),
+                    Step0Length => self.handle_length(),
                     Step2LengthAndSweep => {
-                        // Handle Length
+                        self.handle_length();
                         self.handle_sweep();
                     }
-                    Step4Length => todo!(),
+                    Step4Length => self.handle_length(),
                     Step6LengthAndSweep => {
-                        // Handle Length
+                        self.handle_length();
                         self.handle_sweep();
                     }
                     Step7VolumeEnvelope => self.handle_volume(),
@@ -49,6 +49,56 @@ impl Sound {
         }
 
         self.div_prev = Some(bit_5);
+    }
+
+    fn handle_length(&mut self) {
+        if self.ch1.freq_hi.idk() {
+            if self.ch1.length_timer > 0 {
+                self.ch1.length_timer -= 1;
+
+                // Check in this scope ensures (only) the above subtraction
+                // made length_timer 0
+                if self.ch1.length_timer == 0 {
+                    todo!("Disable Channel 1 until next trigger event");
+                }
+            }
+        }
+
+        if self.ch2.freq_hi.idk() {
+            if self.ch2.length_timer > 0 {
+                self.ch2.length_timer -= 1;
+
+                // Check in this scope ensures (only) the above subtraction
+                // made length_timer 0
+                if self.ch2.length_timer == 0 {
+                    todo!("Disable Channel 2 until next trigger event");
+                }
+            }
+        }
+
+        if self.ch3.freq_hi.idk() {
+            if self.ch3.length_timer > 0 {
+                self.ch3.length_timer -= 1;
+
+                // Check in this scope ensures (only) the above subtraction
+                // made length_timer 0
+                if self.ch3.length_timer == 0 {
+                    todo!("Disable Channel 3 until next trigger event");
+                }
+            }
+        }
+
+        if self.ch4.freq_data.idk() {
+            if self.ch4.length_timer > 0 {
+                self.ch4.length_timer -= 1;
+
+                // Check in this scope ensures (only) the above subtraction
+                // made length_timer 0
+                if self.ch4.length_timer == 0 {
+                    todo!("Disable Channel 4 until next trigger event");
+                }
+            }
+        }
     }
 
     fn handle_sweep(&mut self) {
@@ -180,15 +230,9 @@ pub(crate) struct SoundControl {
 bitfield! {
     pub struct FrequencyHigh(u8);
     impl Debug;
-    initial, _set_initial: 7;
-    from into FrequencyType, freq_type, set_freq_type: 6, 6;
+    initial, set_initial: 7;
+    idk, set_idk: 6; // TODO: Figure out what the hell this is
     freq_bits, set_freq_bits: 2, 0;
-}
-
-impl FrequencyHigh {
-    pub(crate) fn set_initial(&mut self, value: bool, ch1: &mut Channel1) {
-        self._set_initial(value);
-    }
 }
 
 impl Copy for FrequencyHigh {}
@@ -213,34 +257,6 @@ impl From<u8> for FrequencyHigh {
 impl From<FrequencyHigh> for u8 {
     fn from(freq: FrequencyHigh) -> Self {
         freq.0 & 0x40 // Only bit 6 can be read
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum FrequencyType {
-    Counter = 0,
-    Consecutive = 1,
-}
-
-impl From<u8> for FrequencyType {
-    fn from(byte: u8) -> Self {
-        match byte & 0b01 {
-            0b00 => Self::Counter,
-            0b01 => Self::Consecutive,
-            _ => unreachable!("{:#04X} is not a valid value for FrequencyType"),
-        }
-    }
-}
-
-impl From<FrequencyType> for u8 {
-    fn from(freq_type: FrequencyType) -> Self {
-        freq_type as u8
-    }
-}
-
-impl Default for FrequencyType {
-    fn default() -> Self {
-        Self::Counter
     }
 }
 
@@ -284,7 +300,7 @@ pub(crate) struct Channel1 {
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
     pub(crate) sweep: Sweep,
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
-    pub(crate) duty: SoundDuty,
+    duty: SoundDuty,
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
@@ -300,9 +316,23 @@ pub(crate) struct Channel1 {
     sweep_timer: u8,
     shadow_freq: u16,
     sweep_enabled: bool,
+
+    // Length Functionality
+    length_timer: u16,
 }
 
 impl Channel1 {
+    /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
+    pub(crate) fn duty(&self) -> u8 {
+        self.duty.into()
+    }
+
+    /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
+    pub(crate) fn set_duty(&mut self, byte: u8) {
+        self.duty = byte.into();
+        self.length_timer = 64 - self.duty.sound_length() as u16;
+    }
+
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
         self.freq_hi.into()
@@ -332,6 +362,11 @@ impl Channel1 {
 
             if self.sweep.shift_count() != 0 {
                 let _ = self.calc_sweep_freq();
+            }
+
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
             }
         }
     }
@@ -423,7 +458,7 @@ impl From<SweepDirection> for u8 {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel2 {
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
-    pub(crate) duty: SoundDuty,
+    duty: SoundDuty,
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
@@ -434,9 +469,23 @@ pub(crate) struct Channel2 {
     // Envelope Functionality
     period_timer: u8,
     current_volume: u8,
+
+    // Length Functionality
+    length_timer: u16,
 }
 
 impl Channel2 {
+    /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
+    pub(crate) fn duty(&self) -> u8 {
+        self.duty.into()
+    }
+
+    /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
+    pub(crate) fn set_duty(&mut self, byte: u8) {
+        self.duty = byte.into();
+        self.length_timer = 64 - self.duty.sound_length() as u16;
+    }
+
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
         self.freq_hi.into()
@@ -447,8 +496,14 @@ impl Channel2 {
         self.freq_hi = byte.into();
 
         if self.freq_hi.initial() {
+            // Envelope behaviour during trigger event
             self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
+
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
+            }
         }
     }
 }
@@ -518,7 +573,7 @@ bitfield! {
    pub struct SoundDuty(u8);
     impl Debug;
    pub from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
-   pub _, set_sound_length: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
+   pub sound_length, _: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
 }
 
 impl Copy for SoundDuty {}
@@ -583,17 +638,31 @@ pub(crate) struct Channel3 {
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
     enabled: bool,
     /// 0xFF1B | NR31 - Sound Length
-    pub(crate) len: u8,
+    len: u8,
     /// 0xFF1C | NR32 - Channel 3 Volume
     volume: Channel3Volume,
     /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
     pub(crate) freq_lo: u8,
     /// 0xFF1E | NR34 - Channel 3 Frequency high
-    pub(crate) freq_hi: FrequencyHigh,
+    freq_hi: FrequencyHigh,
     pub(crate) ram: [u8; WAVE_PATTERN_RAM_LEN],
+
+    // Length Functionality
+    length_timer: u16,
 }
 
 impl Channel3 {
+    /// 0xFF1B | NR31 - Sound Length
+    pub(crate) fn len(&self) -> u8 {
+        self.len
+    }
+
+    /// 0xFF1B | NR31 - Sound Length
+    pub(crate) fn set_len(&mut self, byte: u8) {
+        self.len = byte;
+        self.length_timer = 256 - self.len as u16;
+    }
+
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
         self.freq_hi.into()
@@ -605,7 +674,9 @@ impl Channel3 {
 
         if self.freq_hi.initial() {
             // Length behaviour during trigger event
-            self.length_timer = 64; // This is just a magic value...
+            if self.length_timer == 0 {
+                self.length_timer = 256;
+            }
         }
     }
 
@@ -662,9 +733,23 @@ pub(crate) struct Channel4 {
     // Envelope Functionality
     period_timer: u8,
     current_volume: u8,
+
+    // Length Functionality
+    length_timer: u16,
 }
 
 impl Channel4 {
+    /// 0xFF20 | NR41 - Channel 4 Sound Length
+    pub(crate) fn len(&self) -> u8 {
+        self.len & 0x3F
+    }
+
+    /// 0xFF20 | NR41 - Channel 4 Sound Length
+    pub(crate) fn set_len(&mut self, byte: u8) {
+        self.len = byte & 0x3F;
+        self.length_timer = 256 - self.len as u16;
+    }
+
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     pub(crate) fn freq_data(&self) -> u8 {
         self.freq_data.into()
@@ -675,19 +760,15 @@ impl Channel4 {
         self.freq_data = byte.into();
 
         if self.freq_data.initial() {
+            // Envelope behaviour during trigger event
             self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
+
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
+            }
         }
-    }
-}
-
-impl Channel4 {
-    pub(crate) fn len(&self) -> u8 {
-        self.len & 0x3F
-    }
-
-    pub(crate) fn set_len(&mut self, byte: u8) {
-        self.len = byte & 0x3F;
     }
 }
 
@@ -750,7 +831,7 @@ bitfield! {
     pub struct Channel4Frequency(u8);
     impl Debug;
     initial, set_initial: 7;
-    from into FrequencyType, freq_type, set_freq_type: 6, 6;
+    idk, set_idk: 6; // TODO: same as FrequencyHigh, figure out what this is
 }
 
 impl Copy for Channel4Frequency {}
