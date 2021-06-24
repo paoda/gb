@@ -57,13 +57,13 @@ impl Sound {
         }
 
         if self.ch1.sweep_timer == 0 {
-            self.ch1.sweep_timer = if self.ch1.sweep.time() != 0 {
-                self.ch1.sweep.time()
+            self.ch1.sweep_timer = if self.ch1.sweep.period() != 0 {
+                self.ch1.sweep.period()
             } else {
                 8
             };
 
-            if self.ch1.sweep_enabled && self.ch1.sweep.time() != 0 {
+            if self.ch1.sweep_enabled && self.ch1.sweep.period() != 0 {
                 let new_freq = self.ch1.calc_sweep_freq();
 
                 if new_freq <= 2047 && self.ch1.sweep.shift_count() != 0 {
@@ -80,13 +80,13 @@ impl Sound {
         use EnvelopeDirection::*;
         // Channels 1, 2 and 4 have Volume Envelopes
 
-        if self.ch1.envelope.sweep_count() != 0 {
+        if self.ch1.envelope.period() != 0 {
             if self.ch1.period_timer > 0 {
                 self.ch1.period_timer -= 1;
             }
 
             if self.ch1.period_timer == 0 {
-                self.ch1.period_timer = self.ch1.envelope.sweep_count();
+                self.ch1.period_timer = self.ch1.envelope.period();
 
                 match self.ch1.envelope.direction() {
                     Decrease if self.ch1.current_volume > 0x00 => self.ch1.current_volume -= 1,
@@ -96,13 +96,13 @@ impl Sound {
             }
         }
 
-        if self.ch2.envelope.sweep_count() != 0 {
+        if self.ch2.envelope.period() != 0 {
             if self.ch2.period_timer > 0 {
                 self.ch2.period_timer -= 1;
             }
 
             if self.ch2.period_timer == 0 {
-                self.ch2.period_timer = self.ch2.envelope.sweep_count();
+                self.ch2.period_timer = self.ch2.envelope.period();
 
                 match self.ch2.envelope.direction() {
                     Decrease if self.ch2.current_volume > 0x00 => self.ch2.current_volume -= 1,
@@ -112,13 +112,13 @@ impl Sound {
             }
         }
 
-        if self.ch4.envelope.sweep_count() != 0 {
+        if self.ch4.envelope.period() != 0 {
             if self.ch4.period_timer > 0 {
                 self.ch4.period_timer -= 1;
             }
 
             if self.ch4.period_timer == 0 {
-                self.ch4.period_timer = self.ch4.envelope.sweep_count();
+                self.ch4.period_timer = self.ch4.envelope.period();
 
                 match self.ch4.envelope.direction() {
                     Decrease if self.ch4.current_volume > 0x00 => self.ch4.current_volume -= 1,
@@ -312,26 +312,27 @@ impl Channel1 {
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
         self.freq_hi = byte.into();
 
-        // Envelope Behaviour during trigger event
+        // If this bit is set, a trigger event occurs
         if self.freq_hi.initial() {
-            self.period_timer = self.envelope.sweep_count();
+            // Envelope Behaviour during trigger event
+            self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
-        }
 
-        // Sweep behaviour during trigger event
-        self.shadow_freq = self.frequency();
-        self.sweep_timer = if self.sweep.time() != 0 {
-            self.sweep.time()
-        } else {
-            8
-        };
+            // Sweep behaviour during trigger event
+            self.shadow_freq = self.frequency() & 0x07FF; // Mask should be redundant
+            self.sweep_timer = if self.sweep.period() != 0 {
+                self.sweep.period()
+            } else {
+                8
+            };
 
-        if self.sweep.time() != 0 || self.sweep.shift_count() != 0 {
-            self.sweep_enabled = true;
-        }
+            if self.sweep.period() != 0 || self.sweep.shift_count() != 0 {
+                self.sweep_enabled = true;
+            }
 
-        if self.sweep.shift_count() != 0 {
-            let _ = self.calc_sweep_freq();
+            if self.sweep.shift_count() != 0 {
+                let _ = self.calc_sweep_freq();
+            }
         }
     }
 
@@ -367,7 +368,7 @@ impl Channel1 {
 bitfield! {
     pub struct Sweep(u8);
     impl Debug;
-    time, set_time: 6, 4;
+    period, set_period: 6, 4;
     from into SweepDirection, direction, set_direction: 3, 3;
     shift_count, set_shift_count: 2, 0;
 }
@@ -446,7 +447,7 @@ impl Channel2 {
         self.freq_hi = byte.into();
 
         if self.freq_hi.initial() {
-            self.period_timer = self.envelope.sweep_count();
+            self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
         }
     }
@@ -457,7 +458,7 @@ bitfield! {
     impl Debug;
     pub init_vol, set_init_vol: 7, 4;
     pub from into EnvelopeDirection, direction, set_direction: 3, 3;
-    pub sweep_count, set_sweep_count: 2, 0;
+    pub period, set_period: 2, 0;
 }
 
 impl Copy for VolumeEnvelope {}
@@ -659,7 +660,7 @@ impl Channel4 {
         self.freq_data = byte.into();
 
         if self.freq_data.initial() {
-            self.period_timer = self.envelope.sweep_count();
+            self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
         }
     }
