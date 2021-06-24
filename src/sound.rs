@@ -33,79 +33,100 @@ impl Sound {
 
                 match self.frame_seq_state {
                     Step0Length => todo!(),
-                    Step2LengthAndSweep => todo!(),
-                    Step4Length => todo!(),
-                    Step6LengthAndSweep => todo!(),
-                    Step7VolumeEnvelope => {
-                        use EnvelopeDirection::*;
-                        // Channels 1, 2 and 4 have Volume Envelopes
-
-                        if self.ch1.envelope.sweep_count() != 0 {
-                            if self.ch1.period_timer > 0 {
-                                self.ch1.period_timer -= 1;
-                            }
-
-                            if self.ch1.period_timer == 0 {
-                                self.ch1.period_timer = self.ch1.envelope.sweep_count();
-
-                                match self.ch1.envelope.direction() {
-                                    Decrease if self.ch1.current_volume > 0x00 => {
-                                        self.ch1.current_volume -= 1
-                                    }
-                                    Increase if self.ch1.current_volume < 0x0F => {
-                                        self.ch1.current_volume += 1
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-
-                        if self.ch2.envelope.sweep_count() != 0 {
-                            if self.ch2.period_timer > 0 {
-                                self.ch2.period_timer -= 1;
-                            }
-
-                            if self.ch2.period_timer == 0 {
-                                self.ch2.period_timer = self.ch2.envelope.sweep_count();
-
-                                match self.ch2.envelope.direction() {
-                                    Decrease if self.ch2.current_volume > 0x00 => {
-                                        self.ch2.current_volume -= 1
-                                    }
-                                    Increase if self.ch2.current_volume < 0x0F => {
-                                        self.ch2.current_volume += 1
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-
-                        if self.ch4.envelope.sweep_count() != 0 {
-                            if self.ch4.period_timer > 0 {
-                                self.ch4.period_timer -= 1;
-                            }
-
-                            if self.ch4.period_timer == 0 {
-                                self.ch4.period_timer = self.ch4.envelope.sweep_count();
-
-                                match self.ch4.envelope.direction() {
-                                    Decrease if self.ch4.current_volume > 0x00 => {
-                                        self.ch4.current_volume -= 1
-                                    }
-                                    Increase if self.ch4.current_volume < 0x0F => {
-                                        self.ch4.current_volume += 1
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                    Step2LengthAndSweep => {
+                        // Handle Length
+                        self.handle_sweep();
                     }
+                    Step4Length => todo!(),
+                    Step6LengthAndSweep => {
+                        // Handle Length
+                        self.handle_sweep();
+                    }
+                    Step7VolumeEnvelope => self.handle_volume(),
                     Step1Nothing | Step3Nothing | Step5Nothing => {}
                 };
             }
         }
 
         self.div_prev = Some(bit_5);
+    }
+
+    fn handle_sweep(&mut self) {
+        if self.ch1.sweep_timer > 0 {
+            self.ch1.sweep_timer -= 1;
+        }
+
+        if self.ch1.sweep_timer == 0 {
+            self.ch1.sweep_timer = if self.ch1.sweep.time() != 0 {
+                self.ch1.sweep.time()
+            } else {
+                8
+            };
+
+            if self.ch1.sweep_enabled && self.ch1.sweep.time() != 0 {
+                let new_freq = self.ch1.calc_sweep_freq();
+
+                if new_freq <= 2047 && self.ch1.sweep.shift_count() != 0 {
+                    self.ch1.set_frequency(new_freq);
+                    self.ch1.shadow_freq = new_freq & 0x07FF;
+
+                    let _ = self.ch1.calc_sweep_freq();
+                }
+            }
+        }
+    }
+
+    fn handle_volume(&mut self) {
+        use EnvelopeDirection::*;
+        // Channels 1, 2 and 4 have Volume Envelopes
+
+        if self.ch1.envelope.sweep_count() != 0 {
+            if self.ch1.period_timer > 0 {
+                self.ch1.period_timer -= 1;
+            }
+
+            if self.ch1.period_timer == 0 {
+                self.ch1.period_timer = self.ch1.envelope.sweep_count();
+
+                match self.ch1.envelope.direction() {
+                    Decrease if self.ch1.current_volume > 0x00 => self.ch1.current_volume -= 1,
+                    Increase if self.ch1.current_volume < 0x0F => self.ch1.current_volume += 1,
+                    _ => {}
+                }
+            }
+        }
+
+        if self.ch2.envelope.sweep_count() != 0 {
+            if self.ch2.period_timer > 0 {
+                self.ch2.period_timer -= 1;
+            }
+
+            if self.ch2.period_timer == 0 {
+                self.ch2.period_timer = self.ch2.envelope.sweep_count();
+
+                match self.ch2.envelope.direction() {
+                    Decrease if self.ch2.current_volume > 0x00 => self.ch2.current_volume -= 1,
+                    Increase if self.ch2.current_volume < 0x0F => self.ch2.current_volume += 1,
+                    _ => {}
+                }
+            }
+        }
+
+        if self.ch4.envelope.sweep_count() != 0 {
+            if self.ch4.period_timer > 0 {
+                self.ch4.period_timer -= 1;
+            }
+
+            if self.ch4.period_timer == 0 {
+                self.ch4.period_timer = self.ch4.envelope.sweep_count();
+
+                match self.ch4.envelope.direction() {
+                    Decrease if self.ch4.current_volume > 0x00 => self.ch4.current_volume -= 1,
+                    Increase if self.ch4.current_volume < 0x0F => self.ch4.current_volume += 1,
+                    _ => {}
+                }
+            }
+        }
     }
 }
 
@@ -160,8 +181,8 @@ bitfield! {
     pub struct FrequencyHigh(u8);
     impl Debug;
     initial, _set_initial: 7;
-    pub from into FrequencyType, get_freq_type, set_freq_type: 6;
-    pub _, set_freq_bits: 2, 0;
+    from into FrequencyType, freq_type, set_freq_type: 6, 6;
+    freq_bits, set_freq_bits: 2, 0;
 }
 
 impl FrequencyHigh {
@@ -274,6 +295,11 @@ pub(crate) struct Channel1 {
     // Envelope Functionality
     period_timer: u8,
     current_volume: u8,
+
+    // Sweep Functionality
+    sweep_timer: u8,
+    shadow_freq: u16,
+    sweep_enabled: bool,
 }
 
 impl Channel1 {
@@ -286,10 +312,55 @@ impl Channel1 {
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
         self.freq_hi = byte.into();
 
+        // Envelope Behaviour during trigger event
         if self.freq_hi.initial() {
             self.period_timer = self.envelope.sweep_count();
             self.current_volume = self.envelope.init_vol();
         }
+
+        // Sweep behaviour during trigger event
+        self.shadow_freq = self.frequency();
+        self.sweep_timer = if self.sweep.time() != 0 {
+            self.sweep.time()
+        } else {
+            8
+        };
+
+        if self.sweep.time() != 0 || self.sweep.shift_count() != 0 {
+            self.sweep_enabled = true;
+        }
+
+        if self.sweep.shift_count() != 0 {
+            let _ = self.calc_sweep_freq();
+        }
+    }
+
+    fn calc_sweep_freq(&mut self) -> u16 {
+        use SweepDirection::*;
+        let shifted_shadow_freq = self.shadow_freq >> self.sweep.shift_count();
+
+        let new_freq = match self.sweep.direction() {
+            Increase => self.shadow_freq + shifted_shadow_freq,
+            Decrease => self.shadow_freq - shifted_shadow_freq,
+        };
+
+        // Overflow check
+        if new_freq > 2047 {
+            todo!("Frequency failed the overflow check. Disable the channel");
+        }
+
+        new_freq
+    }
+
+    fn set_frequency(&mut self, word: u16) {
+        let freq_bits = word & 0x07FF;
+        self.freq_lo = (freq_bits & 0x00FF) as u8;
+        self.freq_hi
+            .set_freq_bits(((freq_bits & 0x0700) >> 8) as u8);
+    }
+
+    fn frequency(&self) -> u16 {
+        (self.freq_hi.freq_bits() as u16) << 8 | self.freq_lo as u16
     }
 }
 
@@ -297,7 +368,7 @@ bitfield! {
     pub struct Sweep(u8);
     impl Debug;
     time, set_time: 6, 4;
-    from into SweepChange, change, set_change: 3, 3;
+    from into SweepDirection, direction, set_direction: 3, 3;
     shift_count, set_shift_count: 2, 0;
 }
 
@@ -327,23 +398,23 @@ impl From<Sweep> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum SweepChange {
-    Additive = 0,
-    Subtractive = 1,
+pub(crate) enum SweepDirection {
+    Increase = 0,
+    Decrease = 1,
 }
 
-impl From<u8> for SweepChange {
+impl From<u8> for SweepDirection {
     fn from(byte: u8) -> Self {
         match byte & 0x01 {
-            0b00 => Self::Additive,
-            0b01 => Self::Subtractive,
+            0b00 => Self::Increase,
+            0b01 => Self::Decrease,
             _ => unreachable!("{:04X} is not a valid value for SweepChange", byte),
         }
     }
 }
 
-impl From<SweepChange> for u8 {
-    fn from(change: SweepChange) -> Self {
+impl From<SweepDirection> for u8 {
+    fn from(change: SweepDirection) -> Self {
         change as u8
     }
 }
