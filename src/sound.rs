@@ -645,7 +645,7 @@ pub(crate) struct Channel3 {
     pub(crate) freq_lo: u8,
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     freq_hi: FrequencyHigh,
-    pub(crate) ram: [u8; WAVE_PATTERN_RAM_LEN],
+    pub(crate) wave_ram: [u8; WAVE_PATTERN_RAM_LEN],
 
     // Length Functionality
     length_timer: u16,
@@ -711,6 +711,19 @@ enum Channel3Volume {
     Full = 1,
     Half = 2,
     Quarter = 3,
+}
+
+impl Channel3Volume {
+    pub fn shift_count(&self) -> u8 {
+        use Channel3Volume::*;
+
+        match *self {
+            Mute => 4,
+            Full => 0,
+            Half => 1,
+            Quarter => 2,
+        }
+    }
 }
 
 impl Default for Channel3Volume {
