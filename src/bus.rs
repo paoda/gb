@@ -69,7 +69,7 @@ impl Bus {
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();
-        self.snd.clock();
+        self.snd.clock(self.timer.divider);
         self.clock_dma();
     }
 
@@ -223,10 +223,10 @@ impl BusIo for Bus {
                     0x10 => self.snd.ch1.sweep.into(),
                     0x11 => self.snd.ch1.duty.into(),
                     0x12 => self.snd.ch1.envelope.into(),
-                    0x14 => self.snd.ch1.freq_hi.into(),
+                    0x14 => self.snd.ch1.freq_hi(),
                     0x16 => self.snd.ch2.duty.into(),
                     0x17 => self.snd.ch2.envelope.into(),
-                    0x19 => self.snd.ch2.freq_hi.into(),
+                    0x19 => self.snd.ch2.freq_hi(),
                     0x1A => self.snd.ch3.enabled(),
                     0x1B => self.snd.ch3.len,
                     0x1C => self.snd.ch3.volume(),
@@ -234,7 +234,7 @@ impl BusIo for Bus {
                     0x20 => self.snd.ch4.len(),
                     0x21 => self.snd.ch4.envelope.into(),
                     0x22 => self.snd.ch4.poly.into(),
-                    0x23 => self.snd.ch4.freq_data.into(),
+                    0x23 => self.snd.ch4.freq_data(),
                     0x24 => self.snd.ctrl.channel.into(),
                     0x25 => self.snd.ctrl.output.into(),
                     0x26 => self.snd.ctrl.status.into(),
@@ -338,11 +338,11 @@ impl BusIo for Bus {
                     0x11 => self.snd.ch1.duty = byte.into(),
                     0x12 => self.snd.ch1.envelope = byte.into(),
                     0x13 => self.snd.ch1.freq_lo = byte,
-                    0x14 => self.snd.ch1.freq_hi = byte.into(),
+                    0x14 => self.snd.ch1.set_freq_hi(byte),
                     0x16 => self.snd.ch2.duty = byte.into(),
                     0x17 => self.snd.ch2.envelope = byte.into(),
                     0x18 => self.snd.ch2.freq_lo = byte,
-                    0x19 => self.snd.ch2.freq_hi = byte.into(),
+                    0x19 => self.snd.ch2.set_freq_hi(byte),
                     0x1A => self.snd.ch3.set_enabled(byte),
                     0x1B => self.snd.ch3.len = byte,
                     0x1C => self.snd.ch3.set_volume(byte),
@@ -351,7 +351,7 @@ impl BusIo for Bus {
                     0x20 => self.snd.ch4.set_len(byte),
                     0x21 => self.snd.ch4.envelope = byte.into(),
                     0x22 => self.snd.ch4.poly = byte.into(),
-                    0x23 => self.snd.ch4.freq_data = byte.into(),
+                    0x23 => self.snd.ch4.set_freq_data(byte),
                     0x24 => self.snd.ctrl.channel = byte.into(),
                     0x25 => self.snd.ctrl.output = byte.into(),
                     0x26 => self.snd.ctrl.status = byte.into(), // FIXME: Should we control which bytes are written to here?

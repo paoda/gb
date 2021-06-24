@@ -13,11 +13,134 @@ pub(crate) struct Sound {
     pub(crate) ch3: Channel3,
     /// Noise
     pub(crate) ch4: Channel4,
+
+    // Frame Sequencer
+    frame_seq_state: FrameSequencerState,
+    div_prev: Option<u8>,
 }
 
 impl Sound {
-    pub(crate) fn clock(&mut self) {
-        //
+    pub(crate) fn clock(&mut self, div: u16) {
+        use FrameSequencerState::*;
+
+        // the 5th bit of the high byte
+        let bit_5 = (div >> 13 & 0x01) as u8;
+
+        if let Some(0x01) = self.div_prev {
+            if bit_5 == 0x00 {
+                // Falling Edge, step the Frame Sequencer
+                self.frame_seq_state.step();
+
+                match self.frame_seq_state {
+                    Step0Length => todo!(),
+                    Step2LengthAndSweep => todo!(),
+                    Step4Length => todo!(),
+                    Step6LengthAndSweep => todo!(),
+                    Step7VolumeEnvelope => {
+                        use EnvelopeDirection::*;
+                        // Channels 1, 2 and 4 have Volume Envelopes
+
+                        if self.ch1.envelope.sweep_count() != 0 {
+                            if self.ch1.period_timer > 0 {
+                                self.ch1.period_timer -= 1;
+                            }
+
+                            if self.ch1.period_timer == 0 {
+                                self.ch1.period_timer = self.ch1.envelope.sweep_count();
+
+                                match self.ch1.envelope.direction() {
+                                    Decrease if self.ch1.current_volume > 0x00 => {
+                                        self.ch1.current_volume -= 1
+                                    }
+                                    Increase if self.ch1.current_volume < 0x0F => {
+                                        self.ch1.current_volume += 1
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        if self.ch2.envelope.sweep_count() != 0 {
+                            if self.ch2.period_timer > 0 {
+                                self.ch2.period_timer -= 1;
+                            }
+
+                            if self.ch2.period_timer == 0 {
+                                self.ch2.period_timer = self.ch2.envelope.sweep_count();
+
+                                match self.ch2.envelope.direction() {
+                                    Decrease if self.ch2.current_volume > 0x00 => {
+                                        self.ch2.current_volume -= 1
+                                    }
+                                    Increase if self.ch2.current_volume < 0x0F => {
+                                        self.ch2.current_volume += 1
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        if self.ch4.envelope.sweep_count() != 0 {
+                            if self.ch4.period_timer > 0 {
+                                self.ch4.period_timer -= 1;
+                            }
+
+                            if self.ch4.period_timer == 0 {
+                                self.ch4.period_timer = self.ch4.envelope.sweep_count();
+
+                                match self.ch4.envelope.direction() {
+                                    Decrease if self.ch4.current_volume > 0x00 => {
+                                        self.ch4.current_volume -= 1
+                                    }
+                                    Increase if self.ch4.current_volume < 0x0F => {
+                                        self.ch4.current_volume += 1
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    Step1Nothing | Step3Nothing | Step5Nothing => {}
+                };
+            }
+        }
+
+        self.div_prev = Some(bit_5);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameSequencerState {
+    Step0Length,
+    Step1Nothing,
+    Step2LengthAndSweep,
+    Step3Nothing,
+    Step4Length,
+    Step5Nothing,
+    Step6LengthAndSweep,
+    Step7VolumeEnvelope,
+}
+
+impl FrameSequencerState {
+    pub fn step(&mut self) {
+        use FrameSequencerState::*;
+
+        *self = match *self {
+            Step0Length => Step1Nothing,
+            Step1Nothing => Step2LengthAndSweep,
+            Step2LengthAndSweep => Step3Nothing,
+            Step3Nothing => Step4Length,
+            Step4Length => Step5Nothing,
+            Step5Nothing => Step6LengthAndSweep,
+            Step6LengthAndSweep => Step7VolumeEnvelope,
+            Step7VolumeEnvelope => Step0Length,
+        };
+    }
+}
+
+impl Default for FrameSequencerState {
+    fn default() -> Self {
+        Self::Step0Length
     }
 }
 
@@ -36,9 +159,15 @@ pub(crate) struct SoundControl {
 bitfield! {
     pub struct FrequencyHigh(u8);
     impl Debug;
-    pub _, set_initial: 7;
+    initial, _set_initial: 7;
     pub from into FrequencyType, get_freq_type, set_freq_type: 6;
     pub _, set_freq_bits: 2, 0;
+}
+
+impl FrequencyHigh {
+    pub(crate) fn set_initial(&mut self, value: bool, ch1: &mut Channel1) {
+        self._set_initial(value);
+    }
 }
 
 impl Copy for FrequencyHigh {}
@@ -140,7 +269,28 @@ pub(crate) struct Channel1 {
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
     pub(crate) freq_lo: u8,
     /// 0xFF14 | NR14 - Channel 1 Frequency high
-    pub(crate) freq_hi: FrequencyHigh,
+    freq_hi: FrequencyHigh,
+
+    // Envelope Functionality
+    period_timer: u8,
+    current_volume: u8,
+}
+
+impl Channel1 {
+    /// 0xFF14 | NR14 - Channel 1 Frequency high
+    pub(crate) fn freq_hi(&self) -> u8 {
+        self.freq_hi.into()
+    }
+
+    /// 0xFF14 | NR14 - Channel 1 Frequency high
+    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
+        self.freq_hi = byte.into();
+
+        if self.freq_hi.initial() {
+            self.period_timer = self.envelope.sweep_count();
+            self.current_volume = self.envelope.init_vol();
+        }
+    }
 }
 
 bitfield! {
@@ -207,14 +357,35 @@ pub(crate) struct Channel2 {
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
     pub(crate) freq_lo: u8,
     /// 0xFF19 | NR24 - Channel 2 Frequency high
-    pub(crate) freq_hi: FrequencyHigh,
+    freq_hi: FrequencyHigh,
+
+    // Envelope Functionality
+    period_timer: u8,
+    current_volume: u8,
+}
+
+impl Channel2 {
+    /// 0xFF19 | NR24 - Channel 2 Frequency high
+    pub(crate) fn freq_hi(&self) -> u8 {
+        self.freq_hi.into()
+    }
+
+    /// 0xFF19 | NR24 - Channel 2 Frequency high
+    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
+        self.freq_hi = byte.into();
+
+        if self.freq_hi.initial() {
+            self.period_timer = self.envelope.sweep_count();
+            self.current_volume = self.envelope.init_vol();
+        }
+    }
 }
 
 bitfield! {
     pub struct VolumeEnvelope(u8);
     impl Debug;
     pub init_vol, set_init_vol: 7, 4;
-    pub from into EnvelopeDirection, direction, set_direction: 3;
+    pub from into EnvelopeDirection, direction, set_direction: 3, 3;
     pub sweep_count, set_sweep_count: 2, 0;
 }
 
@@ -244,7 +415,7 @@ impl From<VolumeEnvelope> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum EnvelopeDirection {
+pub enum EnvelopeDirection {
     Decrease = 0,
     Increase = 1,
 }
@@ -256,6 +427,12 @@ impl From<u8> for EnvelopeDirection {
             0b01 => Self::Increase,
             _ => unreachable!("{:#04X} is not a valid value for EnvelopeDirection", byte),
         }
+    }
+}
+
+impl From<EnvelopeDirection> for u8 {
+    fn from(direction: EnvelopeDirection) -> Self {
+        direction as u8
     }
 }
 
@@ -393,7 +570,28 @@ pub(crate) struct Channel4 {
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
     pub(crate) poly: PolynomialCounter,
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
-    pub(crate) freq_data: Channel4Frequency,
+    freq_data: Channel4Frequency,
+
+    // Envelope Functionality
+    period_timer: u8,
+    current_volume: u8,
+}
+
+impl Channel4 {
+    /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
+    pub(crate) fn freq_data(&self) -> u8 {
+        self.freq_data.into()
+    }
+
+    /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
+    pub(crate) fn set_freq_data(&mut self, byte: u8) {
+        self.freq_data = byte.into();
+
+        if self.freq_data.initial() {
+            self.period_timer = self.envelope.sweep_count();
+            self.current_volume = self.envelope.init_vol();
+        }
+    }
 }
 
 impl Channel4 {
@@ -464,7 +662,7 @@ impl From<CounterWidth> for u8 {
 bitfield! {
     pub struct Channel4Frequency(u8);
     impl Debug;
-    _, set_initial: 7;
+    initial, set_initial: 7;
     from into FrequencyType, freq_type, set_freq_type: 6, 6;
 }
 
