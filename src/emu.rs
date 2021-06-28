@@ -8,8 +8,8 @@ use std::time::Duration;
 
 pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_CLOCK_SPEED);
 pub const CYCLES_IN_FRAME: Cycle = Cycle::new(456 * 154); // 456 Cycles times 154 scanlines
-const SM83_CLOCK_SPEED: u64 = 0x400_000; // Hz which is 4.194304Mhz
-const DEFAULT_TITLE: &'static str = "DMG-01 Emulator";
+const SM83_CLOCK_SPEED: u64 = 0x40_0000; // Hz which is 4.194304Mhz
+const DEFAULT_TITLE: &str = "DMG-01 Emulator";
 
 pub fn init(boot_path: Option<&str>, rom_path: &str) -> Result<SM83> {
     let mut cpu = match boot_path {

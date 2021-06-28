@@ -52,51 +52,43 @@ impl Sound {
     }
 
     fn handle_length(&mut self) {
-        if self.ch1.freq_hi.idk() {
-            if self.ch1.length_timer > 0 {
-                self.ch1.length_timer -= 1;
+        if self.ch1.freq_hi.idk() && self.ch1.length_timer > 0 {
+            self.ch1.length_timer -= 1;
 
-                // Check in this scope ensures (only) the above subtraction
-                // made length_timer 0
-                if self.ch1.length_timer == 0 {
-                    todo!("Disable Channel 1 until next trigger event");
-                }
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if self.ch1.length_timer == 0 {
+                todo!("Disable Channel 1 until next trigger event");
             }
         }
 
-        if self.ch2.freq_hi.idk() {
-            if self.ch2.length_timer > 0 {
-                self.ch2.length_timer -= 1;
+        if self.ch2.freq_hi.idk() && self.ch2.length_timer > 0 {
+            self.ch2.length_timer -= 1;
 
-                // Check in this scope ensures (only) the above subtraction
-                // made length_timer 0
-                if self.ch2.length_timer == 0 {
-                    todo!("Disable Channel 2 until next trigger event");
-                }
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if self.ch2.length_timer == 0 {
+                todo!("Disable Channel 2 until next trigger event");
             }
         }
 
-        if self.ch3.freq_hi.idk() {
-            if self.ch3.length_timer > 0 {
-                self.ch3.length_timer -= 1;
+        if self.ch3.freq_hi.idk() && self.ch3.length_timer > 0 {
+            self.ch3.length_timer -= 1;
 
-                // Check in this scope ensures (only) the above subtraction
-                // made length_timer 0
-                if self.ch3.length_timer == 0 {
-                    todo!("Disable Channel 3 until next trigger event");
-                }
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if self.ch3.length_timer == 0 {
+                todo!("Disable Channel 3 until next trigger event");
             }
         }
 
-        if self.ch4.freq_data.idk() {
-            if self.ch4.length_timer > 0 {
-                self.ch4.length_timer -= 1;
+        if self.ch4.freq_data.idk() && self.ch4.length_timer > 0 {
+            self.ch4.length_timer -= 1;
 
-                // Check in this scope ensures (only) the above subtraction
-                // made length_timer 0
-                if self.ch4.length_timer == 0 {
-                    todo!("Disable Channel 4 until next trigger event");
-                }
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if self.ch4.length_timer == 0 {
+                todo!("Disable Channel 4 until next trigger event");
             }
         }
     }
