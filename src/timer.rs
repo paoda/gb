@@ -1,4 +1,3 @@
-use crate::Cycle;
 use bitfield::bitfield;
 
 #[derive(Debug, Clone, Copy)]

@@ -1,7 +1,9 @@
 use crate::bus::{Bus, BusIo};
 use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
+use crate::joypad::Joypad;
 use crate::ppu::Ppu;
+use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -62,12 +64,6 @@ impl Cpu {
         self.halted
     }
 
-    #[cfg(feature = "debug")]
-    pub(crate) fn inc_pc(&mut self) {
-        self.reg.pc += 1;
-    }
-
-    #[cfg(not(feature = "debug"))]
     fn inc_pc(&mut self) {
         self.reg.pc += 1;
     }
@@ -82,22 +78,10 @@ impl Cpu {
 }
 
 impl Cpu {
-    #[cfg(feature = "debug")]
-    pub(crate) fn fetch(&self) -> u8 {
-        self.bus.read_byte(self.reg.pc)
-    }
-
-    #[cfg(not(feature = "debug"))]
     fn fetch(&self) -> u8 {
         self.bus.read_byte(self.reg.pc)
     }
 
-    #[cfg(feature = "debug")]
-    pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
-        Instruction::from_byte(self, opcode)
-    }
-
-    #[cfg(not(feature = "debug"))]
     pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
         Instruction::from_byte(self, opcode)
     }
@@ -175,8 +159,16 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn get_ppu(&mut self) -> &mut Ppu {
-        &mut self.bus.ppu
+    pub fn ppu(&mut self) -> &Ppu {
+        &self.bus.ppu
+    }
+
+    pub(crate) fn joypad_mut(&mut self) -> &mut Joypad {
+        &mut self.bus.joypad
+    }
+
+    pub(crate) fn timer(&self) -> &Timer {
+        &self.bus.timer
     }
 
     fn check_ime(&mut self) {
@@ -308,21 +300,6 @@ impl Cpu {
         }
     }
 
-    #[cfg(feature = "debug")]
-    pub fn register_pair(&self, pair: RegisterPair) -> u16 {
-        use RegisterPair::*;
-
-        match pair {
-            AF => (self.reg.a as u16) << 8 | u8::from(self.flags) as u16,
-            BC => (self.reg.b as u16) << 8 | self.reg.c as u16,
-            DE => (self.reg.d as u16) << 8 | self.reg.e as u16,
-            HL => (self.reg.h as u16) << 8 | self.reg.l as u16,
-            SP => self.reg.sp,
-            PC => self.reg.pc,
-        }
-    }
-
-    #[cfg(not(feature = "debug"))]
     pub(crate) fn register_pair(&self, pair: RegisterPair) -> u16 {
         use RegisterPair::*;
 
@@ -407,18 +384,6 @@ pub(crate) enum Register {
     Flag,
 }
 
-#[cfg(feature = "debug")]
-#[derive(Debug, Copy, Clone)]
-pub enum RegisterPair {
-    AF,
-    BC,
-    DE,
-    HL,
-    SP,
-    PC,
-}
-
-#[cfg(not(feature = "debug"))]
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum RegisterPair {
     AF,

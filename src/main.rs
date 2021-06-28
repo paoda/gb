@@ -1,30 +1,16 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::Egui;
-use gb::LR35902_CLOCK_SPEED;
-use gb::{handle_gamepad_input, Cycle, LR35902};
+use gb::{Cycle, Egui, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{Pixels, SurfaceTexture};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
-#[cfg(feature = "debug")]
-use gb::RegisterPair;
-
-// 160 x 144
-const GB_WIDTH: u32 = 160;
-const GB_HEIGHT: u32 = 144;
 const SCALE: f64 = 5.0;
-
-const LR35902_CYCLE_TIME: f64 = 1.0f64 / LR35902_CLOCK_SPEED as f64;
-const CYCLES_IN_FRAME: Cycle = Cycle::new(70224);
-
-#[cfg(feature = "debug")]
-const STEP_MODE_BY_DEFAULT: bool = true;
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())
@@ -51,26 +37,16 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
-    let mut game_boy = match m.value_of("boot") {
-        Some(path) => LR35902::boot_new(path).expect("Failed to load boot ROM"),
-        None => LR35902::new(),
-    };
+    // `rom` is a required value in every situation so this will
+    // always exist.
+    let rom_path = m.value_of("rom").unwrap();
 
-    // This is a required value so if we program gets here,
-    // a string **will** have been provided to the rom argument
-    let rom_path = m
-        .value_of("rom")
-        .expect("ROM Path not provided despite it being a required argument");
-
-    game_boy
-        .load_cartridge(rom_path)
-        .expect("Failed to load ROM");
-
-    let default_title = "DMG-01 Emulator";
-    let cartridge_title = game_boy.rom_title().unwrap_or(default_title);
+    let mut game_boy =
+        gb::emu::init(m.value_of("boot"), rom_path).expect("Failed to initialize DMG-01 Emulator");
+    let cartridge_title = gb::emu::rom_title(&game_boy);
 
     // Initialize Gamepad Support
-    let mut gilrs = Gilrs::new().expect("Failed to initialize Gilrs");
+    let mut gamepad = Gilrs::new().expect("Failed to initialize Gilrs");
 
     // Initialize GUI
     let event_loop = EventLoop::new();
@@ -81,17 +57,14 @@ fn main() -> Result<()> {
         let size = window.inner_size();
         let scale_factor = window.scale_factor();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
-        let pixels = Pixels::new(GB_WIDTH, GB_HEIGHT, surface_texture)?;
+        let pixels = Pixels::new(GB_WIDTH as u32, GB_HEIGHT as u32, surface_texture)?;
         let egui = Egui::new(size.width, size.height, scale_factor, pixels.context());
 
         (pixels, egui)
     };
 
     let mut now = Instant::now();
-    let mut cycles_in_frame: Cycle = Default::default();
-
-    #[cfg(feature = "debug")]
-    let mut step_mode = STEP_MODE_BY_DEFAULT;
+    let mut cycle_count: Cycle = Default::default();
 
     event_loop.run(move |event, _, control_flow| {
         // Update egui
@@ -125,11 +98,6 @@ fn main() -> Result<()> {
                 return;
             }
 
-            #[cfg(feature = "debug")]
-            if input.key_pressed(VirtualKeyCode::S) {
-                step_mode = !step_mode;
-            }
-
             if let Some(scale_factor) = input.scale_factor() {
                 egui.scale_factor(scale_factor);
             }
@@ -139,60 +107,17 @@ fn main() -> Result<()> {
                 egui.resize(size.width, size.height);
             }
 
-            // Emulate Game Boy
-            let mut elapsed_cycles: Cycle = Default::default();
             let delta = now.elapsed().subsec_nanos();
             now = Instant::now();
 
-            #[cfg(feature = "debug")]
-            if step_mode {
-                if input.key_pressed(VirtualKeyCode::Space) {
-                    if let Some(event) = gilrs.next_event() {
-                        handle_gamepad_input(&mut game_boy.bus.joypad, event);
-                    }
+            let pending = Cycle::new(delta / gb::emu::SM83_CYCLE_TIME.subsec_nanos());
+            cycle_count += gb::emu::run(&mut game_boy, &mut gamepad, pending);
 
-                    for _ in 0..egui.config.spacebar_step {
-                        elapsed_cycles += game_boy.step();
-                    }
+            if cycle_count >= gb::emu::CYCLES_IN_FRAME {
+                // Draw Frame
+                cycle_count = Cycle::new(0);
 
-                    cycles_in_frame %= CYCLES_IN_FRAME;
-                }
-
-                game_boy.get_ppu().copy_to_gui(pixels.get_frame());
-                window.request_redraw();
-                return;
-            }
-
-            let cycle_time = Duration::from_secs_f64(LR35902_CYCLE_TIME).subsec_nanos();
-            let pending_cycles = Cycle::new(delta / cycle_time);
-
-            while elapsed_cycles <= pending_cycles {
-                if let Some(event) = gilrs.next_event() {
-                    handle_gamepad_input(&mut game_boy.bus.joypad, event);
-                }
-
-                elapsed_cycles += game_boy.step();
-
-                #[cfg(feature = "debug")]
-                {
-                    let pc = game_boy.register_pair(RegisterPair::PC);
-
-                    if let Some(break_point) = egui.break_point {
-                        if pc == break_point {
-                            step_mode = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            cycles_in_frame += elapsed_cycles;
-
-            if cycles_in_frame >= CYCLES_IN_FRAME {
-                // Redraw
-                cycles_in_frame = Default::default();
-
-                game_boy.get_ppu().copy_to_gui(pixels.get_frame());
+                gb::emu::draw(game_boy.ppu(), pixels.get_frame());
                 window.request_redraw();
             }
         }
@@ -205,5 +130,8 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_title(title)
         .with_inner_size(size)
         .with_min_inner_size(size)
+        .with_resizable(true)
+        .with_decorations(true)
+        .with_transparent(false)
         .build(event_loop)?)
 }

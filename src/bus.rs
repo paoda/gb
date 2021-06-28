@@ -18,12 +18,12 @@ pub struct Bus {
     pub ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
-    timer: Timer,
+    pub(crate) timer: Timer,
     int: Interrupt,
     snd: Sound,
     high_ram: HighRam,
     serial: Serial,
-    pub joypad: Joypad,
+    pub(crate) joypad: Joypad,
 }
 
 impl Default for Bus {
@@ -78,10 +78,6 @@ impl Bus {
             let byte = self.oam_read_byte(src_addr);
             self.oam_write_byte(dest_addr, byte);
         }
-    }
-
-    pub(crate) fn timer(&self) -> Timer {
-        self.timer
     }
 }
 

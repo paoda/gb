@@ -1,7 +1,5 @@
 use crate::bus::BusIo;
-use crate::cpu::Register;
-use crate::cpu::RegisterPair;
-use crate::LR35902;
+use crate::cpu::{Cpu as SM83, Register, RegisterPair};
 use egui::{ClippedMesh, FontDefinitions};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -27,11 +25,6 @@ pub struct Egui {
     show_registers: bool,
     show_int: bool,
     show_timer: bool,
-
-    #[cfg(feature = "debug")]
-    show_disasm: bool,
-    #[cfg(feature = "debug")]
-    pub break_point: Option<u16>,
 }
 
 impl Egui {
@@ -65,10 +58,6 @@ impl Egui {
             show_registers: false,
             show_int: false,
             show_timer: false,
-            #[cfg(feature = "debug")]
-            show_disasm: false,
-            #[cfg(feature = "debug")]
-            break_point: None,
         }
     }
 
@@ -89,7 +78,7 @@ impl Egui {
     }
 
     /// Prepare egui.
-    pub fn prepare(&mut self, game_boy: &LR35902) {
+    pub fn prepare(&mut self, game_boy: &SM83) {
         self.platform
             .update_time(self.start_time.elapsed().as_secs_f64());
 
@@ -105,7 +94,7 @@ impl Egui {
     }
 
     /// Create the UI using egui.
-    fn ui(&mut self, ctx: &egui::CtxRef, game_boy: &LR35902) {
+    fn ui(&mut self, ctx: &egui::CtxRef, game_boy: &SM83) {
         egui::TopPanel::top("menubar_container").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 egui::menu::menu(ui, "File", |ui| {
@@ -135,11 +124,6 @@ impl Egui {
                         self.show_timer = true;
                     }
                 });
-
-                #[cfg(feature = "debug")]
-                if ui.button("Disassembly").clicked() {
-                    self.show_disasm = true;
-                }
             });
         });
 
@@ -159,7 +143,7 @@ impl Egui {
         egui::Window::new("Timer")
             .open(&mut self.show_timer)
             .show(ctx, |ui| {
-                let timer = game_boy.bus.timer();
+                let timer = game_boy.timer();
 
                 ui.horizontal(|ui| {
                     ui.label("DIV");
@@ -262,43 +246,6 @@ impl Egui {
                 });
             });
 
-        #[cfg(feature = "debug")]
-        {
-            let mut show_disasm = self.show_disasm;
-            egui::Window::new("Disassembler")
-                .open(&mut show_disasm)
-                .show(ctx, |ui| {
-                    // FIXME: This can't be efficient at all
-                    // To fix this, maybe we should make Instruction::from_byte not mutate the state of the Cpu (which we SHOULD have done to begin with)
-                    let mut emu_clone = game_boy.clone();
-
-                    for i in 0..10 {
-                        let pc = emu_clone.register_pair(RegisterPair::PC);
-                        let opcode = emu_clone.fetch();
-                        emu_clone.inc_pc();
-
-                        let instr = emu_clone.decode(opcode);
-                        let res = ui.selectable_label(i == 0, format!("{:#06X}: {:?}", pc, instr));
-
-                        if res.clicked() {
-                            self.break_point = Some(pc);
-                        }
-                    }
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Reset Breakpoint").clicked() {
-                            self.break_point = None;
-                        }
-
-                        ui.selectable_label(
-                            self.break_point.is_some(),
-                            format!("{:04X?}", self.break_point),
-                        )
-                    });
-                });
-            self.show_disasm = show_disasm;
-        }
-
         egui::Window::new("IRQ Information")
             .open(&mut self.show_int)
             .show(ctx, |ui| {
@@ -324,22 +271,9 @@ impl Egui {
                 });
             });
 
-        #[cfg(feature = "debug")]
-        let mut spacebar_step = self.config.spacebar_step;
         egui::Window::new("Configuration")
             .open(&mut self.config.show)
-            .show(ctx, |_ui| {
-                #[cfg(feature = "debug")]
-                _ui.horizontal(|ui| {
-                    ui.label("Spacebar Steps");
-                    ui.add(egui::Slider::u16(&mut spacebar_step, 0..=std::u16::MAX));
-                });
-            });
-
-        #[cfg(feature = "debug")]
-        {
-            self.config.spacebar_step = spacebar_step;
-        }
+            .show(ctx, |_ui| {});
     }
 
     /// Render egui.
@@ -378,19 +312,10 @@ impl Egui {
 pub struct Configuration {
     /// Show Configuration egui menu
     show: bool,
-
-    /// How many [`LR35902`] .step() do we want to do at once
-    /// when pressing the spacebar key?
-    #[cfg(feature = "debug")]
-    pub spacebar_step: u16,
 }
 
 impl Default for Configuration {
     fn default() -> Self {
-        Self {
-            show: false,
-            #[cfg(feature = "debug")]
-            spacebar_step: 1,
-        }
+        Self { show: false }
     }
 }
