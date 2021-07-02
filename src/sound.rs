@@ -58,7 +58,7 @@ impl Sound {
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
             if self.ch1.length_timer == 0 {
-                todo!("Disable Channel 1 until next trigger event");
+                self.ch1.enabled = false;
             }
         }
 
@@ -68,7 +68,7 @@ impl Sound {
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
             if self.ch2.length_timer == 0 {
-                todo!("Disable Channel 2 until next trigger event");
+                self.ch2.enabled = false;
             }
         }
 
@@ -78,7 +78,7 @@ impl Sound {
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
             if self.ch3.length_timer == 0 {
-                todo!("Disable Channel 3 until next trigger event");
+                self.ch3.enabled = false;
             }
         }
 
@@ -88,7 +88,7 @@ impl Sound {
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
             if self.ch4.length_timer == 0 {
-                todo!("Disable Channel 4 until next trigger event");
+                self.ch4.enabled = false;
             }
         }
     }
@@ -311,6 +311,8 @@ pub(crate) struct Channel1 {
 
     // Length Functionality
     length_timer: u16,
+
+    enabled: bool,
 }
 
 impl Channel1 {
@@ -374,7 +376,7 @@ impl Channel1 {
 
         // Overflow check
         if new_freq > 2047 {
-            todo!("Frequency failed the overflow check. Disable the channel");
+            self.enabled = false;
         }
 
         new_freq
@@ -464,6 +466,8 @@ pub(crate) struct Channel2 {
 
     // Length Functionality
     length_timer: u16,
+
+    enabled: bool,
 }
 
 impl Channel2 {
@@ -743,7 +747,9 @@ pub(crate) struct Channel4 {
     length_timer: u16,
 
     /// Linear Feedback Shift Register (15-bit)
-    lfsr: u16,
+    shift_register: u16,
+
+    enabled: bool,
 }
 
 impl Channel4 {
@@ -778,7 +784,7 @@ impl Channel4 {
             }
 
             // LFSR behaviour during trigger event
-            self.lfsr = 0x7FFF;
+            self.shift_register = 0x7FFF;
         }
     }
 }
