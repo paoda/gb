@@ -247,6 +247,7 @@ impl BusIo for Bus {
                     0x49 => self.ppu.monochrome.obj_palette_1.into(),
                     0x4A => self.ppu.pos.window_y,
                     0x4B => self.ppu.pos.window_x,
+                    0x4D => 0xFF, // CGB Specific Register
                     _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
                 }
             }
@@ -376,7 +377,7 @@ impl BusIo for Bus {
                     0x49 => self.ppu.monochrome.obj_palette_1 = byte.into(),
                     0x4A => self.ppu.pos.window_y = byte,
                     0x4B => self.ppu.pos.window_x = byte,
-                    0x4D => {} // Writing to this address is useful on the CGB only
+                    0x4D => {} // CGB Specific Register
                     0x50 => {
                         // Disable Boot ROM
                         if byte != 0 {
