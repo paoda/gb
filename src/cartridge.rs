@@ -137,7 +137,7 @@ impl BusIo for Cartridge {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Mbc1 {
     /// 5-bit number
     rom_bank: u8,
@@ -148,6 +148,20 @@ struct Mbc1 {
     ram: Vec<u8>,
     bank_count: BankCount,
     ram_enabled: bool,
+}
+
+impl Default for Mbc1 {
+    fn default() -> Self {
+        Self {
+            rom_bank: 0x01,
+            ram_bank: Default::default(),
+            mode: Default::default(),
+            ram_size: Default::default(),
+            ram: Default::default(),
+            bank_count: Default::default(),
+            ram_enabled: Default::default(),
+        }
+    }
 }
 
 impl Mbc1 {
@@ -223,13 +237,13 @@ impl MemoryBankController for Mbc1 {
         match addr {
             0x0000..=0x3FFF => {
                 if self.mode {
-                    Address((0x4000 * self.zero_bank() as usize) + addr as usize)
+                    Address(0x4000 * self.zero_bank() as usize + addr as usize)
                 } else {
                     Address(addr as usize)
                 }
             }
             0x4000..=0x7FFF => {
-                Address((0x4000 * self.high_bank() as usize) + (addr as usize - 0x4000))
+                Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
             }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
