@@ -21,9 +21,12 @@ impl Cartridge {
         let mut rom = File::open(path)?;
         rom.read_to_end(&mut memory)?;
 
+        let title = Self::find_title(&memory);
+        eprintln!("Cartridge Title: {:?}", title);
+
         Ok(Self {
             mbc: Self::detect_mbc(&memory),
-            title: Self::find_title(&memory),
+            title,
             memory,
         })
     }
@@ -33,6 +36,10 @@ impl Cartridge {
         let bank_count = Self::find_bank_count(memory);
         let mbc_kind = Self::find_mbc(memory);
         let ram_byte_count = ram_size.len();
+
+        eprintln!("Cartridge Ram Size: {} bytes", ram_size.len());
+        eprintln!("Cartridge ROM Size: {} bytes", bank_count.size());
+        eprintln!("MBC Type: {:?}", mbc_kind);
 
         match mbc_kind {
             MbcKind::None => Box::new(NoMbc {}),
@@ -478,7 +485,7 @@ impl Default for BankCount {
 
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    fn to_byte_count(self) -> u32 {
+    fn size(self) -> u32 {
         use BankCount::*;
 
         match self {

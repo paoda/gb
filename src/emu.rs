@@ -17,6 +17,8 @@ pub fn init(boot_path: Option<&str>, rom_path: &str) -> Result<SM83> {
         None => SM83::new(),
     };
 
+    eprintln!("Initialized GB Emulator");
+
     cpu.load_cartridge(rom_path)?;
     Ok(cpu)
 }
