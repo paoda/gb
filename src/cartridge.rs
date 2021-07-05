@@ -157,7 +157,18 @@ impl Mbc1 {
         match self.bank_count {
             None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
             SixtyFour => (self.ram_bank & 0x01) << 5,
-            OneHundredTwentyEight => self.ram_bank << 5,
+            OneHundredTwentyEight => (self.ram_bank & 0x03) << 5,
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
+        }
+    }
+
+    fn mbcm_zero_bank(&self) -> u8 {
+        use BankCount::*;
+
+        match self.bank_count {
+            None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
+            SixtyFour => (self.ram_bank & 0x03) << 4,
+            OneHundredTwentyEight => (self.ram_bank & 0x03) << 5,
             _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
@@ -165,39 +176,39 @@ impl Mbc1 {
     fn high_bank(&self) -> u8 {
         use BankCount::*;
 
-        let base = self.rom_bank & self.rom_bank_bitmask();
+        let base = self.rom_bank & self.rom_size_mask();
 
         match self.bank_count {
             None | Four | Eight | Sixteen | ThirtyTwo => base,
-            SixtyFour => (base & !(0x01 << 5)) | (self.ram_bank & 0x01) << 5,
-            OneHundredTwentyEight => (base & !(0x03 << 5)) | (self.ram_bank & 0x03) << 5,
+            SixtyFour => base & !(0x01 << 5) | ((self.ram_bank & 0x01) << 5),
+            OneHundredTwentyEight => base & !(0x03 << 5) | ((self.ram_bank & 0x03) << 5),
             _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
 
-    fn rom_bank_bitmask(&self) -> u8 {
+    fn rom_size_mask(&self) -> u8 {
         use BankCount::*;
 
         match self.bank_count {
-            None => 0x1,
-            Four => 0x03,
-            Eight => 0x07,
-            Sixteen => 0x0F,
-            ThirtyTwo | SixtyFour | OneHundredTwentyEight => 0x1F,
+            None => 0b00000001,
+            Four => 0b00000011,
+            Eight => 0b00000111,
+            Sixteen => 0b00001111,
+            ThirtyTwo | SixtyFour | OneHundredTwentyEight => 0b00011111,
             _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
         }
     }
 
-    fn ram_addr(&self, addr: u16) -> usize {
+    fn ram_addr(&self, addr: u16) -> u16 {
         use RamSize::*;
 
         match self.ram_size {
-            _2KB | _8KB => (addr as usize - 0xA000) % self.ram_size.len() as usize,
+            _2KB | _8KB => (addr - 0xA000) % self.ram_size.len() as u16,
             _32KB => {
                 if self.mode {
-                    0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)
+                    0x2000 * self.ram_bank as u16 + (addr - 0xA000)
                 } else {
-                    addr as usize - 0xA000
+                    addr - 0xA000
                 }
             }
             _ => unreachable!("RAM size can not be greater than 32KB on MBC1"),
@@ -212,19 +223,17 @@ impl MemoryBankController for Mbc1 {
         match addr {
             0x0000..=0x3FFF => {
                 if self.mode {
-                    let zero_bank = self.zero_bank() as usize;
-                    Address(0x4000 * zero_bank + addr as usize)
+                    Address((0x4000 * self.zero_bank() as usize) + addr as usize)
                 } else {
                     Address(addr as usize)
                 }
             }
             0x4000..=0x7FFF => {
-                let high_bank = self.high_bank() as usize;
-                Address(0x4000 * high_bank + (addr as usize - 0x4000))
+                Address((0x4000 * self.high_bank() as usize) + (addr as usize - 0x4000))
             }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
-                    Value(self.ram[self.ram_addr(addr)])
+                    Value(self.ram[self.ram_addr(addr) as usize])
                 } else {
                     Value(0xFF)
                 }
@@ -240,17 +249,18 @@ impl MemoryBankController for Mbc1 {
                 self.rom_bank = if byte == 0x00 {
                     0x01
                 } else {
-                    byte & self.rom_bank_bitmask()
-                }
+                    byte & self.rom_size_mask()
+                };
+
+                self.rom_bank &= 0x1F;
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0x03,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
-            0xA000..=0xBFFF => {
-                if self.ram_enabled {
-                    let ram_addr = self.ram_addr(addr);
-                    self.ram[ram_addr] = byte;
-                }
+            0xA000..=0xBFFF if self.ram_enabled => {
+                let ram_addr = self.ram_addr(addr) as usize;
+                self.ram[ram_addr] = byte;
             }
+            0xA000..=0xBFFF => {} // Ram isn't enabled, ignored write
             _ => unreachable!("A write to {:#06X} should not be handled by MBC1", addr),
         }
     }
@@ -432,7 +442,7 @@ impl From<u8> for RamSize {
 
 #[derive(Debug, Clone, Copy)]
 enum BankCount {
-    None = 0x00,                  // 32KB
+    None = 0x00,                  // 32KB (also called Two)
     Four = 0x01,                  // 64KB
     Eight = 0x02,                 // 128KB
     Sixteen = 0x03,               // 256KB
