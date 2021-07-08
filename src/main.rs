@@ -39,14 +39,16 @@ fn main() -> Result<()> {
 
     // `rom` is a required value in every situation so this will
     // always exist.
-    let rom_path = m.value_of("rom").unwrap();
+    let rom_path = m
+        .value_of("rom")
+        .expect("Required value 'rom' was provided");
 
     let mut game_boy =
-        gb::emu::init(m.value_of("boot"), rom_path).expect("Failed to initialize DMG-01 Emulator");
+        gb::emu::init(m.value_of("boot"), rom_path).expect("Initialized DMG-01 Emulator");
     let cartridge_title = gb::emu::rom_title(&game_boy);
 
     // Initialize Gamepad Support
-    let mut gamepad = Gilrs::new().expect("Failed to initialize Gilrs");
+    let mut gamepad = Gilrs::new().expect("Initialized Gilrs for Controller Input");
 
     // Initialize GUI
     let event_loop = EventLoop::new();

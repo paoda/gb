@@ -2277,13 +2277,13 @@ impl From<Cycle> for u32 {
 
 impl InstrRegisterPair {
     fn to_register_pair(self) -> RegisterPair {
-        RegisterPair::try_from(self).expect("Failed to convert InstrRegisterPair to RegisterPair")
+        RegisterPair::try_from(self).expect("InstrRegisterPair is a valid RegisterPair")
     }
 }
 
 impl InstrRegister {
     fn to_register(self) -> Register {
-        Register::try_from(self).expect("Failed to convert from InstrRegister to Register")
+        Register::try_from(self).expect("InstrRegister is a valid Register")
     }
 }
 

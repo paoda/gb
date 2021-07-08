@@ -278,7 +278,7 @@ impl Ppu {
                         .obj
                         .tile
                         .bytes()
-                        .expect("Failed to unwrap Tile bytes");
+                        .expect("Tile high & low bytes are present");
 
                     let tbpp = Pixels::from_bytes(high, low);
 
@@ -539,7 +539,7 @@ impl ObjectAttributeTable {
 
         let slice: &[u8; 4] = self.buf[start..(start + 4)]
             .try_into()
-            .expect("Could not interpret &[u8] as a &[u8; 4]");
+            .expect("TryInto trait called on a &[u8; 4]");
 
         slice.into()
     }
@@ -704,7 +704,7 @@ impl PixelFetcher {
         let scroll_y = pos.scroll_y;
         let is_window = self.back.is_window_tile();
 
-        let id = self.back.tile.id.expect("Tile Number unexpectedly missing");
+        let id = self.back.tile.id.expect("Tile Number is present");
 
         let tile_data_addr = match control.tile_data_addr() {
             TileDataAddress::X8800 => 0x9000u16.wrapping_add(((id as i8) as i16 * 16) as u16),
@@ -721,7 +721,11 @@ impl PixelFetcher {
     }
 
     fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
-        let (high, low) = self.back.tile.bytes().expect("Failed to unwrap Tile bytes");
+        let (high, low) = self
+            .back
+            .tile
+            .bytes()
+            .expect("Tile high & low bytes are present");
 
         let tbpp = Pixels::from_bytes(high, low);
 

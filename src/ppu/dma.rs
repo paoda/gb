@@ -30,7 +30,7 @@ impl DirectMemoryAccess {
                     .start
                     .addr
                     .as_mut()
-                    .expect("DMA Transfer Attempted without a known source address");
+                    .expect("Source Address present during DMA Transfer");
 
                 let addresses = if (self.cycle - 4) % 4 == 0 {
                     *src_addr += 1;
