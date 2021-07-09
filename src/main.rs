@@ -8,7 +8,6 @@ use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::platform::windows::WindowBuilderExtWindows;
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
@@ -150,6 +149,6 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_resizable(true)
         .with_decorations(true)
         .with_transparent(false)
-        .with_drag_and_drop(false) // OleInitialize failed error if this is set to true
+        // .with_drag_and_drop(false) // OleInitialize failed error if this is set to true
         .build(event_loop)?)
 }
