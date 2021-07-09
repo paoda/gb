@@ -23,6 +23,9 @@ impl Sound {
     pub(crate) fn clock(&mut self, div: u16) {
         use FrameSequencerState::*;
 
+        // Decrement Channel 2 Frequency Timer
+        let ch2_amplitude = self.ch2.clock();
+
         // the 5th bit of the high byte
         let bit_5 = (div >> 13 & 0x01) as u8;
 
@@ -213,8 +216,25 @@ pub(crate) struct SoundControl {
     pub(crate) channel: ChannelControl,
     /// 0xFF25 | NR51 - Selection of Sound output terminal
     pub(crate) output: SoundOutput,
+
+    enabled: bool,
+}
+
+impl SoundControl {
     /// 0xFF26 | NR52 - Sound On/Off
-    pub(crate) status: SoundStatus,
+    pub fn status(&self, snd: &Sound) -> u8 {
+        (self.enabled as u8) << 7
+            | (snd.ch4.enabled as u8) << 3
+            | (snd.ch3.enabled as u8) << 2
+            | (snd.ch2.enabled as u8) << 1
+            | snd.ch1.enabled as u8
+    }
+
+    /// 0xFF26 | NR52 - Sound On/Off
+    pub fn set_status(&mut self, byte: u8) {
+        // TODO: Should all channel enabled fields be disabled when this is reset?
+        self.enabled = (byte >> 7) & 0x01 == 0x01;
+    }
 }
 
 // TODO: What to do about the separation of freq bits
@@ -467,10 +487,25 @@ pub(crate) struct Channel2 {
     // Length Functionality
     length_timer: u16,
 
+    freq_timer: u16,
+    duty_pos: u8,
+
     enabled: bool,
 }
 
 impl Channel2 {
+    fn clock(&mut self) -> u8 {
+        self.freq_timer -= 1;
+
+        if self.freq_timer == 0 {
+            // TODO: Why is this 2048?
+            self.freq_timer = (2048 - self.frequency()) * 4;
+            self.duty_pos = (self.duty_pos + 1) % 8;
+        }
+
+        self.duty.wave_pattern().amplitude(self.duty_pos)
+    }
+
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn duty(&self) -> u8 {
         self.duty.into()
@@ -501,6 +536,10 @@ impl Channel2 {
                 self.length_timer = 64;
             }
         }
+    }
+
+    fn frequency(&self) -> u16 {
+        (self.freq_hi.freq_bits() as u16) << 8 | self.freq_lo as u16
     }
 }
 
@@ -603,6 +642,20 @@ pub enum WavePattern {
     OneQuarter = 1,    // 25%   ( __------__------__------ )
     OneHalf = 2,       // 50%   ( ____----____----____---- ) (normal)
     ThreeQuarters = 3, // 75%   ( ______--______--______-- )
+}
+
+impl WavePattern {
+    pub const fn amplitude(&self, index: u8) -> u8 {
+        use WavePattern::*;
+        let i = 7 - index; // an index of 0 should get the highest bit
+
+        match *self {
+            OneEighth => (0b00000001 >> i) & 0x01,
+            OneQuarter => (0b10000001 >> i) & 0x01,
+            OneHalf => (0b10000111 >> i) & 0x01,
+            ThreeQuarters => (0b01111110 >> i) & 0x01,
+        }
+    }
 }
 
 impl Default for WavePattern {

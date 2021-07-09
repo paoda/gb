@@ -233,7 +233,7 @@ impl BusIo for Bus {
                     0x23 => self.snd.ch4.freq_data(),
                     0x24 => self.snd.ctrl.channel.into(),
                     0x25 => self.snd.ctrl.output.into(),
-                    0x26 => self.snd.ctrl.status.into(),
+                    0x26 => self.snd.ctrl.status(&self.snd),
                     0x30..=0x3F => self.snd.ch3.wave_ram[addr as usize - 0xFF30],
                     0x40 => self.ppu.ctrl.into(),
                     0x41 => self.ppu.stat.into(),
@@ -351,7 +351,7 @@ impl BusIo for Bus {
                     0x23 => self.snd.ch4.set_freq_data(byte),
                     0x24 => self.snd.ctrl.channel = byte.into(),
                     0x25 => self.snd.ctrl.output = byte.into(),
-                    0x26 => self.snd.ctrl.status = byte.into(), // FIXME: Should we control which bytes are written to here?
+                    0x26 => self.snd.ctrl.set_status(byte), // FIXME: Should we control which bytes are written to here?
                     0x30..=0x3F => self.snd.ch3.wave_ram[addr as usize - 0xFF30] = byte,
                     0x40 => self.ppu.ctrl = byte.into(),
                     0x41 => self.ppu.stat.update(byte),
