@@ -1,8 +1,15 @@
 use bitfield::bitfield;
+use crossbeam_channel::{Receiver, Sender};
+use rodio::Source;
+
+use crate::emu::SM83_CLOCK_SPEED;
+use crate::Cycle;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
+const SAMPLE_RATE: u32 = 4800; // Hz
+const SAMPLE_RATE_IN_CYCLES: Cycle = Cycle::new((SM83_CLOCK_SPEED / SAMPLE_RATE as u64) as u32);
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct Sound {
     pub(crate) ctrl: SoundControl,
     /// Tone & Sweep
@@ -17,14 +24,15 @@ pub(crate) struct Sound {
     // Frame Sequencer
     frame_seq_state: FrameSequencerState,
     div_prev: Option<u8>,
+
+    sender: Option<SampleSender>,
+    cycle: Cycle,
 }
 
 impl Sound {
     pub(crate) fn clock(&mut self, div: u16) {
         use FrameSequencerState::*;
-
-        // Decrement Channel 2 Frequency Timer
-        let ch2_amplitude = self.ch2.clock();
+        self.cycle += 1;
 
         // the 5th bit of the high byte
         let bit_5 = (div >> 13 & 0x01) as u8;
@@ -52,6 +60,24 @@ impl Sound {
         }
 
         self.div_prev = Some(bit_5);
+
+        // TODO: Should the FrameSequencer be run first?
+        if self.cycle > SAMPLE_RATE_IN_CYCLES {
+            // Sample the APU
+            self.cycle %= SAMPLE_RATE_IN_CYCLES;
+
+            let left_sample = self.ch2.clock();
+            let right_sample = self.ch2.clock();
+
+            if let Some(send) = self.sender.as_ref() {
+                send.add_sample(left_sample);
+                send.add_sample(right_sample);
+            }
+        }
+    }
+
+    pub(crate) fn set_audio_src(&mut self, sender: SampleSender) {
+        self.sender = Some(sender);
     }
 
     fn handle_length(&mut self) {
@@ -998,5 +1024,64 @@ impl From<u8> for ChannelControl {
 impl From<ChannelControl> for u8 {
     fn from(ctrl: ChannelControl) -> Self {
         ctrl.0
+    }
+}
+
+pub struct AudioSenderReceiver;
+
+impl AudioSenderReceiver {
+    pub fn new() -> (SampleSender, SampleReceiver) {
+        let (send, recv) = crossbeam_channel::unbounded();
+
+        (SampleSender { send }, SampleReceiver { recv })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SampleSender {
+    send: Sender<u8>,
+}
+
+impl SampleSender {
+    fn add_sample(&self, sample: u8) {
+        self.send
+            .send(sample)
+            .expect("Send audio sample across threads");
+    }
+}
+
+pub struct SampleReceiver {
+    recv: Receiver<u8>,
+}
+
+impl Iterator for SampleReceiver {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // TODO: Should this never return none?
+        self.recv.recv().ok().map(|num| num as f32)
+    }
+}
+
+impl Source for SampleReceiver {
+    fn current_frame_len(&self) -> Option<usize> {
+        // A frame changes when the samples rate or
+        // number of channels change. This will never happen, so
+        // we return
+        None
+    }
+
+    fn channels(&self) -> u16 {
+        // The Gameboy supports two channels
+        2
+    }
+
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
+    }
+
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        // The duration of this source is infinite
+        None
     }
 }

@@ -3,6 +3,7 @@ use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
+use crate::sound::SampleSender;
 use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -42,6 +43,10 @@ impl Cpu {
             bus: Bus::with_boot(path)?,
             ..Default::default()
         })
+    }
+
+    pub fn set_audio_src(&mut self, sender: SampleSender) {
+        self.bus.pass_audio_src(sender)
     }
 
     pub(crate) fn ime(&self) -> ImeState {

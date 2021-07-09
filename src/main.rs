@@ -1,12 +1,14 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::{Cycle, Egui, GB_HEIGHT, GB_WIDTH};
+use gb::{AudioSenderReceiver, Cycle, Egui, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{Pixels, SurfaceTexture};
+use rodio::{OutputStream, Sink};
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::windows::WindowBuilderExtWindows;
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
@@ -64,6 +66,19 @@ fn main() -> Result<()> {
 
         (pixels, egui)
     };
+
+    let (send, recv) = AudioSenderReceiver::new();
+    game_boy.set_audio_src(send);
+
+    // Initialize Audio
+    let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
+    let sink = Sink::try_new(&stream_handle).expect("Initialize Audio Sink");
+
+    std::thread::spawn(move || {
+        sink.append(recv);
+
+        sink.sleep_until_end();
+    });
 
     let mut now = Instant::now();
     let mut cycle_count: Cycle = Default::default();
@@ -135,5 +150,6 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_resizable(true)
         .with_decorations(true)
         .with_transparent(false)
+        .with_drag_and_drop(false) // OleInitialize failed error if this is set to true
         .build(event_loop)?)
 }
