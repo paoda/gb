@@ -8,6 +8,6 @@ steps:
   image: rust:latest
   commands:
   - apt-get update
-  - apt-get install -y libudev-dev
+  - apt-get install -y libudev-dev libasound2-dev
   - cargo build --all
   - cargo test --all
