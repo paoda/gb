@@ -11,7 +11,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
-const SCALE: f64 = 5.0;
+const SCALE: f64 = 2.0;
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())

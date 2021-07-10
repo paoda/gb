@@ -67,7 +67,7 @@ impl Sound {
             self.cycle %= SAMPLE_RATE_IN_CYCLES;
 
             let left_sample = self.ch2.clock();
-            let right_sample = self.ch2.clock();
+            let right_sample = left_sample;
 
             if let Some(send) = self.sender.as_ref() {
                 send.add_sample(left_sample);
@@ -342,7 +342,7 @@ pub(crate) struct Channel1 {
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
-    pub(crate) freq_lo: u8,
+    freq_lo: u8,
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     freq_hi: FrequencyHigh,
 
@@ -364,7 +364,7 @@ pub(crate) struct Channel1 {
 impl Channel1 {
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn duty(&self) -> u8 {
-        self.duty.into()
+        u8::from(self.duty) & 0xC0 // Only bits 7 and 6 can be read
     }
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
@@ -373,9 +373,14 @@ impl Channel1 {
         self.length_timer = 64 - self.duty.sound_length() as u16;
     }
 
+    /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
+    pub(crate) fn set_freq_lo(&mut self, byte: u8) {
+        self.freq_lo = byte;
+    }
+
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
-        self.freq_hi.into()
+        u8::from(self.freq_hi) & 0x40 // Only bit 6 is readable
     }
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
@@ -502,7 +507,7 @@ pub(crate) struct Channel2 {
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) envelope: VolumeEnvelope,
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
-    pub(crate) freq_lo: u8,
+    freq_lo: u8,
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     freq_hi: FrequencyHigh,
 
@@ -534,7 +539,7 @@ impl Channel2 {
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn duty(&self) -> u8 {
-        self.duty.into()
+        u8::from(self.duty) & 0xC0 // Only bits 7 & 6 are readable
     }
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
@@ -543,9 +548,14 @@ impl Channel2 {
         self.length_timer = 64 - self.duty.sound_length() as u16;
     }
 
+    /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
+    pub(crate) fn set_freq_lo(&mut self, byte: u8) {
+        self.freq_lo = byte;
+    }
+
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
-        self.freq_hi.into()
+        u8::from(self.freq_hi) & 0x40 // only bit 6 is readable
     }
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
@@ -717,7 +727,7 @@ pub(crate) struct Channel3 {
     /// 0xFF1C | NR32 - Channel 3 Volume
     volume: Channel3Volume,
     /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
-    pub(crate) freq_lo: u8,
+    freq_lo: u8,
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     freq_hi: FrequencyHigh,
     pub(crate) wave_ram: [u8; WAVE_PATTERN_RAM_LEN],
@@ -738,9 +748,14 @@ impl Channel3 {
         self.length_timer = 256 - self.len as u16;
     }
 
+    /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
+    pub(crate) fn set_freq_lo(&mut self, byte: u8) {
+        self.freq_lo = byte;
+    }
+
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
-        self.freq_hi.into()
+        u8::from(self.freq_hi) & 0x40 // Only bit 6 readable
     }
 
     /// 0xFF1E | NR34 - Channel 3 Frequency high
@@ -756,7 +771,7 @@ impl Channel3 {
     }
 
     pub(crate) fn enabled(&self) -> u8 {
-        self.enabled as u8
+        (self.enabled as u8) << 7
     }
 
     pub(crate) fn set_enabled(&mut self, byte: u8) {
@@ -845,7 +860,7 @@ impl Channel4 {
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     pub(crate) fn freq_data(&self) -> u8 {
-        self.freq_data.into()
+        u8::from(self.freq_data) & 0x40 // only bit 6 readable
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
