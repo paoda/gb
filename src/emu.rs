@@ -4,8 +4,8 @@ use crate::joypad;
 use crate::ppu::Ppu;
 use anyhow::Result;
 use gilrs::Gilrs;
-use rodio::OutputStreamHandle;
 use std::time::Duration;
+use winit_input_helper::WinitInputHelper;
 
 pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_CLOCK_SPEED);
 pub const CYCLES_IN_FRAME: Cycle = Cycle::new(456 * 154); // 456 Cycles times 154 scanlines
@@ -28,19 +28,26 @@ pub fn rom_title(game_boy: &SM83) -> &str {
     game_boy.rom_title().unwrap_or(DEFAULT_TITLE)
 }
 
-pub fn run(game_boy: &mut SM83, gamepad: &mut Gilrs, pending: Cycle) -> Cycle {
+pub fn run(
+    game_boy: &mut SM83,
+    gamepad: &mut Gilrs,
+    input: &WinitInputHelper,
+    pending: Cycle,
+) -> Cycle {
     let mut elapsed = Cycle::new(0);
 
     while elapsed < pending {
-        elapsed += run_unsynced(game_boy, gamepad);
+        elapsed += run_unsynced(game_boy, gamepad, input);
     }
 
     elapsed
 }
 
-pub fn run_unsynced(game_boy: &mut SM83, gamepad: &mut Gilrs) -> Cycle {
+pub fn run_unsynced(game_boy: &mut SM83, gamepad: &mut Gilrs, input: &WinitInputHelper) -> Cycle {
     if let Some(event) = gamepad.next_event() {
-        joypad::handle_gamepad_input(&mut game_boy.joypad_mut(), event);
+        joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
+    } else {
+        joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
     }
 
     game_boy.step()

@@ -127,7 +127,7 @@ fn main() -> Result<()> {
             now = Instant::now();
 
             let pending = Cycle::new(delta / gb::emu::SM83_CYCLE_TIME.subsec_nanos());
-            cycle_count += gb::emu::run(&mut game_boy, &mut gamepad, pending);
+            cycle_count += gb::emu::run(&mut game_boy, &mut gamepad, &input, pending);
 
             if cycle_count >= gb::emu::CYCLES_IN_FRAME {
                 // Draw Frame
