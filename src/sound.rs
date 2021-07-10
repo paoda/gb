@@ -59,6 +59,7 @@ impl Sound {
             }
         }
 
+        self.ch1.clock();
         self.ch2.clock();
 
         self.div_prev = Some(bit_5);
@@ -68,12 +69,19 @@ impl Sound {
             // Sample the APU
             self.cycle %= SAMPLE_RATE_IN_CYCLES;
 
-            let left_sample = self.ch2.amplitude();
-            let right_sample = left_sample;
+            let ch1_amplitude = self.ch1.amplitude();
+            let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
+            let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
+
+            let ch2_amplitude = self.ch2.amplitude();
+            let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
+            let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
+
+            let left_sample = (ch1_left + ch2_left) / 2.0;
+            let right_sample = (ch1_right + ch2_right) / 2.0;
 
             if let Some(send) = self.sender.as_ref() {
-                send.add_sample(left_sample);
-                send.add_sample(right_sample);
+                send.add_sample(left_sample, right_sample);
             }
         }
     }
@@ -360,10 +368,31 @@ pub(crate) struct Channel1 {
     // Length Functionality
     length_timer: u16,
 
+    freq_timer: u16,
+    duty_pos: u8,
+
     enabled: bool,
 }
 
 impl Channel1 {
+    fn amplitude(&self) -> f32 {
+        let dac_input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+
+        (dac_input as f32 / 7.5) - 1.0
+    }
+
+    fn clock(&mut self) {
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
+
+        if self.freq_timer == 0 {
+            // TODO: Why is this 2048?
+            self.freq_timer = (2048 - self.frequency()) * 4;
+            self.duty_pos = (self.duty_pos + 1) % 8;
+        }
+    }
+
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn duty(&self) -> u8 {
         u8::from(self.duty) & 0xC0 // Only bits 7 and 6 can be read
@@ -527,12 +556,16 @@ pub(crate) struct Channel2 {
 }
 
 impl Channel2 {
-    fn amplitude(&self) -> u8 {
-        self.duty.wave_pattern().amplitude(self.duty_pos)
+    fn amplitude(&self) -> f32 {
+        let dac_input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+
+        (dac_input as f32 / 7.5) - 1.0
     }
 
     fn clock(&mut self) {
-        self.freq_timer -= 1;
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
 
         if self.freq_timer == 0 {
             // TODO: Why is this 2048?
@@ -977,14 +1010,14 @@ impl From<Channel4Frequency> for u8 {
 bitfield! {
     pub struct SoundOutput(u8);
     impl Debug;
-    pub snd4_so2, set_snd4_so2: 7;
-    pub snd3_so2, set_snd3_so2: 6;
-    pub snd2_so2, set_snd2_so2: 5;
-    pub snd1_so2, set_snd1_so2: 4;
-    pub snd4_so1, set_snd4_so1: 3;
-    pub snd3_so1, set_snd3_so1: 2;
-    pub snd2_so1, set_snd2_so1: 1;
-    pub snd1_so1, set_snd1_so1: 0;
+    pub ch4_left, set_ch4_left: 7;
+    pub ch3_left, set_ch3_left: 6;
+    pub ch2_left, set_ch2_left: 5;
+    pub ch1_left, set_ch1_left: 4;
+    pub ch4_right, set_ch4_right: 3;
+    pub ch3_right, set_ch3_right: 2;
+    pub ch2_right, set_ch2_right: 1;
+    pub ch1_right, set_ch1_right: 0;
 }
 
 impl Copy for SoundOutput {}
@@ -1058,19 +1091,23 @@ impl AudioSenderReceiver {
 
 #[derive(Debug, Clone)]
 pub struct SampleSender {
-    send: Sender<u8>,
+    send: Sender<f32>,
 }
 
 impl SampleSender {
-    fn add_sample(&self, sample: u8) {
+    fn add_sample(&self, left: f32, right: f32) {
         self.send
-            .send(sample)
+            .send(left)
+            .expect("Send audio sample across threads");
+
+        self.send
+            .send(right)
             .expect("Send audio sample across threads");
     }
 }
 
 pub struct SampleReceiver {
-    recv: Receiver<u8>,
+    recv: Receiver<f32>,
 }
 
 impl Iterator for SampleReceiver {
@@ -1078,7 +1115,7 @@ impl Iterator for SampleReceiver {
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Should this never return none?
-        self.recv.recv().ok().map(|num| num as f32)
+        self.recv.recv().ok()
     }
 }
 
