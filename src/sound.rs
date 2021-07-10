@@ -59,6 +59,8 @@ impl Sound {
             }
         }
 
+        self.ch2.clock();
+
         self.div_prev = Some(bit_5);
 
         // TODO: Should the FrameSequencer be run first?
@@ -66,7 +68,7 @@ impl Sound {
             // Sample the APU
             self.cycle %= SAMPLE_RATE_IN_CYCLES;
 
-            let left_sample = self.ch2.clock();
+            let left_sample = self.ch2.amplitude();
             let right_sample = left_sample;
 
             if let Some(send) = self.sender.as_ref() {
@@ -525,7 +527,11 @@ pub(crate) struct Channel2 {
 }
 
 impl Channel2 {
-    fn clock(&mut self) -> u8 {
+    fn amplitude(&self) -> u8 {
+        self.duty.wave_pattern().amplitude(self.duty_pos)
+    }
+
+    fn clock(&mut self) {
         self.freq_timer -= 1;
 
         if self.freq_timer == 0 {
@@ -533,8 +539,6 @@ impl Channel2 {
             self.freq_timer = (2048 - self.frequency()) * 4;
             self.duty_pos = (self.duty_pos + 1) % 8;
         }
-
-        self.duty.wave_pattern().amplitude(self.duty_pos)
     }
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
