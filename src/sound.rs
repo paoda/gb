@@ -62,6 +62,7 @@ impl Sound {
 
         self.ch1.clock();
         self.ch2.clock();
+        self.ch4.clock();
 
         self.div_prev = Some(bit_5);
 
@@ -77,8 +78,12 @@ impl Sound {
             let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
             let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
 
-            let left_sample = (ch1_left + ch2_left) / 2.0;
-            let right_sample = (ch1_right + ch2_right) / 2.0;
+            let ch4_amplitude = self.ch4.amplitude();
+            let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
+            let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
+
+            let left_sample = (ch1_left + ch2_left + ch4_left) / 3.0;
+            let right_sample = (ch1_right + ch2_right + ch4_right) / 3.0;
 
             if let Some(send) = self.sender.as_ref() {
                 send.add_sample(left_sample, right_sample);
@@ -878,7 +883,9 @@ pub(crate) struct Channel4 {
     length_timer: u16,
 
     /// Linear Feedback Shift Register (15-bit)
-    shift_register: u16,
+    lf_shift: u16,
+
+    freq_timer: u16,
 
     enabled: bool,
 }
@@ -915,17 +922,49 @@ impl Channel4 {
             }
 
             // LFSR behaviour during trigger event
-            self.shift_register = 0x7FFF;
+            self.lf_shift = 0x7FFF;
         }
+    }
+
+    fn amplitude(&self) -> f32 {
+        let dac_input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
+
+        (dac_input as f32 / 7.5) - 1.0
+    }
+
+    fn clock(&mut self) {
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
+
+        if self.freq_timer == 0 {
+            let divisor = Self::divisor(self.poly.divisor_code()) as u16;
+            self.freq_timer = divisor << self.poly.shift_count();
+
+            let xor_result = (self.lf_shift & 0x01) ^ ((self.lf_shift & 0x02) >> 1);
+            self.lf_shift = (self.lf_shift >> 1) | xor_result << 14;
+
+            if let CounterWidth::Long = self.poly.counter_width() {
+                self.lf_shift = (self.lf_shift & !(0x01 << 6)) | xor_result << 6;
+            }
+        }
+    }
+
+    fn divisor(code: u8) -> u8 {
+        if code == 0 {
+            return 8;
+        }
+
+        code << 4
     }
 }
 
 bitfield! {
     pub struct PolynomialCounter(u8);
     impl Debug;
-    freq, set_freq: 7, 4;
+    shift_count, set_shift_count: 7, 4;
     from into CounterWidth, counter_width, set_counter_width: 3, 3;
-    div_ratio, set_div_ratio: 2, 0;
+    divisor_code, set_divisor_code: 2, 0;
 }
 
 impl Copy for PolynomialCounter {}
