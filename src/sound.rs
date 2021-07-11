@@ -8,7 +8,6 @@ use crate::Cycle;
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 const SAMPLE_RATE: u32 = 48000; // Hz
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
-const SAMPLE_RATE_IN_CYCLES: Cycle = Cycle::new((SM83_CLOCK_SPEED / SAMPLE_RATE as u64) as u32);
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Sound {
@@ -62,13 +61,14 @@ impl Sound {
 
         self.ch1.clock();
         self.ch2.clock();
+        self.ch3.clock();
         self.ch4.clock();
 
         self.div_prev = Some(bit_5);
 
         if self.sample_counter >= SM83_CLOCK_SPEED {
-            // Sample the APU
             self.sample_counter %= SM83_CLOCK_SPEED;
+            // Sample the APU
 
             let ch1_amplitude = self.ch1.amplitude();
             let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
@@ -78,12 +78,16 @@ impl Sound {
             let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
             let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
 
+            let ch3_amplitude = self.ch3.amplitude();
+            let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
+            let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
+
             let ch4_amplitude = self.ch4.amplitude();
             let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
             let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
 
-            let left_sample = (ch1_left + ch2_left + ch4_left) / 3.0;
-            let right_sample = (ch1_right + ch2_right + ch4_right) / 3.0;
+            let left_sample = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
+            let right_sample = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
             if let Some(send) = self.sender.as_ref() {
                 send.add_sample(left_sample, right_sample);
@@ -776,6 +780,9 @@ pub(crate) struct Channel3 {
 
     // Length Functionality
     length_timer: u16,
+
+    freq_timer: u16,
+    offset: u8,
 }
 
 impl Channel3 {
@@ -834,6 +841,39 @@ impl Channel3 {
             0b11 => Quarter,
             _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
         };
+    }
+
+    fn amplitude(&self) -> f32 {
+        let dac_input = self.read_sample(self.offset) >> self.volume.shift_count();
+
+        (dac_input as f32 / 7.5) - 1.0
+    }
+
+    fn clock(&mut self) {
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
+
+        if self.freq_timer == 0 {
+            self.freq_timer = (2048 - self.frequency()) * 4;
+            self.offset = (self.offset + 1) % 8;
+        }
+    }
+
+    fn read_sample(&self, index: u8) -> u8 {
+        let i = index as usize / 2;
+
+        if index % 2 == 0 {
+            // We grab the high nibble on even indexes
+            self.wave_ram[i] >> 4
+        } else {
+            // We grab the low nibble on odd indexes
+            self.wave_ram[i] & 0x0F
+        }
+    }
+
+    fn frequency(&self) -> u16 {
+        (self.freq_hi.freq_bits() as u16) << 8 | self.freq_lo as u16
     }
 }
 
