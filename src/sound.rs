@@ -6,7 +6,8 @@ use crate::emu::SM83_CLOCK_SPEED;
 use crate::Cycle;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
-const SAMPLE_RATE: u32 = 4800; // Hz
+const SAMPLE_RATE: u32 = 48000; // Hz
+const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 const SAMPLE_RATE_IN_CYCLES: Cycle = Cycle::new((SM83_CLOCK_SPEED / SAMPLE_RATE as u64) as u32);
 
 #[derive(Debug, Clone, Default)]
@@ -26,13 +27,13 @@ pub(crate) struct Sound {
     div_prev: Option<u8>,
 
     sender: Option<SampleSender>,
-    cycle: Cycle,
+    sample_counter: u64,
 }
 
 impl Sound {
     pub(crate) fn clock(&mut self, div: u16) {
         use FrameSequencerState::*;
-        self.cycle += 1;
+        self.sample_counter += SAMPLE_INCREMENT;
 
         // the 5th bit of the high byte
         let bit_5 = (div >> 13 & 0x01) as u8;
@@ -64,10 +65,9 @@ impl Sound {
 
         self.div_prev = Some(bit_5);
 
-        // TODO: Should the FrameSequencer be run first?
-        if self.cycle > SAMPLE_RATE_IN_CYCLES {
+        if self.sample_counter >= SM83_CLOCK_SPEED {
             // Sample the APU
-            self.cycle %= SAMPLE_RATE_IN_CYCLES;
+            self.sample_counter %= SM83_CLOCK_SPEED;
 
             let ch1_amplitude = self.ch1.amplitude();
             let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
