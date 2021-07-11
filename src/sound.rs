@@ -3,7 +3,6 @@ use crossbeam_channel::{Receiver, Sender};
 use rodio::Source;
 
 use crate::emu::SM83_CLOCK_SPEED;
-use crate::Cycle;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 const SAMPLE_RATE: u32 = 48000; // Hz
@@ -99,46 +98,54 @@ impl Sound {
         self.sender = Some(sender);
     }
 
+    fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
+        if freq_hi.idk() && *length_timer > 0 {
+            *length_timer -= 1;
+
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if *length_timer == 0 {
+                *enabled = false;
+            }
+        }
+    }
+
+    fn clock_length_ch4(freq_data: &Channel4Frequency, length_timer: &mut u16, enabled: &mut bool) {
+        if freq_data.idk() && *length_timer > 0 {
+            *length_timer -= 1;
+
+            // Check in this scope ensures (only) the above subtraction
+            // made length_timer 0
+            if *length_timer == 0 {
+                *enabled = false;
+            }
+        }
+    }
+
     fn handle_length(&mut self) {
-        if self.ch1.freq_hi.idk() && self.ch1.length_timer > 0 {
-            self.ch1.length_timer -= 1;
+        Self::clock_length(
+            &self.ch1.freq_hi,
+            &mut self.ch1.length_timer,
+            &mut self.ch1.enabled,
+        );
 
-            // Check in this scope ensures (only) the above subtraction
-            // made length_timer 0
-            if self.ch1.length_timer == 0 {
-                self.ch1.enabled = false;
-            }
-        }
+        Self::clock_length(
+            &self.ch2.freq_hi,
+            &mut self.ch2.length_timer,
+            &mut self.ch2.enabled,
+        );
 
-        if self.ch2.freq_hi.idk() && self.ch2.length_timer > 0 {
-            self.ch2.length_timer -= 1;
+        Self::clock_length(
+            &self.ch3.freq_hi,
+            &mut self.ch3.length_timer,
+            &mut self.ch3.enabled,
+        );
 
-            // Check in this scope ensures (only) the above subtraction
-            // made length_timer 0
-            if self.ch2.length_timer == 0 {
-                self.ch2.enabled = false;
-            }
-        }
-
-        if self.ch3.freq_hi.idk() && self.ch3.length_timer > 0 {
-            self.ch3.length_timer -= 1;
-
-            // Check in this scope ensures (only) the above subtraction
-            // made length_timer 0
-            if self.ch3.length_timer == 0 {
-                self.ch3.enabled = false;
-            }
-        }
-
-        if self.ch4.freq_data.idk() && self.ch4.length_timer > 0 {
-            self.ch4.length_timer -= 1;
-
-            // Check in this scope ensures (only) the above subtraction
-            // made length_timer 0
-            if self.ch4.length_timer == 0 {
-                self.ch4.enabled = false;
-            }
-        }
+        Self::clock_length_ch4(
+            &self.ch4.freq_data,
+            &mut self.ch4.length_timer,
+            &mut self.ch4.enabled,
+        );
     }
 
     fn handle_sweep(&mut self) {
@@ -166,57 +173,46 @@ impl Sound {
         }
     }
 
-    fn handle_volume(&mut self) {
+    fn clock_envelope(envelope: &VolumeEnvelope, period_timer: &mut u8, current_volume: &mut u8) {
         use EnvelopeDirection::*;
+
+        if envelope.period() != 0 {
+            if *period_timer != 0 {
+                *period_timer -= 1;
+            }
+
+            if *period_timer == 0 {
+                *period_timer = envelope.period();
+
+                match envelope.direction() {
+                    Decrease if *current_volume > 0x00 => *current_volume -= 1,
+                    Increase if *current_volume < 0x0F => *current_volume += 1,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn handle_volume(&mut self) {
         // Channels 1, 2 and 4 have Volume Envelopes
 
-        if self.ch1.envelope.period() != 0 {
-            if self.ch1.period_timer > 0 {
-                self.ch1.period_timer -= 1;
-            }
+        Self::clock_envelope(
+            &self.ch1.envelope,
+            &mut self.ch1.period_timer,
+            &mut self.ch1.current_volume,
+        );
 
-            if self.ch1.period_timer == 0 {
-                self.ch1.period_timer = self.ch1.envelope.period();
+        Self::clock_envelope(
+            &self.ch2.envelope,
+            &mut self.ch2.period_timer,
+            &mut self.ch2.current_volume,
+        );
 
-                match self.ch1.envelope.direction() {
-                    Decrease if self.ch1.current_volume > 0x00 => self.ch1.current_volume -= 1,
-                    Increase if self.ch1.current_volume < 0x0F => self.ch1.current_volume += 1,
-                    _ => {}
-                }
-            }
-        }
-
-        if self.ch2.envelope.period() != 0 {
-            if self.ch2.period_timer > 0 {
-                self.ch2.period_timer -= 1;
-            }
-
-            if self.ch2.period_timer == 0 {
-                self.ch2.period_timer = self.ch2.envelope.period();
-
-                match self.ch2.envelope.direction() {
-                    Decrease if self.ch2.current_volume > 0x00 => self.ch2.current_volume -= 1,
-                    Increase if self.ch2.current_volume < 0x0F => self.ch2.current_volume += 1,
-                    _ => {}
-                }
-            }
-        }
-
-        if self.ch4.envelope.period() != 0 {
-            if self.ch4.period_timer > 0 {
-                self.ch4.period_timer -= 1;
-            }
-
-            if self.ch4.period_timer == 0 {
-                self.ch4.period_timer = self.ch4.envelope.period();
-
-                match self.ch4.envelope.direction() {
-                    Decrease if self.ch4.current_volume > 0x00 => self.ch4.current_volume -= 1,
-                    Increase if self.ch4.current_volume < 0x0F => self.ch4.current_volume += 1,
-                    _ => {}
-                }
-            }
-        }
+        Self::clock_envelope(
+            &self.ch4.envelope,
+            &mut self.ch4.period_timer,
+            &mut self.ch4.current_volume,
+        );
     }
 }
 
