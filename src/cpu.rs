@@ -125,9 +125,14 @@ impl Cpu {
             }
         };
 
-        let pending: u32 = cycles.into();
+        let mut pending: u32 = cycles.into();
         for _ in 0..pending {
-            self.bus.clock();
+            if !self.bus.is_audio_full() {
+                self.bus.clock();
+            } else {
+                self.bus.flush_audio();
+                pending += 1;
+            }
         }
 
         self.handle_interrupts();

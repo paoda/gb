@@ -5,10 +5,14 @@ use rodio::Source;
 use crate::emu::SM83_CLOCK_SPEED;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
+
 const SAMPLE_RATE: u32 = 48000; // Hz
+const AUDIO_BUFFER_LEN: usize = 1024;
+const MIN_AUDIO_BUFFER_SIZE: usize = 1;
+const CHANNEL_COUNT: u16 = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct Sound {
     pub(crate) ctrl: SoundControl,
     /// Tone & Sweep
@@ -26,6 +30,8 @@ pub(crate) struct Sound {
 
     sender: Option<SampleSender>,
     sample_counter: u64,
+
+    audio_buf: ArrayQueue<(f32, f32), AUDIO_BUFFER_LEN>,
 }
 
 impl Sound {
@@ -88,14 +94,33 @@ impl Sound {
             let left_sample = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
             let right_sample = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-            if let Some(send) = self.sender.as_ref() {
-                send.add_sample(left_sample, right_sample);
-            }
+            self.audio_buf
+                .push_back((left_sample, right_sample))
+                .expect("Successfully add sample to Audio Buffer");
         }
     }
 
     pub(crate) fn set_audio_src(&mut self, sender: SampleSender) {
         self.sender = Some(sender);
+    }
+
+    pub(crate) fn is_audio_full(&self) -> bool {
+        self.audio_buf.len() >= AUDIO_BUFFER_LEN - MIN_AUDIO_BUFFER_SIZE
+    }
+
+    pub(crate) fn flush_audio(&mut self) {
+        while self.audio_buf.len() > MIN_AUDIO_BUFFER_SIZE {
+            if let Some(send) = self.sender.as_ref() {
+                let (left, right) = self
+                    .audio_buf
+                    .pop_front()
+                    .expect("(f32, f32) is present in Audio Buffer");
+
+                send.add_sample(*left, *right);
+            }
+        }
+
+        self.audio_buf.clear();
     }
 
     fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
@@ -1158,31 +1183,29 @@ pub struct AudioSenderReceiver;
 
 impl AudioSenderReceiver {
     pub fn new() -> (SampleSender, SampleReceiver) {
-        let (send, recv) = crossbeam_channel::unbounded();
+        let (send, recv) = crossbeam_channel::bounded(AUDIO_BUFFER_LEN * 2);
 
-        (SampleSender { send }, SampleReceiver { recv })
+        (SampleSender { inner: send }, SampleReceiver { inner: recv })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SampleSender {
-    send: Sender<f32>,
+    inner: Sender<f32>,
 }
 
 impl SampleSender {
     fn add_sample(&self, left: f32, right: f32) {
-        self.send
-            .send(left)
-            .expect("Send audio sample across threads");
+        let _ = self.inner.try_send(left);
+        // .expect("Send audio sample across threads");
 
-        self.send
-            .send(right)
-            .expect("Send audio sample across threads");
+        let _ = self.inner.try_send(right);
+        // .expect("Send audio sample across threads");
     }
 }
 
 pub struct SampleReceiver {
-    recv: Receiver<f32>,
+    inner: Receiver<f32>,
 }
 
 impl Iterator for SampleReceiver {
@@ -1190,7 +1213,7 @@ impl Iterator for SampleReceiver {
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Should this never return none?
-        self.recv.recv().ok()
+        self.inner.recv().ok()
     }
 }
 
@@ -1204,7 +1227,7 @@ impl Source for SampleReceiver {
 
     fn channels(&self) -> u16 {
         // The Gameboy supports two channels
-        2
+        CHANNEL_COUNT
     }
 
     fn sample_rate(&self) -> u32 {
@@ -1214,5 +1237,74 @@ impl Source for SampleReceiver {
     fn total_duration(&self) -> Option<std::time::Duration> {
         // The duration of this source is infinite
         None
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ArrayQueue<T, const N: usize> {
+    inner: [T; N],
+    head: usize,
+    tail: usize,
+}
+
+impl<T: Default + Copy, const N: usize> Default for ArrayQueue<T, N> {
+    fn default() -> Self {
+        Self {
+            inner: [T::default(); N],
+            head: Default::default(),
+            tail: Default::default(),
+        }
+    }
+}
+
+impl<T: Copy, const N: usize> ArrayQueue<T, N> {
+    pub fn new(default: T) -> Self {
+        Self {
+            inner: [default; N],
+            head: Default::default(),
+            tail: Default::default(),
+        }
+    }
+
+    pub fn push_back(&mut self, value: T) -> Result<(), &'static str> {
+        if self.tail >= N {
+            return Err("Array Capacity Reached");
+        }
+
+        self.inner[self.tail] = value;
+        self.tail += 1;
+
+        Ok(())
+    }
+
+    pub fn pop_front(&mut self) -> Option<&T> {
+        let prev_head = self.head;
+        self.head += 1;
+
+        if prev_head < self.tail {
+            self.inner.get(prev_head)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.tail - self.head
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        N
+    }
+
+    pub fn clear(&mut self) {
+        self.head = 0;
+        self.tail = 0;
     }
 }

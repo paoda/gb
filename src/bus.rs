@@ -70,6 +70,14 @@ impl Bus {
         self.snd.set_audio_src(sender)
     }
 
+    pub(crate) fn is_audio_full(&self) -> bool {
+        self.snd.is_audio_full()
+    }
+
+    pub(crate) fn flush_audio(&mut self) {
+        self.snd.flush_audio()
+    }
+
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();
