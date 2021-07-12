@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::{AudioSenderReceiver, Cycle, Egui, GB_HEIGHT, GB_WIDTH};
+use gb::{AudioMPSC, Cycle, Egui, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink};
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
         (pixels, egui)
     };
 
-    let (send, recv) = AudioSenderReceiver::new();
+    let (send, recv) = AudioMPSC::new();
     game_boy.set_audio_src(send);
 
     // Initialize Audio

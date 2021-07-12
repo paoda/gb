@@ -3,7 +3,7 @@ use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
-use crate::sound::SampleSender;
+use crate::sound::AudioSender;
 use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -45,7 +45,7 @@ impl Cpu {
         })
     }
 
-    pub fn set_audio_src(&mut self, sender: SampleSender) {
+    pub fn set_audio_src(&mut self, sender: AudioSender) {
         self.bus.pass_audio_src(sender)
     }
 
@@ -125,6 +125,8 @@ impl Cpu {
             }
         };
 
+        // FIXME: Regression, this is not a proper fix,
+        // the FIFO behaves weirdly using this code
         let pending: u32 = cycles.into();
         let mut offset = 0;
         for _ in 0..(pending + offset) {

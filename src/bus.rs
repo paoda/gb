@@ -4,7 +4,7 @@ use crate::interrupt::{Interrupt, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::{Ppu, PpuMode};
 use crate::serial::Serial;
-use crate::sound::{SampleSender, Sound};
+use crate::sound::{AudioSender, Sound};
 use crate::timer::Timer;
 use crate::work_ram::{VariableWorkRam, WorkRam};
 use std::{fs::File, io::Read};
@@ -66,7 +66,7 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
-    pub(crate) fn pass_audio_src(&mut self, sender: SampleSender) {
+    pub(crate) fn pass_audio_src(&mut self, sender: AudioSender) {
         self.snd.set_audio_src(sender)
     }
 

@@ -27,7 +27,7 @@ pub(crate) struct Sound {
     frame_seq_state: FrameSequencerState,
     div_prev: Option<u8>,
 
-    sender: Option<SampleSender>,
+    sender: Option<AudioSender>,
     sample_counter: u64,
 
     is_mpsc_full: bool,
@@ -104,7 +104,7 @@ impl Sound {
         }
     }
 
-    pub(crate) fn set_audio_src(&mut self, sender: SampleSender) {
+    pub(crate) fn set_audio_src(&mut self, sender: AudioSender) {
         self.sender = Some(sender);
     }
 
@@ -1172,22 +1172,22 @@ impl From<ChannelControl> for u8 {
     }
 }
 
-pub struct AudioSenderReceiver;
+pub struct AudioMPSC;
 
-impl AudioSenderReceiver {
-    pub fn new() -> (SampleSender, SampleReceiver) {
+impl AudioMPSC {
+    pub fn new() -> (AudioSender, AudioReceiver) {
         let (send, recv) = crossbeam_channel::bounded(AUDIO_BUFFER_LEN * 2);
 
-        (SampleSender { inner: send }, SampleReceiver { inner: recv })
+        (AudioSender { inner: send }, AudioReceiver { inner: recv })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct SampleSender {
+pub struct AudioSender {
     inner: Sender<f32>,
 }
 
-impl SampleSender {
+impl AudioSender {
     fn send_samples(&self, left: f32, right: f32) -> Result<(), TrySendError<f32>> {
         self.inner.try_send(left).and(self.inner.try_send(right))?;
         Ok(())
@@ -1198,11 +1198,11 @@ impl SampleSender {
     }
 }
 
-pub struct SampleReceiver {
+pub struct AudioReceiver {
     inner: Receiver<f32>,
 }
 
-impl Iterator for SampleReceiver {
+impl Iterator for AudioReceiver {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1211,7 +1211,7 @@ impl Iterator for SampleReceiver {
     }
 }
 
-impl Source for SampleReceiver {
+impl Source for AudioReceiver {
     fn current_frame_len(&self) -> Option<usize> {
         // A frame changes when the samples rate or
         // number of channels change. This will never happen, so
