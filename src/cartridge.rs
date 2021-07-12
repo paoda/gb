@@ -183,7 +183,7 @@ impl Mbc1 {
         }
     }
 
-    fn mbcm_zero_bank(&self) -> u8 {
+    fn _mbcm_zero_bank(&self) -> u8 {
         use BankCount::*;
 
         match self.bank_count {
