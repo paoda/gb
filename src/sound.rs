@@ -1,5 +1,5 @@
 use bitfield::bitfield;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, TrySendError};
 use rodio::Source;
 
 use crate::emu::SM83_CLOCK_SPEED;
@@ -8,7 +8,6 @@ const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 
 const SAMPLE_RATE: u32 = 48000; // Hz
 const AUDIO_BUFFER_LEN: usize = 1024;
-const MIN_AUDIO_BUFFER_SIZE: usize = 1;
 const CHANNEL_COUNT: u16 = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
@@ -31,7 +30,7 @@ pub(crate) struct Sound {
     sender: Option<SampleSender>,
     sample_counter: u64,
 
-    audio_buf: ArrayQueue<(f32, f32), AUDIO_BUFFER_LEN>,
+    is_mpsc_full: bool,
 }
 
 impl Sound {
@@ -91,12 +90,17 @@ impl Sound {
             let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
             let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
 
-            let left_sample = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
-            let right_sample = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
+            let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
+            let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-            self.audio_buf
-                .push_back((left_sample, right_sample))
-                .expect("Successfully add sample to Audio Buffer");
+            if let Some(s) = self.sender.as_ref() {
+                let _ = s.send_samples(left, right).map_err(|e| match e {
+                    TrySendError::Full(_) => self.is_mpsc_full = true,
+                    TrySendError::Disconnected(_) => {
+                        panic!("Audio Sample MPSC Channel Disconnected")
+                    }
+                });
+            }
         }
     }
 
@@ -104,23 +108,12 @@ impl Sound {
         self.sender = Some(sender);
     }
 
-    pub(crate) fn is_audio_full(&self) -> bool {
-        self.audio_buf.len() >= AUDIO_BUFFER_LEN - MIN_AUDIO_BUFFER_SIZE
-    }
-
-    pub(crate) fn flush_audio(&mut self) {
-        while self.audio_buf.len() > MIN_AUDIO_BUFFER_SIZE {
-            if let Some(send) = self.sender.as_ref() {
-                let (left, right) = self
-                    .audio_buf
-                    .pop_front()
-                    .expect("(f32, f32) is present in Audio Buffer");
-
-                send.add_sample(*left, *right);
-            }
+    pub(crate) fn is_mpsc_still_full(&mut self) -> bool {
+        if let Some(sender) = self.sender.as_ref() {
+            self.is_mpsc_full = sender.is_full();
         }
 
-        self.audio_buf.clear();
+        self.is_mpsc_full
     }
 
     fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
@@ -1195,12 +1188,13 @@ pub struct SampleSender {
 }
 
 impl SampleSender {
-    fn add_sample(&self, left: f32, right: f32) {
-        let _ = self.inner.try_send(left);
-        // .expect("Send audio sample across threads");
+    fn send_samples(&self, left: f32, right: f32) -> Result<(), TrySendError<f32>> {
+        self.inner.try_send(left).and(self.inner.try_send(right))?;
+        Ok(())
+    }
 
-        let _ = self.inner.try_send(right);
-        // .expect("Send audio sample across threads");
+    fn is_full(&self) -> bool {
+        self.inner.is_full()
     }
 }
 
@@ -1237,74 +1231,5 @@ impl Source for SampleReceiver {
     fn total_duration(&self) -> Option<std::time::Duration> {
         // The duration of this source is infinite
         None
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ArrayQueue<T, const N: usize> {
-    inner: [T; N],
-    head: usize,
-    tail: usize,
-}
-
-impl<T: Default + Copy, const N: usize> Default for ArrayQueue<T, N> {
-    fn default() -> Self {
-        Self {
-            inner: [T::default(); N],
-            head: Default::default(),
-            tail: Default::default(),
-        }
-    }
-}
-
-impl<T: Copy, const N: usize> ArrayQueue<T, N> {
-    pub fn new(default: T) -> Self {
-        Self {
-            inner: [default; N],
-            head: Default::default(),
-            tail: Default::default(),
-        }
-    }
-
-    pub fn push_back(&mut self, value: T) -> Result<(), &'static str> {
-        if self.tail >= N {
-            return Err("Array Capacity Reached");
-        }
-
-        self.inner[self.tail] = value;
-        self.tail += 1;
-
-        Ok(())
-    }
-
-    pub fn pop_front(&mut self) -> Option<&T> {
-        let prev_head = self.head;
-        self.head += 1;
-
-        if prev_head < self.tail {
-            self.inner.get(prev_head)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.tail - self.head
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        N
-    }
-
-    pub fn clear(&mut self) {
-        self.head = 0;
-        self.tail = 0;
     }
 }

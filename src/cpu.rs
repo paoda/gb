@@ -125,13 +125,13 @@ impl Cpu {
             }
         };
 
-        let mut pending: u32 = cycles.into();
-        for _ in 0..pending {
-            if !self.bus.is_audio_full() {
+        let pending: u32 = cycles.into();
+        let mut offset = 0;
+        for _ in 0..(pending + offset) {
+            if !self.bus.is_mpsc_still_full() {
                 self.bus.clock();
             } else {
-                self.bus.flush_audio();
-                pending += 1;
+                offset += 1;
             }
         }
 
