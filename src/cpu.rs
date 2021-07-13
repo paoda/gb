@@ -363,6 +363,25 @@ impl Cpu {
 }
 
 impl Cpu {
+    fn _debug_log(&self, mut w: impl std::io::Write, instr: &Instruction) -> std::io::Result<()> {
+        write!(w, "A: {:02X} ", self.reg.a)?;
+        write!(w, "F: {:02X} ", u8::from(self.flags))?;
+        write!(w, "B: {:02X} ", self.reg.b)?;
+        write!(w, "C: {:02X} ", self.reg.c)?;
+        write!(w, "D: {:02X} ", self.reg.d)?;
+        write!(w, "E: {:02X} ", self.reg.e)?;
+        write!(w, "H: {:02X} ", self.reg.h)?;
+        write!(w, "L: {:02X} ", self.reg.l)?;
+        write!(w, "SP: {:04X} ", self.reg.sp)?;
+        write!(w, "PC: 00:{:04X} ", self.reg.pc)?;
+        write!(w, "({:02X} ", self.read_byte(self.reg.pc))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
+        write!(w, "{:02X}) ", self.read_byte(self.reg.pc + 3))?;
+        writeln!(w, "| {:?}", instr)?;
+        w.flush()
+    }
+
     fn _log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
         write!(writer, "A: {:02X} ", self.reg.a)?;
         write!(writer, "F: {:02X} ", u8::from(self.flags))?;
@@ -378,9 +397,7 @@ impl Cpu {
         write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
         write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
         writeln!(writer, "{:02X})", self.read_byte(self.reg.pc + 3))?;
-        writer.flush()?;
-
-        Ok(())
+        writer.flush()
     }
 }
 
