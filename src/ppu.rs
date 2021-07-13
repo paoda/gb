@@ -67,11 +67,11 @@ impl BusIo for Ppu {
 
 impl Ppu {
     pub(crate) fn clock(&mut self) {
+        self.cycle += 1;
+
         if !self.ctrl.lcd_enabled() {
             return;
         }
-
-        self.cycle += 1;
 
         match self.stat.mode() {
             PpuMode::OamScan => {
