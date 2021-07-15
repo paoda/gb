@@ -1,10 +1,13 @@
-use std::collections::VecDeque;
-
-use bitfield::bitfield;
-use crossbeam_channel::{Receiver, Sender, TrySendError};
-use rodio::Source;
-
 use crate::emu::SM83_CLOCK_SPEED;
+use gen::{AudioBuffer, AudioSender};
+use types::ch1::{Sweep, SweepDirection};
+use types::ch3::Volume as Ch3Volume;
+use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
+use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
+use types::{ChannelControl, FrameSequencerState, SoundOutput};
+
+pub mod gen;
+mod types;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 
@@ -136,7 +139,7 @@ impl Sound {
         }
     }
 
-    fn clock_length_ch4(freq_data: &Channel4Frequency, length_timer: &mut u16, enabled: &mut bool) {
+    fn clock_length_ch4(freq_data: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
         if freq_data.idk() && *length_timer > 0 {
             *length_timer -= 1;
 
@@ -168,7 +171,7 @@ impl Sound {
         );
 
         Self::clock_length_ch4(
-            &self.ch4.freq_data,
+            &self.ch4.freq,
             &mut self.ch4.length_timer,
             &mut self.ch4.enabled,
         );
@@ -242,41 +245,6 @@ impl Sound {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum FrameSequencerState {
-    Step0Length,
-    Step1Nothing,
-    Step2LengthAndSweep,
-    Step3Nothing,
-    Step4Length,
-    Step5Nothing,
-    Step6LengthAndSweep,
-    Step7VolumeEnvelope,
-}
-
-impl FrameSequencerState {
-    fn step(&mut self) {
-        use FrameSequencerState::*;
-
-        *self = match *self {
-            Step0Length => Step1Nothing,
-            Step1Nothing => Step2LengthAndSweep,
-            Step2LengthAndSweep => Step3Nothing,
-            Step3Nothing => Step4Length,
-            Step4Length => Step5Nothing,
-            Step5Nothing => Step6LengthAndSweep,
-            Step6LengthAndSweep => Step7VolumeEnvelope,
-            Step7VolumeEnvelope => Step0Length,
-        };
-    }
-}
-
-impl Default for FrameSequencerState {
-    fn default() -> Self {
-        Self::Step0Length
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct SoundControl {
     /// 0xFF24 | NR50 - Channel Control
@@ -289,7 +257,7 @@ pub(crate) struct SoundControl {
 
 impl SoundControl {
     /// 0xFF26 | NR52 - Sound On/Off
-    pub fn status(&self, snd: &Sound) -> u8 {
+    pub(crate) fn status(&self, snd: &Sound) -> u8 {
         (self.enabled as u8) << 7
             | (snd.ch4.enabled as u8) << 3
             | (snd.ch3.enabled as u8) << 2
@@ -298,79 +266,9 @@ impl SoundControl {
     }
 
     /// 0xFF26 | NR52 - Sound On/Off
-    pub fn set_status(&mut self, byte: u8) {
+    pub(crate) fn set_status(&mut self, byte: u8) {
         // TODO: Should all channel enabled fields be disabled when this is reset?
         self.enabled = (byte >> 7) & 0x01 == 0x01;
-    }
-}
-
-// TODO: What to do about the separation of freq bits
-// across multiple registers?
-bitfield! {
-    pub struct FrequencyHigh(u8);
-    impl Debug;
-    initial, set_initial: 7;
-    idk, set_idk: 6; // TODO: Figure out what the hell this is
-    freq_bits, set_freq_bits: 2, 0;
-}
-
-impl Copy for FrequencyHigh {}
-impl Clone for FrequencyHigh {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for FrequencyHigh {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for FrequencyHigh {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<FrequencyHigh> for u8 {
-    fn from(freq: FrequencyHigh) -> Self {
-        freq.0 & 0x40 // Only bit 6 can be read
-    }
-}
-
-bitfield! {
-    pub struct SoundStatus(u8);
-    impl Debug;
-    pub all_enabled, set_all_enabled: 7;
-    pub sound_4, _: 3;
-    pub sound_3, _: 2;
-    pub sound_2, _: 1;
-    pub sound_1, _: 0;
-}
-
-impl Copy for SoundStatus {}
-impl Clone for SoundStatus {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for SoundStatus {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for SoundStatus {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<SoundStatus> for u8 {
-    fn from(status: SoundStatus) -> Self {
-        status.0
     }
 }
 
@@ -507,61 +405,6 @@ impl Channel1 {
     }
 }
 
-bitfield! {
-    pub struct Sweep(u8);
-    impl Debug;
-    period, set_period: 6, 4;
-    from into SweepDirection, direction, set_direction: 3, 3;
-    shift_count, set_shift_count: 2, 0;
-}
-
-impl Copy for Sweep {}
-impl Clone for Sweep {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for Sweep {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for Sweep {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<Sweep> for u8 {
-    fn from(sweep: Sweep) -> Self {
-        sweep.0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum SweepDirection {
-    Increase = 0,
-    Decrease = 1,
-}
-
-impl From<u8> for SweepDirection {
-    fn from(byte: u8) -> Self {
-        match byte & 0x01 {
-            0b00 => Self::Increase,
-            0b01 => Self::Decrease,
-            _ => unreachable!("{:04X} is not a valid value for SweepChange", byte),
-        }
-    }
-}
-
-impl From<SweepDirection> for u8 {
-    fn from(change: SweepDirection) -> Self {
-        change as u8
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel2 {
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
@@ -647,145 +490,6 @@ impl Channel2 {
     }
 }
 
-bitfield! {
-    pub struct VolumeEnvelope(u8);
-    impl Debug;
-    pub init_vol, set_init_vol: 7, 4;
-    pub from into EnvelopeDirection, direction, set_direction: 3, 3;
-    pub period, set_period: 2, 0;
-}
-
-impl Copy for VolumeEnvelope {}
-impl Clone for VolumeEnvelope {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for VolumeEnvelope {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for VolumeEnvelope {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<VolumeEnvelope> for u8 {
-    fn from(envelope: VolumeEnvelope) -> Self {
-        envelope.0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum EnvelopeDirection {
-    Decrease = 0,
-    Increase = 1,
-}
-
-impl From<u8> for EnvelopeDirection {
-    fn from(byte: u8) -> Self {
-        match byte & 0b01 {
-            0b00 => Self::Decrease,
-            0b01 => Self::Increase,
-            _ => unreachable!("{:#04X} is not a valid value for EnvelopeDirection", byte),
-        }
-    }
-}
-
-impl From<EnvelopeDirection> for u8 {
-    fn from(direction: EnvelopeDirection) -> Self {
-        direction as u8
-    }
-}
-
-impl Default for EnvelopeDirection {
-    fn default() -> Self {
-        Self::Decrease
-    }
-}
-
-bitfield! {
-   pub struct SoundDuty(u8);
-    impl Debug;
-   pub from into WavePattern, wave_pattern, set_wave_pattern: 7, 6;
-   pub sound_length, _: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
-}
-
-impl Copy for SoundDuty {}
-impl Clone for SoundDuty {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for SoundDuty {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for SoundDuty {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<SoundDuty> for u8 {
-    fn from(duty: SoundDuty) -> Self {
-        duty.0 & 0xC0 // Only bits 7 and 6 can be read
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum WavePattern {
-    OneEighth = 0,     // 12.5% ( _-------_-------_------- )
-    OneQuarter = 1,    // 25%   ( __------__------__------ )
-    OneHalf = 2,       // 50%   ( ____----____----____---- ) (normal)
-    ThreeQuarters = 3, // 75%   ( ______--______--______-- )
-}
-
-impl WavePattern {
-    pub const fn amplitude(&self, index: u8) -> u8 {
-        use WavePattern::*;
-        let i = 7 - index; // an index of 0 should get the highest bit
-
-        match *self {
-            OneEighth => (0b00000001 >> i) & 0x01,
-            OneQuarter => (0b10000001 >> i) & 0x01,
-            OneHalf => (0b10000111 >> i) & 0x01,
-            ThreeQuarters => (0b01111110 >> i) & 0x01,
-        }
-    }
-}
-
-impl Default for WavePattern {
-    fn default() -> Self {
-        Self::OneEighth // Rationale: OneEighth is 0x00
-    }
-}
-
-impl From<WavePattern> for u8 {
-    fn from(pattern: WavePattern) -> Self {
-        pattern as Self
-    }
-}
-
-impl From<u8> for WavePattern {
-    fn from(byte: u8) -> Self {
-        match byte & 0b11 {
-            0b00 => Self::OneEighth,
-            0b01 => Self::OneQuarter,
-            0b10 => Self::OneHalf,
-            0b11 => Self::ThreeQuarters,
-            _ => unreachable!("{:#04X} is not a valid value for WavePattern", byte),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel3 {
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
@@ -793,7 +497,7 @@ pub(crate) struct Channel3 {
     /// 0xFF1B | NR31 - Sound Length
     len: u8,
     /// 0xFF1C | NR32 - Channel 3 Volume
-    volume: Channel3Volume,
+    volume: Ch3Volume,
     /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
     freq_lo: u8,
     /// 0xFF1E | NR34 - Channel 3 Frequency high
@@ -854,7 +558,7 @@ impl Channel3 {
     }
 
     pub(crate) fn set_volume(&mut self, byte: u8) {
-        use Channel3Volume::*;
+        use Ch3Volume::*;
 
         self.volume = match (byte >> 5) & 0x03 {
             0b00 => Mute,
@@ -899,33 +603,6 @@ impl Channel3 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Channel3Volume {
-    Mute = 0,
-    Full = 1,
-    Half = 2,
-    Quarter = 3,
-}
-
-impl Channel3Volume {
-    pub fn shift_count(&self) -> u8 {
-        use Channel3Volume::*;
-
-        match *self {
-            Mute => 4,
-            Full => 0,
-            Half => 1,
-            Quarter => 2,
-        }
-    }
-}
-
-impl Default for Channel3Volume {
-    fn default() -> Self {
-        Self::Mute
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
@@ -935,7 +612,7 @@ pub(crate) struct Channel4 {
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
     pub(crate) poly: PolynomialCounter,
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
-    freq_data: Channel4Frequency,
+    freq: Ch4Frequency,
 
     // Envelope Functionality
     period_timer: u8,
@@ -966,14 +643,14 @@ impl Channel4 {
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     pub(crate) fn freq_data(&self) -> u8 {
-        u8::from(self.freq_data) & 0x40 // only bit 6 readable
+        u8::from(self.freq) & 0x40 // only bit 6 readable
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     pub(crate) fn set_freq_data(&mut self, byte: u8) {
-        self.freq_data = byte.into();
+        self.freq = byte.into();
 
-        if self.freq_data.initial() {
+        if self.freq.initial() {
             // Envelope behaviour during trigger event
             self.period_timer = self.envelope.period();
             self.current_volume = self.envelope.init_vol();
@@ -1018,252 +695,5 @@ impl Channel4 {
         }
 
         code << 4
-    }
-}
-
-bitfield! {
-    pub struct PolynomialCounter(u8);
-    impl Debug;
-    shift_count, set_shift_count: 7, 4;
-    from into CounterWidth, counter_width, set_counter_width: 3, 3;
-    divisor_code, set_divisor_code: 2, 0;
-}
-
-impl Copy for PolynomialCounter {}
-impl Clone for PolynomialCounter {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for PolynomialCounter {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for PolynomialCounter {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<PolynomialCounter> for u8 {
-    fn from(poly: PolynomialCounter) -> Self {
-        poly.0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum CounterWidth {
-    Long,  // 15 bits long
-    Short, // 7 bits long
-}
-
-impl From<u8> for CounterWidth {
-    fn from(byte: u8) -> Self {
-        match byte & 0x01 {
-            0b00 => Self::Short,
-            0b01 => Self::Long,
-            _ => unreachable!("{:#04X} is not a valid value for CounterWidth"),
-        }
-    }
-}
-
-impl From<CounterWidth> for u8 {
-    fn from(counter_width: CounterWidth) -> Self {
-        counter_width as u8
-    }
-}
-
-bitfield! {
-    pub struct Channel4Frequency(u8);
-    impl Debug;
-    initial, set_initial: 7;
-    idk, set_idk: 6; // TODO: same as FrequencyHigh, figure out what this is
-}
-
-impl Copy for Channel4Frequency {}
-impl Clone for Channel4Frequency {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for Channel4Frequency {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for Channel4Frequency {
-    fn from(byte: u8) -> Self {
-        Self(byte & 0xC0) // Only bits 7 and 6 hold anything of value
-    }
-}
-
-impl From<Channel4Frequency> for u8 {
-    fn from(state: Channel4Frequency) -> Self {
-        state.0 & 0x40 // Only bit 6 holds anything of value
-    }
-}
-
-bitfield! {
-    pub struct SoundOutput(u8);
-    impl Debug;
-    pub ch4_left, set_ch4_left: 7;
-    pub ch3_left, set_ch3_left: 6;
-    pub ch2_left, set_ch2_left: 5;
-    pub ch1_left, set_ch1_left: 4;
-    pub ch4_right, set_ch4_right: 3;
-    pub ch3_right, set_ch3_right: 2;
-    pub ch2_right, set_ch2_right: 1;
-    pub ch1_right, set_ch1_right: 0;
-}
-
-impl Copy for SoundOutput {}
-impl Clone for SoundOutput {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for SoundOutput {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for SoundOutput {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<SoundOutput> for u8 {
-    fn from(output: SoundOutput) -> Self {
-        output.0
-    }
-}
-
-bitfield! {
-    pub struct ChannelControl(u8);
-    impl Debug;
-    pub vin_so2, set_vin_so2: 7;
-    pub so2_level, set_so2_level: 6, 4;
-    pub vin_so1, set_vin_so1: 3;
-    pub so1_level, set_so1_level: 2, 0;
-}
-
-impl Copy for ChannelControl {}
-impl Clone for ChannelControl {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Default for ChannelControl {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u8> for ChannelControl {
-    fn from(byte: u8) -> Self {
-        Self(byte)
-    }
-}
-
-impl From<ChannelControl> for u8 {
-    fn from(ctrl: ChannelControl) -> Self {
-        ctrl.0
-    }
-}
-
-pub struct AudioMPSC;
-
-impl AudioMPSC {
-    pub fn new() -> (AudioSender<f32>, AudioReceiver<f32>) {
-        // TODO: Can we provide an upper limit for this?
-        // The larger this channel is, the more lag there is between the Audio and
-        // Emulator
-        let (send, recv) = crossbeam_channel::unbounded();
-
-        (AudioSender { inner: send }, AudioReceiver { inner: recv })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioSender<T> {
-    inner: Sender<T>,
-}
-
-impl<T> AudioSender<T> {
-    fn send_samples(&self, left: T, right: T) -> Result<(), TrySendError<T>> {
-        self.inner.try_send(left).and(self.inner.try_send(right))?;
-        Ok(())
-    }
-}
-
-pub struct AudioReceiver<T> {
-    inner: Receiver<T>,
-}
-
-impl<T> Iterator for AudioReceiver<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // TODO: Should this never return none?
-        self.inner.recv().ok()
-    }
-}
-
-impl<T: rodio::Sample> Source for AudioReceiver<T> {
-    fn current_frame_len(&self) -> Option<usize> {
-        // A frame changes when the samples rate or
-        // number of channels change. This will never happen, so
-        // we return
-        None
-    }
-
-    fn channels(&self) -> u16 {
-        // The Gameboy supports two channels
-        CHANNEL_COUNT as u16
-    }
-
-    fn sample_rate(&self) -> u32 {
-        SAMPLE_RATE
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        // The duration of this source is infinite
-        None
-    }
-}
-
-#[derive(Debug, Clone)]
-struct AudioBuffer<T> {
-    inner: VecDeque<T>,
-}
-
-impl<T> Default for AudioBuffer<T> {
-    fn default() -> Self {
-        Self {
-            inner: VecDeque::with_capacity(AUDIO_BUFFER_LEN * CHANNEL_COUNT),
-        }
-    }
-}
-
-impl<T> AudioBuffer<T> {
-    pub fn push_back(&mut self, value: T) {
-        self.inner.push_back(value)
-    }
-
-    pub fn pop_front(&mut self) -> Option<T> {
-        self.inner.pop_front()
-    }
-
-    pub fn len(&self) -> usize {
-        self.inner.len()
     }
 }

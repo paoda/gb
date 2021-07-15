@@ -3,7 +3,7 @@ use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
-use crate::sound::AudioSender;
+use crate::sound::gen::AudioSender;
 use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};

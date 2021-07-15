@@ -1,6 +1,6 @@
 pub use gui::Egui;
 pub use instruction::Cycle;
-pub use sound::AudioMPSC;
+pub use sound::gen::AudioMPSC;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;
