@@ -1,10 +1,11 @@
+pub use apu::gen::AudioMPSC;
 pub use gui::Egui;
 pub use instruction::Cycle;
-pub use sound::gen::AudioMPSC;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;
 
+mod apu;
 mod bus;
 mod cartridge;
 mod cpu;
@@ -16,6 +17,5 @@ mod interrupt;
 mod joypad;
 mod ppu;
 mod serial;
-mod sound;
 mod timer;
 mod work_ram;

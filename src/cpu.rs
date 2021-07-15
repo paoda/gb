@@ -1,9 +1,9 @@
+use crate::apu::gen::AudioSender;
 use crate::bus::{Bus, BusIo};
 use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
-use crate::sound::gen::AudioSender;
 use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -128,11 +128,11 @@ impl Cpu {
         let mut elapsed = 0x00;
         let pending: u32 = cycles.into();
         while elapsed < pending {
-            if !self.bus.is_full() {
+            if !self.bus.apu().is_full() {
                 self.bus.clock();
                 elapsed += 1;
             } else {
-                self.bus.flush_samples();
+                self.bus.apu_mut().flush_samples();
             }
         }
 

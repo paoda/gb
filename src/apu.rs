@@ -17,7 +17,7 @@ const CHANNEL_COUNT: usize = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct Sound {
+pub(crate) struct Apu {
     pub(crate) ctrl: SoundControl,
     /// Tone & Sweep
     pub(crate) ch1: Channel1,
@@ -38,7 +38,7 @@ pub(crate) struct Sound {
     buffer: AudioBuffer<(f32, f32)>,
 }
 
-impl Sound {
+impl Apu {
     pub(crate) fn clock(&mut self, div: u16) {
         use FrameSequencerState::*;
         self.sample_counter += SAMPLE_INCREMENT;
@@ -257,7 +257,7 @@ pub(crate) struct SoundControl {
 
 impl SoundControl {
     /// 0xFF26 | NR52 - Sound On/Off
-    pub(crate) fn status(&self, snd: &Sound) -> u8 {
+    pub(crate) fn status(&self, snd: &Apu) -> u8 {
         (self.enabled as u8) << 7
             | (snd.ch4.enabled as u8) << 3
             | (snd.ch3.enabled as u8) << 2

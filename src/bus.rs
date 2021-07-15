@@ -1,11 +1,11 @@
+use crate::apu::gen::AudioSender;
+use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::high_ram::HighRam;
 use crate::interrupt::{Interrupt, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::{Ppu, PpuMode};
 use crate::serial::Serial;
-use crate::sound::gen::AudioSender;
-use crate::sound::Sound;
 use crate::timer::Timer;
 use crate::work_ram::{VariableWorkRam, WorkRam};
 use std::{fs::File, io::Read};
@@ -21,7 +21,7 @@ pub struct Bus {
     var_ram: VariableWorkRam,
     pub(crate) timer: Timer,
     int: Interrupt,
-    snd: Sound,
+    apu: Apu,
     high_ram: HighRam,
     serial: Serial,
     pub(crate) joypad: Joypad,
@@ -37,7 +37,7 @@ impl Default for Bus {
             var_ram: Default::default(),
             timer: Default::default(),
             int: Default::default(),
-            snd: Default::default(),
+            apu: Default::default(),
             high_ram: Default::default(),
             serial: Default::default(),
             joypad: Default::default(),
@@ -67,22 +67,22 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
+    pub(crate) fn apu(&self) -> &Apu {
+        &self.apu
+    }
+
+    pub(crate) fn apu_mut(&mut self) -> &mut Apu {
+        &mut self.apu
+    }
+
     pub(crate) fn pass_audio_src(&mut self, sender: AudioSender<f32>) {
-        self.snd.set_audio_src(sender)
-    }
-
-    pub(crate) fn is_full(&self) -> bool {
-        self.snd.is_full()
-    }
-
-    pub(crate) fn flush_samples(&mut self) {
-        self.snd.flush_samples()
+        self.apu.set_audio_src(sender)
     }
 
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();
-        self.snd.clock(self.timer.divider);
+        self.apu.clock(self.timer.divider);
         self.clock_dma();
     }
 
@@ -229,25 +229,25 @@ impl BusIo for Bus {
                     0x06 => self.timer.modulo,
                     0x07 => self.timer.ctrl.into(),
                     0x0F => self.interrupt_flag().into(),
-                    0x10 => self.snd.ch1.sweep.into(),
-                    0x11 => self.snd.ch1.duty(),
-                    0x12 => self.snd.ch1.envelope.into(),
-                    0x14 => self.snd.ch1.freq_hi(),
-                    0x16 => self.snd.ch2.duty(),
-                    0x17 => self.snd.ch2.envelope.into(),
-                    0x19 => self.snd.ch2.freq_hi(),
-                    0x1A => self.snd.ch3.enabled(),
-                    0x1B => self.snd.ch3.len(),
-                    0x1C => self.snd.ch3.volume(),
-                    0x1E => self.snd.ch3.freq_hi(),
-                    0x20 => self.snd.ch4.len(),
-                    0x21 => self.snd.ch4.envelope.into(),
-                    0x22 => self.snd.ch4.poly.into(),
-                    0x23 => self.snd.ch4.freq_data(),
-                    0x24 => self.snd.ctrl.channel.into(),
-                    0x25 => self.snd.ctrl.output.into(),
-                    0x26 => self.snd.ctrl.status(&self.snd),
-                    0x30..=0x3F => self.snd.ch3.wave_ram[addr as usize - 0xFF30],
+                    0x10 => self.apu.ch1.sweep.into(),
+                    0x11 => self.apu.ch1.duty(),
+                    0x12 => self.apu.ch1.envelope.into(),
+                    0x14 => self.apu.ch1.freq_hi(),
+                    0x16 => self.apu.ch2.duty(),
+                    0x17 => self.apu.ch2.envelope.into(),
+                    0x19 => self.apu.ch2.freq_hi(),
+                    0x1A => self.apu.ch3.enabled(),
+                    0x1B => self.apu.ch3.len(),
+                    0x1C => self.apu.ch3.volume(),
+                    0x1E => self.apu.ch3.freq_hi(),
+                    0x20 => self.apu.ch4.len(),
+                    0x21 => self.apu.ch4.envelope.into(),
+                    0x22 => self.apu.ch4.poly.into(),
+                    0x23 => self.apu.ch4.freq_data(),
+                    0x24 => self.apu.ctrl.channel.into(),
+                    0x25 => self.apu.ctrl.output.into(),
+                    0x26 => self.apu.ctrl.status(&self.apu),
+                    0x30..=0x3F => self.apu.ch3.wave_ram[addr as usize - 0xFF30],
                     0x40 => self.ppu.ctrl.into(),
                     0x41 => self.ppu.stat.into(),
                     0x42 => self.ppu.pos.scroll_y,
@@ -344,28 +344,28 @@ impl BusIo for Bus {
                     0x06 => self.timer.modulo = byte,
                     0x07 => self.timer.ctrl = byte.into(),
                     0x0F => self.set_interrupt_flag(byte),
-                    0x10 => self.snd.ch1.sweep = byte.into(),
-                    0x11 => self.snd.ch1.set_duty(byte),
-                    0x12 => self.snd.ch1.envelope = byte.into(),
-                    0x13 => self.snd.ch1.set_freq_lo(byte),
-                    0x14 => self.snd.ch1.set_freq_hi(byte),
-                    0x16 => self.snd.ch2.set_duty(byte),
-                    0x17 => self.snd.ch2.envelope = byte.into(),
-                    0x18 => self.snd.ch2.set_freq_lo(byte),
-                    0x19 => self.snd.ch2.set_freq_hi(byte),
-                    0x1A => self.snd.ch3.set_enabled(byte),
-                    0x1B => self.snd.ch3.set_len(byte),
-                    0x1C => self.snd.ch3.set_volume(byte),
-                    0x1D => self.snd.ch3.set_freq_lo(byte),
-                    0x1E => self.snd.ch3.set_freq_hi(byte),
-                    0x20 => self.snd.ch4.set_len(byte),
-                    0x21 => self.snd.ch4.envelope = byte.into(),
-                    0x22 => self.snd.ch4.poly = byte.into(),
-                    0x23 => self.snd.ch4.set_freq_data(byte),
-                    0x24 => self.snd.ctrl.channel = byte.into(),
-                    0x25 => self.snd.ctrl.output = byte.into(),
-                    0x26 => self.snd.ctrl.set_status(byte), // FIXME: Should we control which bytes are written to here?
-                    0x30..=0x3F => self.snd.ch3.wave_ram[addr as usize - 0xFF30] = byte,
+                    0x10 => self.apu.ch1.sweep = byte.into(),
+                    0x11 => self.apu.ch1.set_duty(byte),
+                    0x12 => self.apu.ch1.envelope = byte.into(),
+                    0x13 => self.apu.ch1.set_freq_lo(byte),
+                    0x14 => self.apu.ch1.set_freq_hi(byte),
+                    0x16 => self.apu.ch2.set_duty(byte),
+                    0x17 => self.apu.ch2.envelope = byte.into(),
+                    0x18 => self.apu.ch2.set_freq_lo(byte),
+                    0x19 => self.apu.ch2.set_freq_hi(byte),
+                    0x1A => self.apu.ch3.set_enabled(byte),
+                    0x1B => self.apu.ch3.set_len(byte),
+                    0x1C => self.apu.ch3.set_volume(byte),
+                    0x1D => self.apu.ch3.set_freq_lo(byte),
+                    0x1E => self.apu.ch3.set_freq_hi(byte),
+                    0x20 => self.apu.ch4.set_len(byte),
+                    0x21 => self.apu.ch4.envelope = byte.into(),
+                    0x22 => self.apu.ch4.poly = byte.into(),
+                    0x23 => self.apu.ch4.set_freq_data(byte),
+                    0x24 => self.apu.ctrl.channel = byte.into(),
+                    0x25 => self.apu.ctrl.output = byte.into(),
+                    0x26 => self.apu.ctrl.set_status(byte), // FIXME: Should we control which bytes are written to here?
+                    0x30..=0x3F => self.apu.ch3.wave_ram[addr as usize - 0xFF30] = byte,
                     0x40 => self.ppu.ctrl = byte.into(),
                     0x41 => self.ppu.stat.update(byte),
                     0x42 => self.ppu.pos.scroll_y = byte,
