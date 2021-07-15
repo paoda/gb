@@ -66,7 +66,7 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
-    pub(crate) fn pass_audio_src(&mut self, sender: AudioSender) {
+    pub(crate) fn pass_audio_src(&mut self, sender: AudioSender<f32>) {
         self.snd.set_audio_src(sender)
     }
 

@@ -45,7 +45,7 @@ impl Cpu {
         })
     }
 
-    pub fn set_audio_src(&mut self, sender: AudioSender) {
+    pub fn set_audio_src(&mut self, sender: AudioSender<f32>) {
         self.bus.pass_audio_src(sender)
     }
 

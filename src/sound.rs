@@ -27,7 +27,7 @@ pub(crate) struct Sound {
     frame_seq_state: FrameSequencerState,
     div_prev: Option<u8>,
 
-    sender: Option<AudioSender>,
+    sender: Option<AudioSender<f32>>,
     sample_counter: u64,
 
     is_mpsc_full: bool,
@@ -104,7 +104,7 @@ impl Sound {
         }
     }
 
-    pub(crate) fn set_audio_src(&mut self, sender: AudioSender) {
+    pub(crate) fn set_audio_src(&mut self, sender: AudioSender<f32>) {
         self.sender = Some(sender);
     }
 
@@ -1175,20 +1175,23 @@ impl From<ChannelControl> for u8 {
 pub struct AudioMPSC;
 
 impl AudioMPSC {
-    pub fn new() -> (AudioSender, AudioReceiver) {
-        let (send, recv) = crossbeam_channel::bounded(AUDIO_BUFFER_LEN * 2);
+    pub fn new() -> (AudioSender<f32>, AudioReceiver<f32>) {
+        // TODO: Can we provide an upper limit for this?
+        // The larger this channel is, the more lag there is between the Audio and
+        // Emulator
+        let (send, recv) = crossbeam_channel::unbounded();
 
         (AudioSender { inner: send }, AudioReceiver { inner: recv })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct AudioSender {
-    inner: Sender<f32>,
+pub struct AudioSender<T> {
+    inner: Sender<T>,
 }
 
-impl AudioSender {
-    fn send_samples(&self, left: f32, right: f32) -> Result<(), TrySendError<f32>> {
+impl<T> AudioSender<T> {
+    fn send_samples(&self, left: T, right: T) -> Result<(), TrySendError<T>> {
         self.inner.try_send(left).and(self.inner.try_send(right))?;
         Ok(())
     }
@@ -1198,12 +1201,12 @@ impl AudioSender {
     }
 }
 
-pub struct AudioReceiver {
-    inner: Receiver<f32>,
+pub struct AudioReceiver<T> {
+    inner: Receiver<T>,
 }
 
-impl Iterator for AudioReceiver {
-    type Item = f32;
+impl<T> Iterator for AudioReceiver<T> {
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Should this never return none?
@@ -1211,7 +1214,7 @@ impl Iterator for AudioReceiver {
     }
 }
 
-impl Source for AudioReceiver {
+impl<T: rodio::Sample> Source for AudioReceiver<T> {
     fn current_frame_len(&self) -> Option<usize> {
         // A frame changes when the samples rate or
         // number of channels change. This will never happen, so
