@@ -128,9 +128,11 @@ impl Cpu {
         let mut elapsed = 0x00;
         let pending: u32 = cycles.into();
         while elapsed < pending {
-            if !self.bus.is_mpsc_still_full() {
+            if !self.bus.is_full() {
                 self.bus.clock();
                 elapsed += 1;
+            } else {
+                self.bus.flush_samples();
             }
         }
 

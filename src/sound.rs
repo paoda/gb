@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bitfield::bitfield;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use rodio::Source;
@@ -7,8 +9,8 @@ use crate::emu::SM83_CLOCK_SPEED;
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 
 const SAMPLE_RATE: u32 = 48000; // Hz
-const AUDIO_BUFFER_LEN: usize = 1024;
-const CHANNEL_COUNT: u16 = 2;
+const AUDIO_BUFFER_LEN: usize = 512;
+const CHANNEL_COUNT: usize = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
 #[derive(Default, Debug, Clone)]
@@ -30,7 +32,7 @@ pub(crate) struct Sound {
     sender: Option<AudioSender<f32>>,
     sample_counter: u64,
 
-    is_mpsc_full: bool,
+    buffer: AudioBuffer<(f32, f32)>,
 }
 
 impl Sound {
@@ -70,7 +72,7 @@ impl Sound {
 
         self.div_prev = Some(bit_5);
 
-        if self.sample_counter >= SM83_CLOCK_SPEED {
+        if self.sender.is_some() && self.sample_counter >= SM83_CLOCK_SPEED {
             self.sample_counter %= SM83_CLOCK_SPEED;
             // Sample the APU
 
@@ -93,14 +95,7 @@ impl Sound {
             let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
             let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-            if let Some(s) = self.sender.as_ref() {
-                let _ = s.send_samples(left, right).map_err(|e| match e {
-                    TrySendError::Full(_) => self.is_mpsc_full = true,
-                    TrySendError::Disconnected(_) => {
-                        panic!("Audio Sample MPSC Channel Disconnected")
-                    }
-                });
-            }
+            self.buffer.push_back((left, right));
         }
     }
 
@@ -108,12 +103,25 @@ impl Sound {
         self.sender = Some(sender);
     }
 
-    pub(crate) fn is_mpsc_still_full(&mut self) -> bool {
-        if let Some(sender) = self.sender.as_ref() {
-            self.is_mpsc_full = sender.is_full();
-        }
+    pub(crate) fn is_full(&self) -> bool {
+        self.buffer.len() >= AUDIO_BUFFER_LEN * CHANNEL_COUNT
+    }
 
-        self.is_mpsc_full
+    pub(crate) fn flush_samples(&mut self) {
+        if let Some(sender) = self.sender.as_ref() {
+            while self.buffer.len() >= CHANNEL_COUNT {
+                match self.buffer.pop_front() {
+                    Some((left, right)) => {
+                        sender
+                            .send_samples(left, right)
+                            .expect("Successfully sent samples across threads");
+                    }
+                    None => unreachable!(
+                        "While loop ensures that there are at least two items in AudioBuffer"
+                    ),
+                }
+            }
+        }
     }
 
     fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
@@ -1195,10 +1203,6 @@ impl<T> AudioSender<T> {
         self.inner.try_send(left).and(self.inner.try_send(right))?;
         Ok(())
     }
-
-    fn is_full(&self) -> bool {
-        self.inner.is_full()
-    }
 }
 
 pub struct AudioReceiver<T> {
@@ -1224,7 +1228,7 @@ impl<T: rodio::Sample> Source for AudioReceiver<T> {
 
     fn channels(&self) -> u16 {
         // The Gameboy supports two channels
-        CHANNEL_COUNT
+        CHANNEL_COUNT as u16
     }
 
     fn sample_rate(&self) -> u32 {
@@ -1234,5 +1238,32 @@ impl<T: rodio::Sample> Source for AudioReceiver<T> {
     fn total_duration(&self) -> Option<std::time::Duration> {
         // The duration of this source is infinite
         None
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AudioBuffer<T> {
+    inner: VecDeque<T>,
+}
+
+impl<T> Default for AudioBuffer<T> {
+    fn default() -> Self {
+        Self {
+            inner: VecDeque::with_capacity(AUDIO_BUFFER_LEN * CHANNEL_COUNT),
+        }
+    }
+}
+
+impl<T> AudioBuffer<T> {
+    pub fn push_back(&mut self, value: T) {
+        self.inner.push_back(value)
+    }
+
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.inner.pop_front()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 }
