@@ -122,15 +122,15 @@ impl Cpu {
             }
         };
 
-        // FIXME: Regression, this is not a proper fix,
-        // the FIFO behaves weirdly using this code
+        // TODO: With how we currently handle audio
+        // this --while being correct-- incurs a performance penalty
+        // as our emu is audio-bound.
+        let mut elapsed = 0x00;
         let pending: u32 = cycles.into();
-        let mut offset = 0;
-        for _ in 0..(pending + offset) {
+        while elapsed < pending {
             if !self.bus.is_mpsc_still_full() {
                 self.bus.clock();
-            } else {
-                offset += 1;
+                elapsed += 1;
             }
         }
 
