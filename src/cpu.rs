@@ -96,13 +96,6 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
-        // if !self.bus.boot_enabled() {
-        //     let out = std::io::stdout();
-        //     let handle = out.lock();
-
-        //     self.log_state(handle).unwrap();
-        // }
-
         let cycles = match self.halted() {
             Some(state) => {
                 use HaltState::*;
@@ -117,6 +110,10 @@ impl Cpu {
                 self.inc_pc();
 
                 let instr = self.decode(opcode);
+
+                // let out = std::io::stdout();
+                // let _ = self._debug_log(out.lock(), &instr);
+
                 let cycles = self.execute(instr);
 
                 self.check_ime();
