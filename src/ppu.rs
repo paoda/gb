@@ -369,11 +369,12 @@ impl Ppu {
                 }
                 SendToFifoTwo => {
                     let palette = &self.monochrome.bg_palette;
-                    self.fetch.send_to_fifo(&mut self.fifo, palette);
-                    self.fetch.x_pos += 1;
 
-                    self.fetch.back.next(TileNumber);
-                    self.fetch.back.tile = Default::default();
+                    if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo, palette) {
+                        self.fetch.x_pos += 1;
+                        self.fetch.back.next(TileNumber);
+                        self.fetch.back.tile = Default::default();
+                    }
                 }
             }
         }
@@ -720,7 +721,11 @@ impl PixelFetcher {
         tile_data_addr + (offset * 2)
     }
 
-    fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) {
+    fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) -> Result<(), ()> {
+        if !fifo.back.is_empty() {
+            return Err(());
+        }
+
         let (high, low) = self
             .back
             .tile
@@ -729,14 +734,14 @@ impl PixelFetcher {
 
         let tbpp = Pixels::from_bytes(high, low);
 
-        if fifo.back.is_empty() {
-            for x in 0..Pixels::PIXEL_COUNT {
-                let shade = palette.shade(tbpp.shade_id(x));
+        for x in 0..Pixels::PIXEL_COUNT {
+            let shade = palette.shade(tbpp.shade_id(x));
 
-                let fifo_info = BackgroundFifoInfo { shade };
-                fifo.back.push_back(fifo_info);
-            }
+            let fifo_info = BackgroundFifoInfo { shade };
+            fifo.back.push_back(fifo_info);
         }
+
+        Ok(())
     }
 
     fn get_obj_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
