@@ -332,7 +332,7 @@ bitfield! {
     pub from into RenderPriority, priority, set_priority: 7, 7;
     pub y_flip, set_y_flip: 6;
     pub x_flip, set_x_flip: 5;
-    pub from into ObjectPaletteId, palette, set_palette: 4, 4;
+    pub from into ObjectPaletteKind, palette, set_palette: 4, 4;
 }
 
 impl Eq for ObjectFlags {}
@@ -368,23 +368,29 @@ impl Default for ObjectFlags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ObjectPaletteId {
+pub enum ObjectPaletteKind {
     Zero = 0,
     One = 1,
 }
 
-impl From<u8> for ObjectPaletteId {
+impl Default for ObjectPaletteKind {
+    fn default() -> Self {
+        Self::Zero
+    }
+}
+
+impl From<u8> for ObjectPaletteKind {
     fn from(byte: u8) -> Self {
         match byte & 0b01 {
-            0b00 => ObjectPaletteId::Zero,
-            0b01 => ObjectPaletteId::One,
+            0b00 => ObjectPaletteKind::Zero,
+            0b01 => ObjectPaletteKind::One,
             _ => unreachable!("{:#04X} is not a valid value for BgPaletteNumber", byte),
         }
     }
 }
 
-impl From<ObjectPaletteId> for u8 {
-    fn from(palette_num: ObjectPaletteId) -> Self {
+impl From<ObjectPaletteKind> for u8 {
+    fn from(palette_num: ObjectPaletteKind) -> Self {
         palette_num as u8
     }
 }

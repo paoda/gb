@@ -8,7 +8,7 @@ use std::convert::TryInto;
 pub(crate) use types::PpuMode;
 use types::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,
-    ObjectPaletteId, ObjectSize, Pixels, RenderPriority, TileDataAddress,
+    ObjectPaletteKind, ObjectSize, Pixels, RenderPriority, TileDataAddress,
 };
 
 mod dma;
@@ -47,7 +47,7 @@ pub struct Ppu {
     pub(crate) dma: DirectMemoryAccess,
     scan_state: OamScanState,
     fetch: PixelFetcher,
-    fifo: FifoRenderer,
+    fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     window_stat: WindowStatus,
@@ -282,10 +282,7 @@ impl Ppu {
 
                     let tbpp = Pixels::from_bytes(high, low);
 
-                    let palette = match attr.flags.palette() {
-                        ObjectPaletteId::Zero => self.monochrome.obj_palette_0,
-                        ObjectPaletteId::One => self.monochrome.obj_palette_1,
-                    };
+                    let palette_kind = attr.flags.palette();
 
                     let end = Pixels::PIXEL_COUNT - self.fifo.obj.len();
                     let start = Pixels::PIXEL_COUNT - end;
@@ -296,11 +293,11 @@ impl Ppu {
                         let x = if x_flip { 7 - i } else { i };
 
                         let priority = attr.flags.priority();
-                        let shade = palette.shade(tbpp.shade_id(x));
+                        let shade_id = tbpp.shade_id(x);
 
-                        let fifo_info = ObjectFifoInfo {
-                            shade,
-                            palette,
+                        let fifo_info = ObjPixelProperty {
+                            shade_id,
+                            palette_kind,
                             priority,
                         };
 
@@ -368,9 +365,7 @@ impl Ppu {
                     self.fetch.back.next(SendToFifoTwo);
                 }
                 SendToFifoTwo => {
-                    let palette = &self.monochrome.bg_palette;
-
-                    if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo, palette) {
+                    if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo) {
                         self.fetch.x_pos += 1;
                         self.fetch.back.next(TileNumber);
                         self.fetch.back.tile = Default::default();
@@ -380,8 +375,6 @@ impl Ppu {
         }
 
         if self.fifo.is_enabled() {
-            use RenderPriority::*;
-
             if self.x_pos == 0 && !self.fifo.back.is_empty() {
                 let to_discard = self.pos.scroll_x % 8;
 
@@ -391,39 +384,12 @@ impl Ppu {
             }
 
             // Handle Background Pixel and Sprite FIFO
-            let bg_enabled = self.ctrl.bg_win_enabled();
-            let obj_enabled = self.ctrl.obj_enabled();
-            let i0_colour = self.monochrome.bg_palette.i0_colour();
-
-            // FIXME: Is this the correct behaviour
-            let rgba_opt = self.fifo.back.pop_front().map(|bg_info| {
-                let bg_shade = if bg_enabled { bg_info.shade } else { i0_colour };
-
-                match self.fifo.obj.pop_front() {
-                    Some(obj_info) => {
-                        if obj_enabled {
-                            match (obj_info.shade, obj_info.priority) {
-                                (Some(obj_shade), BackgroundAndWindow) => match bg_info.shade {
-                                    GrayShade::White => obj_shade.into_rgba(),
-                                    _ => bg_shade.into_rgba(),
-                                },
-                                (Some(obj_shade), Object) => obj_shade.into_rgba(),
-                                (None, _) => bg_shade.into_rgba(),
-                            }
-                        } else {
-                            bg_shade.into_rgba()
-                        }
-                    }
-                    None => bg_shade.into_rgba(),
-                }
-            });
-
-            if let Some(rgba) = rgba_opt.as_ref() {
+            if let Some(rgba) = self.clock_fifo().map(GrayShade::into_rgba) {
                 let y = self.pos.line_y as usize;
                 let x = self.x_pos as usize;
 
                 let i = (GB_WIDTH * 4) * y + (x * 4);
-                self.frame_buf[i..(i + rgba.len())].copy_from_slice(rgba);
+                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
 
                 self.x_pos += 1;
             }
@@ -441,6 +407,49 @@ impl Ppu {
 
     pub fn copy_to_gui(&self, frame: &mut [u8]) {
         frame.copy_from_slice(self.frame_buf.as_ref());
+    }
+
+    fn clock_fifo(&mut self) -> Option<GrayShade> {
+        use ObjectPaletteKind::*;
+        use RenderPriority::*;
+
+        let obj_palette_0 = &self.monochrome.obj_palette_0;
+        let obj_palette_1 = &self.monochrome.obj_palette_1;
+
+        match self.fifo.back.pop_front() {
+            Some(bg_pixel) => match self.fifo.obj.pop_front() {
+                Some(obj_pixel) if self.ctrl.obj_enabled() => match obj_pixel.priority {
+                    Object | BackgroundAndWindow if obj_pixel.shade_id == 0 => {
+                        Some(self.bg_pixel(bg_pixel.shade_id))
+                    }
+                    BackgroundAndWindow if bg_pixel.shade_id != 0 => {
+                        Some(self.bg_pixel(bg_pixel.shade_id))
+                    }
+                    Object | BackgroundAndWindow => {
+                        let maybe_sprite = match obj_pixel.palette_kind {
+                            Zero => obj_palette_0.shade(obj_pixel.shade_id),
+                            One => obj_palette_1.shade(obj_pixel.shade_id),
+                        };
+
+                        let sprite = maybe_sprite
+                            .expect("Sprite w/ a colour id of 0 has already been handled");
+                        Some(sprite)
+                    }
+                },
+                _ => Some(self.bg_pixel(bg_pixel.shade_id)),
+            },
+            None => None,
+        }
+    }
+
+    fn bg_pixel(&self, shade_id: u8) -> GrayShade {
+        let bg_palette = &self.monochrome.bg_palette;
+
+        if self.ctrl.bg_win_enabled() {
+            bg_palette.shade(shade_id)
+        } else {
+            bg_palette.shade(0)
+        }
     }
 }
 
@@ -721,7 +730,7 @@ impl PixelFetcher {
         tile_data_addr + (offset * 2)
     }
 
-    fn send_to_fifo(&self, fifo: &mut FifoRenderer, palette: &BackgroundPalette) -> Result<(), ()> {
+    fn send_to_fifo(&self, fifo: &mut PixelFifo) -> Result<(), ()> {
         if !fifo.back.is_empty() {
             return Err(());
         }
@@ -735,9 +744,9 @@ impl PixelFetcher {
         let tbpp = Pixels::from_bytes(high, low);
 
         for x in 0..Pixels::PIXEL_COUNT {
-            let shade = palette.shade(tbpp.shade_id(x));
+            let shade_id = tbpp.shade_id(x);
 
-            let fifo_info = BackgroundFifoInfo { shade };
+            let fifo_info = BgPixelProperty { shade_id };
             fifo.back.push_back(fifo_info);
         }
 
@@ -897,27 +906,27 @@ impl Default for FetcherState {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct BackgroundFifoInfo {
-    shade: GrayShade,
+struct BgPixelProperty {
+    shade_id: u8,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct ObjectFifoInfo {
-    shade: Option<GrayShade>,
-    palette: ObjectPalette,
+struct ObjPixelProperty {
+    shade_id: u8,
+    palette_kind: ObjectPaletteKind,
     priority: RenderPriority,
 }
 
 // FIXME: Fifo Registers have a known size. Are heap allocations
 // really necessary here?
 #[derive(Debug, Clone)]
-struct FifoRenderer {
-    back: VecDeque<BackgroundFifoInfo>,
-    obj: VecDeque<ObjectFifoInfo>,
+struct PixelFifo {
+    back: VecDeque<BgPixelProperty>,
+    obj: VecDeque<ObjPixelProperty>,
     enabled: bool,
 }
 
-impl FifoRenderer {
+impl PixelFifo {
     fn is_enabled(&self) -> bool {
         self.enabled
     }
@@ -931,7 +940,7 @@ impl FifoRenderer {
     }
 }
 
-impl Default for FifoRenderer {
+impl Default for PixelFifo {
     fn default() -> Self {
         Self {
             back: VecDeque::with_capacity(8),
