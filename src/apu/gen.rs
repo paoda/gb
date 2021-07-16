@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 pub struct AudioMPSC;
 
 impl AudioMPSC {
-    pub fn new() -> (AudioSender<f32>, AudioReceiver<f32>) {
+    pub fn init() -> (AudioSender<f32>, AudioReceiver<f32>) {
         // TODO: Can we provide an upper limit for this?
         // The larger this channel is, the more lag there is between the Audio and
         // Emulator

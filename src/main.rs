@@ -66,7 +66,7 @@ fn main() -> Result<()> {
         (pixels, egui)
     };
 
-    let (send, recv) = AudioMPSC::new();
+    let (send, recv) = AudioMPSC::init();
     game_boy.set_audio_src(send);
 
     // Initialize Audio
