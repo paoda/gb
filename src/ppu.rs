@@ -51,6 +51,10 @@ pub struct Ppu {
     obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     window_stat: WindowStatus,
+
+    scanline_start: bool,
+    to_discard: u8,
+
     x_pos: u8,
     cycle: Cycle,
 }
@@ -105,6 +109,8 @@ impl Ppu {
                     }
 
                     self.x_pos = 0;
+                    self.scanline_start = true;
+                    self.to_discard = 0;
 
                     self.fetch.hblank_reset();
                     self.window_stat.hblank_reset();
@@ -375,12 +381,17 @@ impl Ppu {
         }
 
         if self.fifo.is_enabled() {
-            if self.x_pos == 0 && !self.fifo.back.is_empty() {
-                let to_discard = self.pos.scroll_x % 8;
+            if self.x_pos == 0 && !self.fifo.back.is_empty() && self.scanline_start {
+                self.to_discard = self.pos.scroll_x % 8;
+                self.scanline_start = false;
+            }
 
-                for _ in 0..to_discard {
-                    let _ = self.fifo.back.pop_front();
-                }
+            if self.to_discard > 0 {
+                let _ = self.fifo.back.pop_front();
+                self.to_discard -= 1;
+
+                // Delay the PPU by one cycle
+                return;
             }
 
             // Handle Background Pixel and Sprite FIFO
@@ -472,6 +483,8 @@ impl Default for Ppu {
             window_stat: Default::default(),
             dma: Default::default(),
             x_pos: 0,
+            scanline_start: true,
+            to_discard: Default::default(),
         }
     }
 }
