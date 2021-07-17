@@ -140,6 +140,7 @@ fn main() -> Result<()> {
     });
 }
 
+#[cfg(not(windows))]
 fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
     let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
     Ok(WindowBuilder::new()
@@ -149,6 +150,21 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
         .with_resizable(true)
         .with_decorations(true)
         .with_transparent(false)
-        // .with_drag_and_drop(false) // OleInitialize failed error if this is set to true
+        .build(event_loop)?)
+}
+
+#[cfg(windows)]
+fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
+    use winit::platform::windows::WindowBuilderExtWindows;
+
+    let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
+    Ok(WindowBuilder::new()
+        .with_title(title)
+        .with_inner_size(size)
+        .with_min_inner_size(size)
+        .with_resizable(true)
+        .with_decorations(true)
+        .with_transparent(false)
+        .with_drag_and_drop(false)
         .build(event_loop)?)
 }
