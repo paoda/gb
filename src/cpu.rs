@@ -1,4 +1,4 @@
-use crate::apu::gen::AudioSender;
+use crate::apu::Apu;
 use crate::bus::{Bus, BusIo};
 use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
@@ -43,10 +43,6 @@ impl Cpu {
             bus: Bus::with_boot(path)?,
             ..Default::default()
         })
-    }
-
-    pub fn set_audio_src(&mut self, sender: AudioSender<f32>) {
-        self.bus.pass_audio_src(sender)
     }
 
     pub(crate) fn ime(&self) -> ImeState {
@@ -172,6 +168,10 @@ impl Cpu {
 impl Cpu {
     pub fn ppu(&mut self) -> &Ppu {
         &self.bus.ppu
+    }
+
+    pub fn apu_mut(&mut self) -> &mut Apu {
+        &mut self.bus.apu
     }
 
     pub(crate) fn joypad_mut(&mut self) -> &mut Joypad {

@@ -17,7 +17,7 @@ const CHANNEL_COUNT: usize = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct Apu {
+pub struct Apu {
     pub(crate) ctrl: SoundControl,
     /// Tone & Sweep
     pub(crate) ch1: Channel1,
@@ -102,7 +102,7 @@ impl Apu {
         }
     }
 
-    pub(crate) fn set_audio_src(&mut self, sender: AudioSender<f32>) {
+    pub fn set_audio_sender(&mut self, sender: AudioSender<f32>) {
         self.sender = Some(sender);
     }
 

@@ -1,4 +1,3 @@
-use crate::apu::gen::AudioSender;
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::high_ram::HighRam;
@@ -16,12 +15,12 @@ const BOOT_ROM_SIZE: usize = 0x100;
 pub struct Bus {
     boot: Option<[u8; BOOT_ROM_SIZE]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,
-    pub ppu: Ppu,
+    pub(crate) ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
     pub(crate) timer: Timer,
     int: Interrupt,
-    apu: Apu,
+    pub(crate) apu: Apu,
     high_ram: HighRam,
     serial: Serial,
     pub(crate) joypad: Joypad,
@@ -73,10 +72,6 @@ impl Bus {
 
     pub(crate) fn apu_mut(&mut self) -> &mut Apu {
         &mut self.apu
-    }
-
-    pub(crate) fn pass_audio_src(&mut self, sender: AudioSender<f32>) {
-        self.apu.set_audio_src(sender)
     }
 
     pub(crate) fn clock(&mut self) {
