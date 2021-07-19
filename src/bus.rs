@@ -256,7 +256,10 @@ impl BusIo for Bus {
                     0x4A => self.ppu.pos.window_y,
                     0x4B => self.ppu.pos.window_x,
                     0x4D => 0xFF, // CGB Specific Register
-                    _ => unimplemented!("Unable to read {:#06X} in I/O Registers", addr),
+                    _ => {
+                        eprintln!("Read 0xFF from unused IO register {:#06X}.", addr);
+                        0xFF
+                    }
                 }
             }
             0xFF80..=0xFFFE => {
@@ -392,8 +395,7 @@ impl BusIo for Bus {
                             self.boot = None;
                         }
                     }
-                    0x7F => {} // Tetris tries to write to this non-existent IO Address
-                    _ => unimplemented!("Unable to write to {:#06X} in I/O Registers", addr),
+                    _ => eprintln!("Wrote {:#04X} to unused IO register {:#06X}.", byte, addr),
                 };
             }
             0xFF80..=0xFFFE => {
