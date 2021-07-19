@@ -11,7 +11,7 @@ mod types;
 
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
 
-const SAMPLE_RATE: u32 = 48000; // Hz
+const SAMPLE_RATE: u32 = 44100; // Hz
 const AUDIO_BUFFER_LEN: usize = 512;
 const CHANNEL_COUNT: usize = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;

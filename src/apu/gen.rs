@@ -1,5 +1,5 @@
 use super::{AUDIO_BUFFER_LEN, CHANNEL_COUNT, SAMPLE_RATE};
-use crossbeam_channel::{Receiver, Sender, TrySendError};
+use crossbeam_channel::{Receiver, SendError, Sender};
 use rodio::Source;
 use std::collections::VecDeque;
 
@@ -22,8 +22,8 @@ pub struct AudioSender<T> {
 }
 
 impl<T> AudioSender<T> {
-    pub(crate) fn send_samples(&self, left: T, right: T) -> Result<(), TrySendError<T>> {
-        self.inner.try_send(left).and(self.inner.try_send(right))?;
+    pub(crate) fn send_samples(&self, left: T, right: T) -> Result<(), SendError<T>> {
+        self.inner.send(left).and(self.inner.send(right))?;
         Ok(())
     }
 }
