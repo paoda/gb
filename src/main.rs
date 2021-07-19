@@ -71,12 +71,11 @@ fn main() -> Result<()> {
 
     // Initialize Audio
     let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
-    let sink = Sink::try_new(&stream_handle).expect("Initialize Audio Sink");
 
     std::thread::spawn(move || {
-        sink.append(recv);
-
-        sink.sleep_until_end();
+        stream_handle
+            .play_raw(recv)
+            .expect("Failed to play Audio Source");
     });
 
     let mut now = Instant::now();
