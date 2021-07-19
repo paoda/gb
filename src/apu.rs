@@ -275,11 +275,11 @@ impl SoundControl {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Channel1 {
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
-    pub(crate) sweep: Sweep,
+    sweep: Sweep,
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     duty: SoundDuty,
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
-    pub(crate) envelope: VolumeEnvelope,
+    envelope: VolumeEnvelope,
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
     freq_lo: u8,
     /// 0xFF14 | NR14 - Channel 1 Frequency high
@@ -322,6 +322,18 @@ impl Channel1 {
         }
     }
 
+    /// 0xFF10 | NR10 - Channel 1 Sweep Register
+    pub(crate) fn sweep(&self) -> u8 {
+        self.sweep.into()
+    }
+
+    /// 0xFF10 | NR10 - Channel 1 Sweep Register
+    pub(crate) fn set_sweep(&mut self, byte: u8) {
+        if self.enabled {
+            self.sweep = byte.into()
+        }
+    }
+
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn duty(&self) -> u8 {
         u8::from(self.duty) & 0xC0 // Only bits 7 and 6 can be read
@@ -329,13 +341,29 @@ impl Channel1 {
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn set_duty(&mut self, byte: u8) {
-        self.duty = byte.into();
-        self.length_timer = 64 - self.duty.sound_length() as u16;
+        if self.enabled {
+            self.duty = byte.into();
+            self.length_timer = 64 - self.duty.sound_length() as u16;
+        }
+    }
+
+    /// 0xFF12 | NR12 - Channel 1 Volume Envelope
+    pub fn envelope(&self) -> u8 {
+        self.envelope.into()
+    }
+
+    /// 0xFF12 | NR12 - Channel 1 Volume Envelope
+    pub(crate) fn set_envelope(&mut self, byte: u8) {
+        if self.enabled {
+            self.envelope = byte.into()
+        }
     }
 
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
     pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        self.freq_lo = byte;
+        if self.enabled {
+            self.freq_lo = byte;
+        }
     }
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
@@ -345,33 +373,35 @@ impl Channel1 {
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        self.freq_hi = byte.into();
+        if self.enabled {
+            self.freq_hi = byte.into();
 
-        // If this bit is set, a trigger event occurs
-        if self.freq_hi.initial() {
-            // Envelope Behaviour during trigger event
-            self.period_timer = self.envelope.period();
-            self.current_volume = self.envelope.init_vol();
+            // If this bit is set, a trigger event occurs
+            if self.freq_hi.initial() {
+                // Envelope Behaviour during trigger event
+                self.period_timer = self.envelope.period();
+                self.current_volume = self.envelope.init_vol();
 
-            // Sweep behaviour during trigger event
-            self.shadow_freq = self.frequency() & 0x07FF; // Mask should be redundant
-            self.sweep_timer = if self.sweep.period() != 0 {
-                self.sweep.period()
-            } else {
-                8
-            };
+                // Sweep behaviour during trigger event
+                self.shadow_freq = self.frequency() & 0x07FF; // Mask should be redundant
+                self.sweep_timer = if self.sweep.period() != 0 {
+                    self.sweep.period()
+                } else {
+                    8
+                };
 
-            if self.sweep.period() != 0 || self.sweep.shift_count() != 0 {
-                self.sweep_enabled = true;
-            }
+                if self.sweep.period() != 0 || self.sweep.shift_count() != 0 {
+                    self.sweep_enabled = true;
+                }
 
-            if self.sweep.shift_count() != 0 {
-                let _ = self.calc_sweep_freq();
-            }
+                if self.sweep.shift_count() != 0 {
+                    let _ = self.calc_sweep_freq();
+                }
 
-            // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 64;
+                // Length behaviour during trigger event
+                if self.length_timer == 0 {
+                    self.length_timer = 64;
+                }
             }
         }
     }
@@ -410,7 +440,7 @@ pub(crate) struct Channel2 {
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     duty: SoundDuty,
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
-    pub(crate) envelope: VolumeEnvelope,
+    envelope: VolumeEnvelope,
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
     freq_lo: u8,
     /// 0xFF19 | NR24 - Channel 2 Frequency high
@@ -455,13 +485,29 @@ impl Channel2 {
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn set_duty(&mut self, byte: u8) {
-        self.duty = byte.into();
-        self.length_timer = 64 - self.duty.sound_length() as u16;
+        if self.enabled {
+            self.duty = byte.into();
+            self.length_timer = 64 - self.duty.sound_length() as u16;
+        }
+    }
+
+    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    pub(crate) fn envelope(&self) -> u8 {
+        self.envelope.into()
+    }
+
+    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    pub(crate) fn set_envelope(&mut self, byte: u8) {
+        if self.enabled {
+            self.envelope = byte.into()
+        }
     }
 
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
     pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        self.freq_lo = byte;
+        if self.enabled {
+            self.freq_lo = byte;
+        }
     }
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
@@ -471,16 +517,18 @@ impl Channel2 {
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        self.freq_hi = byte.into();
+        if self.enabled {
+            self.freq_hi = byte.into();
 
-        if self.freq_hi.initial() {
-            // Envelope behaviour during trigger event
-            self.period_timer = self.envelope.period();
-            self.current_volume = self.envelope.init_vol();
+            if self.freq_hi.initial() {
+                // Envelope behaviour during trigger event
+                self.period_timer = self.envelope.period();
+                self.current_volume = self.envelope.init_vol();
 
-            // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 64;
+                // Length behaviour during trigger event
+                if self.length_timer == 0 {
+                    self.length_timer = 64;
+                }
             }
         }
     }
