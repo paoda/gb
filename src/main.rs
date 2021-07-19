@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::{AudioMPSC, Cycle, Egui, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::OutputStream;
 use std::time::Instant;
 use winit::dpi::LogicalSize;
@@ -60,7 +60,10 @@ fn main() -> Result<()> {
         let size = window.inner_size();
         let scale_factor = window.scale_factor();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
-        let pixels = Pixels::new(GB_WIDTH as u32, GB_HEIGHT as u32, surface_texture)?;
+
+        let pixels = PixelsBuilder::new(GB_WIDTH as u32, GB_HEIGHT as u32, surface_texture)
+            .enable_vsync(false)
+            .build()?;
         let egui = Egui::new(size.width, size.height, scale_factor, pixels.context());
 
         (pixels, egui)
