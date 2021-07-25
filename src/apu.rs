@@ -19,15 +19,15 @@ const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
 #[derive(Default, Debug, Clone)]
 pub struct Apu {
-    pub(crate) ctrl: SoundControl,
+    ctrl: SoundControl,
     /// Tone & Sweep
-    pub(crate) ch1: Channel1,
+    ch1: Channel1,
     /// Tone
-    pub(crate) ch2: Channel2,
+    ch2: Channel2,
     /// Wave
-    pub(crate) ch3: Channel3,
+    ch3: Channel3,
     /// Noise
-    pub(crate) ch4: Channel4,
+    ch4: Channel4,
 
     // Frame Sequencer
     frame_seq_state: FrameSequencerState,
@@ -37,6 +37,66 @@ pub struct Apu {
     sample_counter: u64,
 
     buffer: AudioBuffer<(f32, f32)>,
+}
+
+impl BusIo for Apu {
+    fn read_byte(&self, addr: u16) -> u8 {
+        match addr & 0x00FF {
+            0x11 => self.ch1.duty(),
+            0x12 => self.ch1.envelope(),
+            0x14 => self.ch1.freq_hi(),
+            0x16 => self.ch2.duty(),
+            0x17 => self.ch2.envelope(),
+            0x19 => self.ch2.freq_hi(),
+            0x1A => self.ch3.enabled(),
+            0x1B => self.ch3.len(),
+            0x1C => self.ch3.volume(),
+            0x1E => self.ch3.freq_hi(),
+            0x20 => self.ch4.len(),
+            0x21 => self.ch4.envelope(),
+            0x22 => self.ch4.poly(),
+            0x23 => self.ch4.frequency(),
+            0x24 => self.ctrl.channel(),
+            0x25 => self.ctrl.output(),
+            0x26 => self.ctrl.status(self),
+            0x30..=0x3F => self.ch3.read_byte(addr),
+            _ => {
+                eprintln!("Read 0xFF from unused IO register {:#06X} [APU]", addr);
+                0xFF
+            }
+        }
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        match addr & 0x00FF {
+            0x10 => self.ch1.set_sweep(byte),
+            0x11 => self.ch1.set_duty(byte),
+            0x12 => self.ch1.set_envelope(byte),
+            0x13 => self.ch1.set_freq_lo(byte),
+            0x14 => self.ch1.set_freq_hi(byte),
+            0x16 => self.ch2.set_duty(byte),
+            0x17 => self.ch2.set_envelope(byte),
+            0x18 => self.ch2.set_freq_lo(byte),
+            0x19 => self.ch2.set_freq_hi(byte),
+            0x1A => self.ch3.set_enabled(byte),
+            0x1B => self.ch3.set_len(byte),
+            0x1C => self.ch3.set_volume(byte),
+            0x1D => self.ch3.set_freq_lo(byte),
+            0x1E => self.ch3.set_freq_hi(byte),
+            0x20 => self.ch4.set_len(byte),
+            0x21 => self.ch4.set_envelope(byte),
+            0x22 => self.ch4.set_poly(byte),
+            0x23 => self.ch4.set_freq_data(byte),
+            0x24 => self.ctrl.set_channel(byte),
+            0x25 => self.ctrl.set_output(byte),
+            0x26 => self.set_status(byte),
+            0x30..=0x3F => self.ch3.write_byte(addr, byte),
+            _ => eprintln!(
+                "Wrote {:#04X} to unused IO register {:#06X} [APU]",
+                byte, addr
+            ),
+        }
+    }
 }
 
 impl Apu {
