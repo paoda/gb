@@ -127,6 +127,49 @@ impl Apu {
         }
     }
 
+    /// 0xFF26 | NR52 - Sound On/Off
+    pub(crate) fn set_status(&mut self, byte: u8) {
+        self.ctrl.enabled = (byte >> 7) & 0x01 == 0x01;
+
+        if !self.ctrl.enabled {
+            self.reset();
+        }
+
+        self.ch1.enabled = self.ctrl.enabled;
+        self.ch2.enabled = self.ctrl.enabled;
+        self.ch3.enabled = self.ctrl.enabled;
+        self.ch4.enabled = self.ctrl.enabled;
+    }
+
+    fn reset(&mut self) {
+        // TODO: Clear readable sound registers
+
+        self.ch1.sweep = Default::default();
+        self.ch1.duty = Default::default();
+        self.ch1.envelope = Default::default();
+        self.ch1.freq_hi = Default::default(); // FIXME: What about frequency low?
+
+        self.ch2.duty = Default::default();
+        self.ch2.envelope = Default::default();
+        self.ch2.freq_hi = Default::default();
+
+        self.ch3.enabled = Default::default();
+        self.ch3.len = Default::default();
+        self.ch3.volume = Default::default();
+        self.ch3.freq_hi = Default::default();
+
+        self.ch4.len = Default::default();
+        self.ch4.envelope = Default::default();
+        self.ch4.poly = Default::default();
+        self.ch4.freq = Default::default();
+
+        self.ch2 = Default::default();
+        self.ch3 = Default::default();
+        self.ch4 = Default::default();
+        self.ctrl.channel = Default::default();
+        self.ctrl.output = Default::default();
+    }
+
     fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
         if freq_hi.idk() && *length_timer > 0 {
             *length_timer -= 1;
@@ -248,27 +291,45 @@ impl Apu {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct SoundControl {
     /// 0xFF24 | NR50 - Channel Control
-    pub(crate) channel: ChannelControl,
+    channel: ChannelControl,
     /// 0xFF25 | NR51 - Selection of Sound output terminal
-    pub(crate) output: SoundOutput,
+    output: SoundOutput,
 
     enabled: bool,
 }
 
 impl SoundControl {
-    /// 0xFF26 | NR52 - Sound On/Off
-    pub(crate) fn status(&self, snd: &Apu) -> u8 {
-        (self.enabled as u8) << 7
-            | (snd.ch4.enabled as u8) << 3
-            | (snd.ch3.enabled as u8) << 2
-            | (snd.ch2.enabled as u8) << 1
-            | snd.ch1.enabled as u8
+    /// 0xFF24 | NR50 - Channel Control
+    pub(crate) fn channel(&self) -> u8 {
+        u8::from(self.channel)
+    }
+
+    /// 0xFF24 | NR50 - Channel Control
+    pub(crate) fn set_channel(&mut self, byte: u8) {
+        if self.enabled {
+            self.channel = byte.into();
+        }
+    }
+
+    /// 0xFF25 | NR51 - Selection of Sound output terminal
+    pub(crate) fn output(&self) -> u8 {
+        u8::from(self.output)
+    }
+
+    /// 0xFF25 | NR51 - Selection of Sound output terminal
+    pub(crate) fn set_output(&mut self, byte: u8) {
+        if self.enabled {
+            self.output = byte.into();
+        }
     }
 
     /// 0xFF26 | NR52 - Sound On/Off
-    pub(crate) fn set_status(&mut self, byte: u8) {
-        // TODO: Should all channel enabled fields be disabled when this is reset?
-        self.enabled = (byte >> 7) & 0x01 == 0x01;
+    pub(crate) fn status(&self, apu: &Apu) -> u8 {
+        (self.enabled as u8) << 7
+            | (apu.ch4.enabled as u8) << 3
+            | (apu.ch3.enabled as u8) << 2
+            | (apu.ch2.enabled as u8) << 1
+            | apu.ch1.enabled as u8
     }
 }
 
@@ -324,7 +385,7 @@ impl Channel1 {
 
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
     pub(crate) fn sweep(&self) -> u8 {
-        self.sweep.into()
+        u8::from(self.sweep) | 0x80
     }
 
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
@@ -336,7 +397,7 @@ impl Channel1 {
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn duty(&self) -> u8 {
-        u8::from(self.duty) & 0xC0 // Only bits 7 and 6 can be read
+        u8::from(self.duty) | 0x3F
     }
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
@@ -349,7 +410,7 @@ impl Channel1 {
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub fn envelope(&self) -> u8 {
-        self.envelope.into()
+        u8::from(self.envelope)
     }
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
@@ -368,7 +429,7 @@ impl Channel1 {
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
-        u8::from(self.freq_hi) & 0x40 // Only bit 6 is readable
+        u8::from(self.freq_hi) | 0xBF
     }
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
@@ -480,7 +541,7 @@ impl Channel2 {
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn duty(&self) -> u8 {
-        u8::from(self.duty) & 0xC0 // Only bits 7 & 6 are readable
+        u8::from(self.duty) | 0x3F
     }
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
@@ -493,7 +554,7 @@ impl Channel2 {
 
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) fn envelope(&self) -> u8 {
-        self.envelope.into()
+        u8::from(self.envelope)
     }
 
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
@@ -512,7 +573,7 @@ impl Channel2 {
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) fn freq_hi(&self) -> u8 {
-        u8::from(self.freq_hi) & 0x40 // only bit 6 is readable
+        u8::from(self.freq_hi) | 0xBF
     }
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
@@ -560,61 +621,73 @@ pub(crate) struct Channel3 {
 }
 
 impl Channel3 {
-    /// 0xFF1B | NR31 - Sound Length
-    pub(crate) fn len(&self) -> u8 {
-        self.len
-    }
-
-    /// 0xFF1B | NR31 - Sound Length
-    pub(crate) fn set_len(&mut self, byte: u8) {
-        self.len = byte;
-        self.length_timer = 256 - self.len as u16;
-    }
-
-    /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
-    pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        self.freq_lo = byte;
-    }
-
-    /// 0xFF1E | NR34 - Channel 3 Frequency high
-    pub(crate) fn freq_hi(&self) -> u8 {
-        u8::from(self.freq_hi) & 0x40 // Only bit 6 readable
-    }
-
-    /// 0xFF1E | NR34 - Channel 3 Frequency high
-    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        self.freq_hi = byte.into();
-
-        if self.freq_hi.initial() {
-            // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 256;
-            }
-        }
-    }
-
+    /// 0xFF1A | NR30 - Channel 3 Sound on/off
     pub(crate) fn enabled(&self) -> u8 {
-        (self.enabled as u8) << 7
+        ((self.enabled as u8) << 7) | 0x7F
     }
 
+    /// 0xFF1A | NR30 - Channel 3 Sound on/off
     pub(crate) fn set_enabled(&mut self, byte: u8) {
         self.enabled = (byte >> 7) & 0x01 == 0x01;
     }
 
-    pub(crate) fn volume(&self) -> u8 {
-        (self.volume as u8) << 5
+    /// 0xFF1B | NR31 - Sound Length
+    pub(crate) fn len(&self) -> u8 {
+        self.len | 0xFF
     }
 
+    /// 0xFF1B | NR31 - Sound Length
+    pub(crate) fn set_len(&mut self, byte: u8) {
+        if self.enabled {
+            self.len = byte;
+            self.length_timer = 256 - self.len as u16;
+        }
+    }
+
+    /// 0xFF1C | NR32 - Channel 3 Volume
+    pub(crate) fn volume(&self) -> u8 {
+        ((self.volume as u8) << 5) | 0x9F
+    }
+
+    /// 0xFF1C | NR32 - Channel 3 Volume
     pub(crate) fn set_volume(&mut self, byte: u8) {
         use Ch3Volume::*;
 
-        self.volume = match (byte >> 5) & 0x03 {
-            0b00 => Mute,
-            0b01 => Full,
-            0b10 => Half,
-            0b11 => Quarter,
-            _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
-        };
+        if self.enabled {
+            self.volume = match (byte >> 5) & 0x03 {
+                0b00 => Mute,
+                0b01 => Full,
+                0b10 => Half,
+                0b11 => Quarter,
+                _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
+            };
+        }
+    }
+
+    /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
+    pub(crate) fn set_freq_lo(&mut self, byte: u8) {
+        if self.enabled {
+            self.freq_lo = byte;
+        }
+    }
+
+    /// 0xFF1E | NR34 - Channel 3 Frequency high
+    pub(crate) fn freq_hi(&self) -> u8 {
+        u8::from(self.freq_hi) | 0xBF
+    }
+
+    /// 0xFF1E | NR34 - Channel 3 Frequency high
+    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
+        if self.enabled {
+            self.freq_hi = byte.into();
+
+            if self.freq_hi.initial() {
+                // Length behaviour during trigger event
+                if self.length_timer == 0 {
+                    self.length_timer = 256;
+                }
+            }
+        }
     }
 
     fn amplitude(&self) -> f32 {
@@ -656,9 +729,9 @@ pub(crate) struct Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     len: u8,
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
-    pub(crate) envelope: VolumeEnvelope,
+    envelope: VolumeEnvelope,
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
-    pub(crate) poly: PolynomialCounter,
+    poly: PolynomialCounter,
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     freq: Ch4Frequency,
 
@@ -680,36 +753,64 @@ pub(crate) struct Channel4 {
 impl Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn len(&self) -> u8 {
-        self.len & 0x3F
+        self.len | 0xFF
     }
 
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
-        self.len = byte & 0x3F;
-        self.length_timer = 256 - self.len as u16;
+        if self.enabled {
+            self.len = byte & 0x3F;
+            self.length_timer = 256 - self.len as u16;
+        }
+    }
+
+    /// 0xFF21 | NR42 - Channel 4 Volume Envelope
+    pub(crate) fn envelope(&self) -> u8 {
+        u8::from(self.envelope)
+    }
+
+    /// 0xFF21 | NR42 - Channel 4 Volume Envelope
+    pub(crate) fn set_envelope(&mut self, byte: u8) {
+        if self.enabled {
+            self.envelope = byte.into()
+        }
+    }
+
+    /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
+    pub(crate) fn poly(&self) -> u8 {
+        u8::from(self.poly)
+    }
+
+    /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
+    pub(crate) fn set_poly(&mut self, byte: u8) {
+        if self.enabled {
+            self.poly = byte.into();
+        }
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
-    pub(crate) fn freq_data(&self) -> u8 {
-        u8::from(self.freq) & 0x40 // only bit 6 readable
+    pub(crate) fn frequency(&self) -> u8 {
+        u8::from(self.freq) | 0xBF
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
     pub(crate) fn set_freq_data(&mut self, byte: u8) {
-        self.freq = byte.into();
+        if self.enabled {
+            self.freq = byte.into();
 
-        if self.freq.initial() {
-            // Envelope behaviour during trigger event
-            self.period_timer = self.envelope.period();
-            self.current_volume = self.envelope.init_vol();
+            if self.freq.initial() {
+                // Envelope behaviour during trigger event
+                self.period_timer = self.envelope.period();
+                self.current_volume = self.envelope.init_vol();
 
-            // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 64;
+                // Length behaviour during trigger event
+                if self.length_timer == 0 {
+                    self.length_timer = 64;
+                }
+
+                // LFSR behaviour during trigger event
+                self.lf_shift = 0x7FFF;
             }
-
-            // LFSR behaviour during trigger event
-            self.lf_shift = 0x7FFF;
         }
     }
 
