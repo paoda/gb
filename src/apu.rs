@@ -1,3 +1,4 @@
+use crate::bus::BusIo;
 use crate::emu::SM83_CLOCK_SPEED;
 use gen::{AudioBuffer, AudioSender};
 use types::ch1::{Sweep, SweepDirection};
@@ -611,7 +612,8 @@ pub(crate) struct Channel3 {
     freq_lo: u8,
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     freq_hi: FrequencyHigh,
-    pub(crate) wave_ram: [u8; WAVE_PATTERN_RAM_LEN],
+
+    wave_ram: [u8; WAVE_PATTERN_RAM_LEN],
 
     // Length Functionality
     length_timer: u16,
@@ -620,7 +622,19 @@ pub(crate) struct Channel3 {
     offset: u8,
 }
 
+impl BusIo for Channel3 {
+    fn read_byte(&self, addr: u16) -> u8 {
+        self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize]
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize] = byte;
+    }
+}
+
 impl Channel3 {
+    const WAVE_RAM_START_ADDR: u16 = 0xFF30;
+
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
     pub(crate) fn enabled(&self) -> u8 {
         ((self.enabled as u8) << 7) | 0x7F
