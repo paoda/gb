@@ -131,33 +131,35 @@ impl Apu {
 
         self.div_prev = Some(bit_5);
 
-        if let Some(ref mut prod) = self.prod {
-            if self.sample_counter >= SM83_CLOCK_SPEED {
-                self.sample_counter %= SM83_CLOCK_SPEED;
+        if self.sample_counter >= SM83_CLOCK_SPEED {
+            self.sample_counter %= SM83_CLOCK_SPEED;
 
-                // Sample the APU
-                let ch1_amplitude = self.ch1.amplitude();
-                let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
-                let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
+            if let Some(ref mut prod) = self.prod {
+                if prod.two_available() {
+                    // Sample the APU
+                    let ch1_amplitude = self.ch1.amplitude();
+                    let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
+                    let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
 
-                let ch2_amplitude = self.ch2.amplitude();
-                let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
-                let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
+                    let ch2_amplitude = self.ch2.amplitude();
+                    let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
+                    let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
 
-                let ch3_amplitude = self.ch3.amplitude();
-                let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
-                let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
+                    let ch3_amplitude = self.ch3.amplitude();
+                    let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
+                    let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
 
-                let ch4_amplitude = self.ch4.amplitude();
-                let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
-                let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
+                    let ch4_amplitude = self.ch4.amplitude();
+                    let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
+                    let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
 
-                let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
-                let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
+                    let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
+                    let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-                prod.push(left)
-                    .and(prod.push(right))
-                    .expect("Add samples to ring buffer");
+                    prod.push(left)
+                        .and(prod.push(right))
+                        .expect("Add samples to ring buffer");
+                }
             }
         }
     }

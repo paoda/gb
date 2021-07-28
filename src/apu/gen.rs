@@ -47,6 +47,11 @@ impl<T> SampleProducer<T> {
     pub(crate) fn is_full(&self) -> bool {
         self.inner.is_full()
     }
+
+    #[inline]
+    pub(crate) fn two_available(&self) -> bool {
+        self.inner.slots() > 2
+    }
 }
 
 impl<T> std::fmt::Debug for SampleProducer<T> {

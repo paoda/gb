@@ -112,7 +112,7 @@ fn main() -> Result<()> {
 
             if cycle_count >= gb::emu::CYCLES_IN_FRAME {
                 // Draw Frame
-                cycle_count = Cycle::new(0);
+                cycle_count %= gb::emu::CYCLES_IN_FRAME;
 
                 gb::emu::draw(game_boy.ppu(), pixels.get_frame());
                 window.request_redraw();

@@ -117,16 +117,9 @@ impl Cpu {
             }
         };
 
-        // TODO: With how we currently handle audio
-        // this --while being correct-- incurs a performance penalty
-        // as our emu is audio-bound.
-        let mut elapsed = 0x00;
         let pending: u32 = cycles.into();
-        while elapsed < pending {
-            if !self.bus.apu().is_full() {
-                self.bus.clock();
-                elapsed += 1;
-            }
+        for _ in 0..pending {
+            self.bus.clock();
         }
 
         self.handle_interrupts();
