@@ -5,7 +5,7 @@ const VARIABLE_WORK_RAM_SIZE: usize = WORK_RAM_SIZE;
 const WORK_RAM_START_ADDRESS: usize = 0xC000;
 const VARIABLE_WORK_RAM_START_ADDRESS: usize = 0xD000;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct WorkRam {
     bank: Box<[u8; WORK_RAM_SIZE]>,
 }
@@ -39,7 +39,7 @@ enum BankNumber {
     Seven = 7,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct VariableWorkRam {
     current: BankNumber,
     bank_n: Box<[[u8; VARIABLE_WORK_RAM_SIZE]; 7]>, // 4K for Variable amount of Banks (Banks 1 -> 7) in Game Boy Colour
@@ -59,8 +59,8 @@ impl VariableWorkRam {
         self.current = bank;
     }
 
-    fn get_current_bank(&self) -> BankNumber {
-        self.current
+    fn get_current_bank(&self) -> &BankNumber {
+        &self.current
     }
 }
 

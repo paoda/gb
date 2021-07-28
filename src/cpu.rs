@@ -8,7 +8,7 @@ use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Cpu {
     pub bus: Bus,
     reg: Registers,
@@ -45,8 +45,8 @@ impl Cpu {
         })
     }
 
-    pub(crate) fn ime(&self) -> ImeState {
-        self.ime
+    pub(crate) fn ime(&self) -> &ImeState {
+        &self.ime
     }
 
     pub(crate) fn set_ime(&mut self, state: ImeState) {
@@ -61,8 +61,8 @@ impl Cpu {
         self.halted = None;
     }
 
-    pub(crate) fn halted(&self) -> Option<HaltState> {
-        self.halted
+    pub(crate) fn halted(&self) -> Option<&HaltState> {
+        self.halted.as_ref()
     }
 
     fn inc_pc(&mut self) {
@@ -267,7 +267,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum State {
     Execute,
     // Halt,
@@ -400,7 +400,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum Register {
     A,
     B,
@@ -412,7 +412,7 @@ pub(crate) enum Register {
     Flag,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum RegisterPair {
     AF,
     BC,
@@ -422,7 +422,7 @@ pub(crate) enum RegisterPair {
     PC,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Default)]
 struct Registers {
     a: u8,
     b: u8,

@@ -8,7 +8,7 @@ const RAM_SIZE_ADDRESS: usize = 0x0149;
 const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Cartridge {
     memory: Vec<u8>,
     title: Option<String>,
@@ -144,7 +144,7 @@ impl BusIo for Cartridge {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Mbc1 {
     /// 5-bit number
     rom_bank: u8,
@@ -293,7 +293,7 @@ enum MBC3Device {
     RealTimeClock,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct MBC3 {
     /// 7-bit Number
     rom_bank: u8,
@@ -361,7 +361,7 @@ impl MemoryBankController for MBC3 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct NoMbc {}
 
 impl MemoryBankController for NoMbc {
@@ -374,22 +374,9 @@ impl MemoryBankController for NoMbc {
     }
 }
 
-trait MemoryBankController: CloneMbc {
+trait MemoryBankController {
     fn handle_read(&self, addr: u16) -> MbcResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
-}
-
-trait CloneMbc {
-    fn clone_mbc(&self) -> Box<dyn MemoryBankController>;
-}
-
-impl<T> CloneMbc for T
-where
-    T: MemoryBankController + Clone + 'static,
-{
-    fn clone_mbc<'a>(&self) -> Box<dyn MemoryBankController> {
-        Box::new(self.clone())
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -485,7 +472,7 @@ impl Default for BankCount {
 
 impl BankCount {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    fn size(self) -> u32 {
+    fn size(&self) -> u32 {
         use BankCount::*;
 
         match self {
@@ -530,12 +517,6 @@ impl From<u8> for BankCount {
 impl std::fmt::Debug for Box<dyn MemoryBankController> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Implement Debug for Box<dyn MBC> Trait Object");
-    }
-}
-
-impl std::clone::Clone for Box<dyn MemoryBankController> {
-    fn clone(&self) -> Self {
-        self.clone_mbc()
     }
 }
 

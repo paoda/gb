@@ -1,7 +1,7 @@
 use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType};
 use winit_input_helper::WinitInputHelper;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct Joypad {
     /// 0xFF00 | P1/JOYP - Player 1 Joypad
     pub(crate) p1: u8,
@@ -48,7 +48,7 @@ impl Joypad {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct JoypadState {
     // Direction Row
     dpad_down: ButtonEvent,

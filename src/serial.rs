@@ -1,6 +1,6 @@
 use bitfield::bitfield;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Serial {
     /// 0xFF01 | SB - Serial Transfer Data
     pub(crate) next: u8,

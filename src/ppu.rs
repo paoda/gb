@@ -33,7 +33,7 @@ const LIGHT_GRAY: [u8; 4] = 0xAEBA89FFu32.to_be_bytes();
 const DARK_GRAY: [u8; 4] = 0x5E6745FFu32.to_be_bytes();
 const BLACK: [u8; 4] = 0x202020FFu32.to_be_bytes();
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Ppu {
     pub(crate) int: Interrupt,
     /// 0xFF40 | LCDC - LCD Control
@@ -489,7 +489,7 @@ impl Default for Ppu {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Interrupt {
     _vblank: bool,
     _lcd_stat: bool,
@@ -513,7 +513,7 @@ impl Interrupt {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct ScreenPosition {
     /// 0xFF42 | SCY - Scroll Y
     pub(crate) scroll_y: u8,
@@ -529,7 +529,7 @@ pub(crate) struct ScreenPosition {
     pub(crate) window_x: u8,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Monochrome {
     /// 0xFF47 | BGP - Background Palette Data
     pub(crate) bg_palette: BackgroundPalette,
@@ -539,7 +539,7 @@ pub(crate) struct Monochrome {
     pub(crate) obj_palette_1: ObjectPalette,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct ObjectAttributeTable {
     buf: Box<[u8; OAM_SIZE]>,
 }
@@ -606,7 +606,7 @@ impl<'a> From<&'a [u8; 4]> for ObjectAttribute {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct ObjectBuffer {
     buf: [Option<ObjectAttribute>; OBJECT_LIMIT],
     len: usize,
@@ -674,7 +674,7 @@ impl Default for ObjectBuffer {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct PixelFetcher {
     x_pos: u8,
     back: BackgroundFetcher,
@@ -793,7 +793,7 @@ trait Fetcher {
     fn hblank_reset(&mut self);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct BackgroundFetcher {
     state: FetcherState,
     tile: TileBuilder,
@@ -859,7 +859,7 @@ impl Default for BackgroundFetcher {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct ObjectFetcher {
     state: FetcherState,
     tile: TileBuilder,
@@ -881,7 +881,7 @@ impl Fetcher for ObjectFetcher {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct WindowLineCounter {
     count: u8,
 }
@@ -918,12 +918,12 @@ impl Default for FetcherState {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct BgPixelProperty {
     shade_id: u8,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct ObjPixelProperty {
     shade_id: u8,
     palette_kind: ObjectPaletteKind,
@@ -932,7 +932,7 @@ struct ObjPixelProperty {
 
 // FIXME: Fifo Registers have a known size. Are heap allocations
 // really necessary here?
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct PixelFifo {
     back: VecDeque<BgPixelProperty>,
     obj: VecDeque<ObjPixelProperty>,
@@ -963,7 +963,7 @@ impl Default for PixelFifo {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct TileBuilder {
     id: Option<u8>,
     low: Option<u8>,
@@ -988,7 +988,7 @@ impl TileBuilder {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct OamScanState {
     count: u8,
     mode: OamScanMode,
@@ -1009,8 +1009,8 @@ impl OamScanState {
         self.count
     }
 
-    fn mode(&self) -> OamScanMode {
-        self.mode
+    fn mode(&self) -> &OamScanMode {
+        &self.mode
     }
 
     fn next(&mut self) {
@@ -1035,7 +1035,7 @@ impl Default for OamScanMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 struct WindowStatus {
     /// This will be true if WY == LY at any point in the frame thus far
     coincidence: bool,

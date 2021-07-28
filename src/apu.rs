@@ -17,7 +17,7 @@ const AUDIO_BUFFER_LEN: usize = 512;
 const CHANNEL_COUNT: usize = 2;
 const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct Apu {
     ctrl: SoundControl,
     /// Tone & Sweep
@@ -349,7 +349,7 @@ impl Apu {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct SoundControl {
     /// 0xFF24 | NR50 - Channel Control
     channel: ChannelControl,
@@ -394,7 +394,7 @@ impl SoundControl {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Channel1 {
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
     sweep: Sweep,
@@ -557,7 +557,7 @@ impl Channel1 {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Channel2 {
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     duty: SoundDuty,
@@ -660,7 +660,7 @@ impl Channel2 {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Channel3 {
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
     enabled: bool,
@@ -798,7 +798,7 @@ impl Channel3 {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     len: u8,

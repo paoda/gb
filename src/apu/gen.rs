@@ -16,7 +16,7 @@ impl AudioMPSC {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AudioSender<T> {
     inner: Sender<T>,
 }
@@ -64,7 +64,7 @@ impl<T: rodio::Sample> Source for AudioReceiver<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct AudioBuffer<T> {
     inner: VecDeque<T>,
 }

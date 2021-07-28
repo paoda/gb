@@ -1,6 +1,6 @@
 use crate::instruction::Cycle;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub(crate) struct DirectMemoryAccess {
     pub(crate) state: DmaState,
     cycle: Cycle,
@@ -28,7 +28,7 @@ impl DirectMemoryAccess {
 
                 let src_addr = self
                     .start
-                    .addr
+                    .0
                     .as_mut()
                     .expect("Source Address present during DMA Transfer");
 
@@ -58,7 +58,7 @@ impl DirectMemoryAccess {
     fn reset(&mut self) {
         self.cycle = Cycle::new(0);
         self.state = DmaState::Disabled;
-        self.start.addr = None;
+        self.start.0 = None;
     }
 }
 
@@ -75,26 +75,21 @@ impl Default for DmaState {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct DmaAddress {
-    /// The current *source* address of the DMA Transfer
-    ///
-    /// NB: Will be None if no DMA Transfer is in progress
-    addr: Option<u16>,
-}
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct DmaAddress(Option<u16>);
 
 impl DmaAddress {
     pub(crate) fn update(&mut self, byte: u8, state: &mut DmaState) {
         let start = (byte as u16) << 8;
 
-        self.addr = Some(start);
+        self.0 = Some(start);
         *state = DmaState::Pending;
     }
 }
 
 impl From<DmaAddress> for u8 {
     fn from(ctrl: DmaAddress) -> Self {
-        match ctrl.addr {
+        match ctrl.0 {
             Some(addr) => (addr >> 8) as u8,
             None => 0xFF, // TODO: What garbage value should be here?
         }

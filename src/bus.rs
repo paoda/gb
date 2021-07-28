@@ -11,7 +11,7 @@ use std::{fs::File, io::Read};
 
 const BOOT_ROM_SIZE: usize = 0x100;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Bus {
     boot: Option<[u8; BOOT_ROM_SIZE]>, // Boot ROM is 256b long
     cartridge: Option<Cartridge>,

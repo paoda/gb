@@ -1,6 +1,6 @@
 use bitfield::bitfield;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct Interrupt {
     pub(crate) flag: InterruptFlag,
     pub(crate) enable: InterruptEnable,

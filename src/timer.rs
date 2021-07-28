@@ -1,6 +1,6 @@
 use bitfield::bitfield;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct Timer {
     /// 0xFF07 | TAC - Timer Control
     pub(crate) ctrl: TimerControl,

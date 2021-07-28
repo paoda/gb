@@ -2,7 +2,7 @@ use crate::bus::BusIo;
 use crate::cpu::{Cpu, Flags, HaltState, ImeState, Register, RegisterPair};
 use std::{convert::TryFrom, fmt::Debug};
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) enum Instruction {
     NOP,
@@ -51,26 +51,26 @@ pub(crate) enum Instruction {
     SET(u8, InstrRegister),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum JPTarget {
     RegisterPair(RegisterPair),
     ImmediateWord(u16),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum Registers {
     Byte(InstrRegister),
     Word(RegisterPair),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum MATHTarget {
     Register(InstrRegister),
     RegisterPair(RegisterPair),
     ImmediateByte(u8),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum LDTarget {
     IndirectC,
     Register(InstrRegister),
@@ -82,7 +82,7 @@ pub(crate) enum LDTarget {
     ByteAtAddressWithOffset(u8),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum InstrRegisterPair {
     AF,
     BC,
@@ -94,7 +94,7 @@ pub(crate) enum InstrRegisterPair {
     DecrementHL,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum InstrRegister {
     A,
     B,
@@ -106,7 +106,7 @@ pub(crate) enum InstrRegister {
     IndirectHL, // (HL)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(crate) enum JumpCondition {
     NotZero,
     Zero,
@@ -115,7 +115,7 @@ pub(crate) enum JumpCondition {
     Always,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 struct Table;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
