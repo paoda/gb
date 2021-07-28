@@ -44,11 +44,6 @@ impl<T> SampleProducer<T> {
     }
 
     #[inline]
-    pub(crate) fn is_full(&self) -> bool {
-        self.inner.is_full()
-    }
-
-    #[inline]
     pub(crate) fn two_available(&self) -> bool {
         self.inner.slots() > 2
     }

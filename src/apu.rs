@@ -168,14 +168,6 @@ impl Apu {
         self.prod = Some(prod);
     }
 
-    #[inline]
-    pub(crate) fn is_full(&self) -> bool {
-        match self.prod.as_ref() {
-            Some(prod) => prod.is_full(),
-            None => false,
-        }
-    }
-
     /// 0xFF26 | NR52 - Sound On/Off
     pub(crate) fn set_status(&mut self, byte: u8) {
         self.ctrl.enabled = (byte >> 7) & 0x01 == 0x01;

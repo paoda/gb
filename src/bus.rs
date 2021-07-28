@@ -66,10 +66,6 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
-    pub(crate) fn apu(&self) -> &Apu {
-        &self.apu
-    }
-
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();
