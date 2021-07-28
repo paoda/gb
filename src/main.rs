@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::{AudioMPSC, Cycle, Egui, GB_HEIGHT, GB_WIDTH};
+use gb::{AudioMPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::OutputStream;
@@ -56,17 +56,13 @@ fn main() -> Result<()> {
     let mut input = WinitInputHelper::new();
     let window = create_window(&event_loop, cartridge_title)?;
 
-    let (mut pixels, mut egui) = {
+    let mut pixels = {
         let size = window.inner_size();
-        let scale_factor = window.scale_factor();
         let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
 
-        let pixels = PixelsBuilder::new(GB_WIDTH as u32, GB_HEIGHT as u32, surface_texture)
+        PixelsBuilder::new(GB_WIDTH as u32, GB_HEIGHT as u32, surface_texture)
             .enable_vsync(false)
-            .build()?;
-        let egui = Egui::new(size.width, size.height, scale_factor, pixels.context());
-
-        (pixels, egui)
+            .build()?
     };
 
     let (send, recv) = AudioMPSC::init();
@@ -85,23 +81,9 @@ fn main() -> Result<()> {
     let mut cycle_count: Cycle = Default::default();
 
     event_loop.run(move |event, _, control_flow| {
-        // Update egui
-        egui.handle_event(&event);
-
         if let Event::RedrawRequested(_) = event {
-            // Prepare egui
-            egui.prepare(&game_boy);
-
-            // Render everything together
-            let render_result = pixels.render_with(|encoder, target, ctx| {
-                // Render the texture
-                ctx.scaling_renderer.render(encoder, target);
-
-                // Render egui
-                egui.render(encoder, target, ctx);
-            });
-
-            if render_result
+            if pixels
+                .render()
                 .map_err(|e| anyhow!("pixels.render() failed: {}", e))
                 .is_err()
             {
@@ -116,13 +98,8 @@ fn main() -> Result<()> {
                 return;
             }
 
-            if let Some(scale_factor) = input.scale_factor() {
-                egui.scale_factor(scale_factor);
-            }
-
             if let Some(size) = input.window_resized() {
                 pixels.resize_surface(size.width, size.height);
-                egui.resize(size.width, size.height);
             }
 
             let delta = now.elapsed().subsec_nanos();

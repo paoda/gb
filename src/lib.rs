@@ -1,5 +1,4 @@
 pub use apu::gen::AudioMPSC;
-pub use gui::Egui;
 pub use instruction::Cycle;
 
 pub const GB_WIDTH: usize = 160;
@@ -10,7 +9,6 @@ mod bus;
 mod cartridge;
 mod cpu;
 pub mod emu;
-mod gui;
 mod high_ram;
 mod instruction;
 mod interrupt;
