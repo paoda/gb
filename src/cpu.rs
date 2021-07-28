@@ -4,7 +4,6 @@ use crate::instruction::{Cycle, Instruction};
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
-use crate::timer::Timer;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -127,8 +126,6 @@ impl Cpu {
             if !self.bus.apu().is_full() {
                 self.bus.clock();
                 elapsed += 1;
-            } else {
-                self.bus.apu_mut().flush_samples();
             }
         }
 
@@ -176,10 +173,6 @@ impl Cpu {
 
     pub(crate) fn joypad_mut(&mut self) -> &mut Joypad {
         &mut self.bus.joypad
-    }
-
-    pub(crate) fn timer(&self) -> &Timer {
-        &self.bus.timer
     }
 
     fn check_ime(&mut self) {
@@ -292,7 +285,6 @@ impl Cpu {
             E => self.reg.e = value,
             H => self.reg.h = value,
             L => self.reg.l = value,
-            Flag => self.flags = value.into(),
         }
     }
 
@@ -307,7 +299,6 @@ impl Cpu {
             E => self.reg.e,
             H => self.reg.h,
             L => self.reg.l,
-            Flag => self.flags.into(),
         }
     }
 
@@ -409,7 +400,6 @@ pub(crate) enum Register {
     E,
     H,
     L,
-    Flag,
 }
 
 #[derive(Debug, Clone, Copy)]

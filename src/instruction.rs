@@ -1887,7 +1887,6 @@ impl TryFrom<Register> for InstrRegister {
             Register::E => Ok(Self::E),
             Register::H => Ok(Self::H),
             Register::L => Ok(Self::L),
-            Register::Flag => Err("Can not convert Register::Flag to InstrRegister"),
         }
     }
 }

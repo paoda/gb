@@ -1,47 +1,74 @@
-use super::{AUDIO_BUFFER_LEN, CHANNEL_COUNT, SAMPLE_RATE};
-use crossbeam_channel::{Receiver, SendError, Sender};
 use rodio::Source;
-use std::collections::VecDeque;
+use rtrb::{Consumer, Producer, PushError, RingBuffer};
 
-pub struct AudioMPSC;
+pub(crate) const SAMPLE_RATE: u32 = 48000; // Hz
+const CHANNEL_COUNT: usize = 2;
+const AUDIO_BUFFER_LEN: usize = 4096;
 
-impl AudioMPSC {
-    pub fn init() -> (AudioSender<f32>, AudioReceiver<f32>) {
-        // TODO: Can we provide an upper limit for this?
-        // The larger this channel is, the more lag there is between the Audio and
-        // Emulator
-        let (send, recv) = crossbeam_channel::unbounded();
+pub struct AudioSPSC<T> {
+    inner: RingBuffer<T>,
+}
 
-        (AudioSender { inner: send }, AudioReceiver { inner: recv })
+impl<T> Default for AudioSPSC<T> {
+    fn default() -> Self {
+        Self {
+            inner: RingBuffer::new(AUDIO_BUFFER_LEN * CHANNEL_COUNT),
+        }
     }
 }
 
-#[derive(Debug)]
-pub struct AudioSender<T> {
-    inner: Sender<T>,
-}
+impl<T> AudioSPSC<T> {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            inner: RingBuffer::new(capacity),
+        }
+    }
 
-impl<T> AudioSender<T> {
-    pub(crate) fn send_samples(&self, left: T, right: T) -> Result<(), SendError<T>> {
-        self.inner.send(left).and(self.inner.send(right))?;
-        Ok(())
+    pub fn init(self) -> (SampleProducer<T>, SampleConsumer<T>) {
+        let (prod, cons) = self.inner.split();
+
+        (
+            SampleProducer { inner: prod },
+            SampleConsumer { inner: cons },
+        )
     }
 }
 
-pub struct AudioReceiver<T> {
-    inner: Receiver<T>,
+pub struct SampleProducer<T> {
+    inner: Producer<T>,
 }
 
-impl<T> Iterator for AudioReceiver<T> {
-    type Item = T;
+impl<T> SampleProducer<T> {
+    pub(crate) fn push(&mut self, value: T) -> Result<(), PushError<T>> {
+        self.inner.push(value)
+    }
+
+    pub(crate) fn is_full(&self) -> bool {
+        self.inner.is_full()
+    }
+}
+
+impl<T> std::fmt::Debug for SampleProducer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(&format!("SampleProducer<{}>", std::any::type_name::<T>()))
+            .finish_non_exhaustive()
+    }
+}
+
+pub struct SampleConsumer<T> {
+    inner: Consumer<T>,
+}
+
+impl Iterator for SampleConsumer<f32> {
+    type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: Should this never return none?
-        self.inner.recv().ok()
+        // As of 2021-07-28, PopError can only be Empty
+        Some(self.inner.pop().unwrap_or_default())
     }
 }
 
-impl<T: rodio::Sample> Source for AudioReceiver<T> {
+impl Source for SampleConsumer<f32> {
     fn current_frame_len(&self) -> Option<usize> {
         // A frame changes when the samples rate or
         // number of channels change. This will never happen, so
@@ -61,32 +88,5 @@ impl<T: rodio::Sample> Source for AudioReceiver<T> {
     fn total_duration(&self) -> Option<std::time::Duration> {
         // The duration of this source is infinite
         None
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct AudioBuffer<T> {
-    inner: VecDeque<T>,
-}
-
-impl<T> Default for AudioBuffer<T> {
-    fn default() -> Self {
-        Self {
-            inner: VecDeque::with_capacity(AUDIO_BUFFER_LEN * CHANNEL_COUNT),
-        }
-    }
-}
-
-impl<T> AudioBuffer<T> {
-    pub(crate) fn push_back(&mut self, value: T) {
-        self.inner.push_back(value)
-    }
-
-    pub(crate) fn pop_front(&mut self) -> Option<T> {
-        self.inner.pop_front()
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.inner.len()
     }
 }

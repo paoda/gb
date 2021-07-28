@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::{AudioMPSC, Cycle, GB_HEIGHT, GB_WIDTH};
+use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use rodio::OutputStream;
+use rodio::{OutputStream, Sink};
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
@@ -65,16 +65,18 @@ fn main() -> Result<()> {
             .build()?
     };
 
-    let (send, recv) = AudioMPSC::init();
-    game_boy.apu_mut().set_audio_sender(send);
+    let spsc: AudioSPSC<f32> = Default::default();
+    let (prod, cons) = spsc.init();
+
+    game_boy.apu_mut().set_producer(prod);
 
     // Initialize Audio
     let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
+    let sink = Sink::try_new(&stream_handle)?;
+    sink.append(cons);
 
     std::thread::spawn(move || {
-        stream_handle
-            .play_raw(recv)
-            .expect("Failed to play Audio Source");
+        sink.sleep_until_end();
     });
 
     let mut now = Instant::now();

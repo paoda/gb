@@ -1,6 +1,6 @@
 use crate::bus::BusIo;
 use crate::emu::SM83_CLOCK_SPEED;
-use gen::{AudioBuffer, AudioSender};
+use gen::SampleProducer;
 use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
@@ -10,12 +10,8 @@ use types::{ChannelControl, FrameSequencerState, SoundOutput};
 pub mod gen;
 mod types;
 
+const SAMPLE_INCREMENT: u64 = gen::SAMPLE_RATE as u64;
 const WAVE_PATTERN_RAM_LEN: usize = 0x10;
-
-const SAMPLE_RATE: u32 = 48000; // Hz
-const AUDIO_BUFFER_LEN: usize = 512;
-const CHANNEL_COUNT: usize = 2;
-const SAMPLE_INCREMENT: u64 = SAMPLE_RATE as u64;
 
 #[derive(Default, Debug)]
 pub struct Apu {
@@ -33,15 +29,14 @@ pub struct Apu {
     frame_seq_state: FrameSequencerState,
     div_prev: Option<u8>,
 
-    sender: Option<AudioSender<f32>>,
+    prod: Option<SampleProducer<f32>>,
     sample_counter: u64,
-
-    buffer: AudioBuffer<(f32, f32)>,
 }
 
 impl BusIo for Apu {
     fn read_byte(&self, addr: u16) -> u8 {
         match addr & 0x00FF {
+            0x10 => self.ch1.sweep(),
             0x11 => self.ch1.duty(),
             0x12 => self.ch1.envelope(),
             0x14 => self.ch1.freq_hi(),
@@ -136,55 +131,45 @@ impl Apu {
 
         self.div_prev = Some(bit_5);
 
-        if self.sender.is_some() && self.sample_counter >= SM83_CLOCK_SPEED {
-            self.sample_counter %= SM83_CLOCK_SPEED;
-            // Sample the APU
+        if let Some(ref mut prod) = self.prod {
+            if self.sample_counter >= SM83_CLOCK_SPEED {
+                self.sample_counter %= SM83_CLOCK_SPEED;
 
-            let ch1_amplitude = self.ch1.amplitude();
-            let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
-            let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
+                // Sample the APU
+                let ch1_amplitude = self.ch1.amplitude();
+                let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
+                let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
 
-            let ch2_amplitude = self.ch2.amplitude();
-            let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
-            let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
+                let ch2_amplitude = self.ch2.amplitude();
+                let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
+                let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
 
-            let ch3_amplitude = self.ch3.amplitude();
-            let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
-            let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
+                let ch3_amplitude = self.ch3.amplitude();
+                let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
+                let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
 
-            let ch4_amplitude = self.ch4.amplitude();
-            let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
-            let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
+                let ch4_amplitude = self.ch4.amplitude();
+                let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
+                let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
 
-            let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
-            let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
+                let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
+                let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-            self.buffer.push_back((left, right));
+                prod.push(left)
+                    .and(prod.push(right))
+                    .expect("Add samples to ring buffer");
+            }
         }
     }
 
-    pub fn set_audio_sender(&mut self, sender: AudioSender<f32>) {
-        self.sender = Some(sender);
+    pub fn set_producer(&mut self, prod: SampleProducer<f32>) {
+        self.prod = Some(prod);
     }
 
     pub(crate) fn is_full(&self) -> bool {
-        self.buffer.len() >= AUDIO_BUFFER_LEN * CHANNEL_COUNT
-    }
-
-    pub(crate) fn flush_samples(&mut self) {
-        if let Some(sender) = self.sender.as_ref() {
-            while self.buffer.len() >= CHANNEL_COUNT {
-                match self.buffer.pop_front() {
-                    Some((left, right)) => {
-                        sender
-                            .send_samples(left, right)
-                            .expect("Successfully sent samples across threads");
-                    }
-                    None => unreachable!(
-                        "While loop ensures that there are at least two items in AudioBuffer"
-                    ),
-                }
-            }
+        match self.prod.as_ref() {
+            Some(prod) => prod.is_full(),
+            None => false,
         }
     }
 

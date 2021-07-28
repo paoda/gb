@@ -15,7 +15,7 @@ pixels = "^0.5"
 winit = "^0.25"
 winit_input_helper = "^0.10"
 rodio = "^0.14"
-crossbeam-channel = "^0.5"
+rtrb = "^0.1.4"
 
 [profile.release]
 debug = true

@@ -70,10 +70,6 @@ impl Bus {
         &self.apu
     }
 
-    pub(crate) fn apu_mut(&mut self) -> &mut Apu {
-        &mut self.apu
-    }
-
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();

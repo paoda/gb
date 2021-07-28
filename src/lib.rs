@@ -1,4 +1,4 @@
-pub use apu::gen::AudioMPSC;
+pub use apu::gen::AudioSPSC;
 pub use instruction::Cycle;
 
 pub const GB_WIDTH: usize = 160;
