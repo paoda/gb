@@ -166,6 +166,7 @@ impl Apu {
         self.prod = Some(prod);
     }
 
+    #[inline]
     pub(crate) fn is_full(&self) -> bool {
         match self.prod.as_ref() {
             Some(prod) => prod.is_full(),

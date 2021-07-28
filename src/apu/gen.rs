@@ -3,7 +3,7 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 
 pub(crate) const SAMPLE_RATE: u32 = 48000; // Hz
 const CHANNEL_COUNT: usize = 2;
-const AUDIO_BUFFER_LEN: usize = 4096;
+const BUFFER_CAPACITY: usize = 4096 * CHANNEL_COUNT; // # of samples * the # of channels
 
 pub struct AudioSPSC<T> {
     inner: RingBuffer<T>,
@@ -12,7 +12,7 @@ pub struct AudioSPSC<T> {
 impl<T> Default for AudioSPSC<T> {
     fn default() -> Self {
         Self {
-            inner: RingBuffer::new(AUDIO_BUFFER_LEN * CHANNEL_COUNT),
+            inner: RingBuffer::new(BUFFER_CAPACITY),
         }
     }
 }
@@ -43,6 +43,7 @@ impl<T> SampleProducer<T> {
         self.inner.push(value)
     }
 
+    #[inline]
     pub(crate) fn is_full(&self) -> bool {
         self.inner.is_full()
     }
