@@ -66,6 +66,10 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
+    pub(crate) fn boot_mapped(&self) -> bool {
+        self.boot.is_some()
+    }
+
     pub(crate) fn clock(&mut self) {
         self.ppu.clock();
         self.timer.clock();

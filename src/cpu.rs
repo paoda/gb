@@ -1,6 +1,7 @@
 use crate::apu::Apu;
 use crate::bus::{Bus, BusIo};
-use crate::instruction::{Cycle, Instruction};
+use crate::instruction::cycle::Cycle;
+use crate::instruction::Instruction;
 use crate::interrupt::{InterruptEnable, InterruptFlag};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
@@ -82,8 +83,24 @@ impl Cpu {
         self.bus.read_byte(self.reg.pc)
     }
 
+    pub(crate) fn imm_byte(&mut self) -> u8 {
+        let byte = self.bus.read_byte(self.reg.pc);
+        self.reg.pc += 1;
+        byte
+    }
+
+    pub(crate) fn imm_word(&mut self) -> u16 {
+        let word = self.bus.read_word(self.reg.pc);
+        self.reg.pc += 2;
+        word
+    }
+
     pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
-        Instruction::from_byte(self, opcode)
+        if opcode == 0xCB {
+            Instruction::decode(self.imm_byte(), true)
+        } else {
+            Instruction::decode(opcode, false)
+        }
     }
 
     fn execute(&mut self, instruction: Instruction) -> Cycle {
@@ -91,6 +108,13 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
+        // Log instructions
+        // if !self.bus.boot_mapped() {
+        //     let out = std::io::stdout();
+        //     let _ = self._log_state(out.lock());
+        // }
+
+        // FIXME: The Halt instruction takes less cycles than it should in Blargg's 2nd cpu_instrs test
         let cycles = match self.halted() {
             Some(state) => {
                 use HaltState::*;
@@ -105,10 +129,6 @@ impl Cpu {
                 self.inc_pc();
 
                 let instr = self.decode(opcode);
-
-                // let out = std::io::stdout();
-                // let _ = self._debug_log(out.lock(), &instr);
-
                 let cycles = self.execute(instr);
 
                 self.check_ime();
@@ -122,6 +142,7 @@ impl Cpu {
             self.bus.clock();
         }
 
+        // TODO: This is in the wrong place
         self.handle_interrupts();
 
         cycles
@@ -139,17 +160,6 @@ impl BusIo for Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn read_imm_byte(&mut self, addr: u16) -> u8 {
-        self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 1 after this function call
-        self.bus.read_byte(addr)
-    }
-
-    pub(crate) fn read_imm_word(&mut self, addr: u16) -> u16 {
-        self.inc_pc();
-        self.inc_pc(); // NB: the addr read in the line below will be equal to PC - 2 after this function call
-        self.bus.read_word(addr)
-    }
-
     pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
         self.bus.write_word(addr, word)
     }
@@ -340,6 +350,13 @@ impl Cpu {
         &self.flags
     }
 
+    pub(crate) fn update_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
+        self.flags.set_z(z);
+        self.flags.set_n(n);
+        self.flags.set_h(h);
+        self.flags.set_c(c);
+    }
+
     pub(crate) fn set_flags(&mut self, flags: Flags) {
         self.flags = flags;
     }
@@ -347,8 +364,9 @@ impl Cpu {
 
 impl Cpu {
     fn _debug_log(&self, mut w: impl std::io::Write, instr: &Instruction) -> std::io::Result<()> {
+        let pc = self.reg.pc - 1;
         write!(w, "A: {:02X} ", self.reg.a)?;
-        write!(w, "F: {:02X} ", u8::from(self.flags))?;
+        write!(w, "F: {:04b} ", u8::from(self.flags) >> 4)?;
         write!(w, "B: {:02X} ", self.reg.b)?;
         write!(w, "C: {:02X} ", self.reg.c)?;
         write!(w, "D: {:02X} ", self.reg.d)?;
@@ -356,11 +374,11 @@ impl Cpu {
         write!(w, "H: {:02X} ", self.reg.h)?;
         write!(w, "L: {:02X} ", self.reg.l)?;
         write!(w, "SP: {:04X} ", self.reg.sp)?;
-        write!(w, "PC: 00:{:04X} ", self.reg.pc)?;
-        write!(w, "({:02X} ", self.read_byte(self.reg.pc))?;
-        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
-        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
-        write!(w, "{:02X}) ", self.read_byte(self.reg.pc + 3))?;
+        write!(w, "PC: 00:{:04X} ", pc)?;
+        write!(w, "({:02X} ", self.read_byte(pc))?;
+        write!(w, "{:02X} ", self.read_byte(pc + 1))?;
+        write!(w, "{:02X} ", self.read_byte(pc + 2))?;
+        write!(w, "{:02X}) ", self.read_byte(pc + 3))?;
         writeln!(w, "| {:?}", instr)?;
         w.flush()
     }

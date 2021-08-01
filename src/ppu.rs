@@ -1,5 +1,5 @@
 use crate::bus::BusIo;
-use crate::instruction::Cycle;
+use crate::instruction::cycle::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use dma::DirectMemoryAccess;

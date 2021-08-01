@@ -1,5 +1,5 @@
 use crate::cpu::Cpu as SM83;
-use crate::instruction::Cycle;
+use crate::instruction::cycle::Cycle;
 use crate::joypad;
 use crate::ppu::Ppu;
 use anyhow::Result;

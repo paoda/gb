@@ -1,4 +1,4 @@
-use crate::instruction::Cycle;
+use crate::instruction::cycle::Cycle;
 
 #[derive(Debug, Default)]
 pub(crate) struct DirectMemoryAccess {
