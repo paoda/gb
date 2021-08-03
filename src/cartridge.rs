@@ -305,6 +305,9 @@ struct MBC3 {
     currently_mapped: Option<MBC3Device>,
     ram_size: RamSize,
     ram: Vec<u8>,
+
+    // RTC Data Latch Previous Write
+    prev_latch_write: Option<u8>,
 }
 
 impl MBCIo for MBC3 {
@@ -319,7 +322,7 @@ impl MBCIo for MBC3 {
                     Value(self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
                 }
                 Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
-                    unimplemented!("Reading from MBC3 RTC is currently unsupported")
+                    todo!("Return Latched value of register")
                 }
                 _ => Value(0xFF),
             },
@@ -332,10 +335,12 @@ impl MBCIo for MBC3 {
     fn handle_write(&mut self, addr: u16, byte: u8) {
         match addr {
             0x000..=0x1FFF => self.devices_enabled = (byte & 0x0F) == 0x0A, // Enable External RAM and Access to RTC if there is one
-            0x2000..=0x3FFF => match byte {
-                0x00 => self.rom_bank = 0x01,
-                byte => self.rom_bank = byte & 0x7F,
-            },
+            0x2000..=0x3FFF => {
+                self.rom_bank = match byte {
+                    0x00 => 0x01,
+                    byte => byte & 0x7F,
+                }
+            }
             0x4000..=0x5FFF => match byte {
                 0x00 | 0x01 | 0x02 | 0x03 => {
                     self.ram_bank = byte & 0x03;
@@ -343,17 +348,23 @@ impl MBCIo for MBC3 {
                 }
                 0x08 | 0x09 | 0x0A | 0x0B | 0x0C => {
                     self.currently_mapped = Some(MBC3Device::RealTimeClock);
-                    unimplemented!("RTC in MBC3 is currently unimplemented")
                 }
                 _ => {}
             },
-            0x6000..=0x7FFF => unimplemented!("RTC Data Latch is currently unimplemented"),
+            0x6000..=0x7FFF => {
+                if let Some(0x00) = self.prev_latch_write {
+                    if byte == 0x01 {
+                        todo!("Perform Data Latch")
+                    }
+                }
+                self.prev_latch_write = Some(byte);
+            }
             0xA000..=0xBFFF => match self.currently_mapped {
                 Some(MBC3Device::ExternalRam) if self.devices_enabled => {
                     self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
                 }
                 Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
-                    unimplemented!("Writing to MBC3 RTC is currently unsupported")
+                    todo!("Write to RTC")
                 }
                 _ => {}
             },
