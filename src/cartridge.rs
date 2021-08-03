@@ -13,7 +13,7 @@ const ROM_TITLE_RANGE: std::ops::RangeInclusive<usize> = 0x0134..=0x0143;
 pub(crate) struct Cartridge {
     memory: Vec<u8>,
     title: Option<String>,
-    mbc: Box<dyn MemoryBankController>,
+    mbc: Box<dyn MBCIo>,
 }
 
 impl Cartridge {
@@ -32,7 +32,7 @@ impl Cartridge {
         })
     }
 
-    fn detect_mbc(memory: &[u8]) -> Box<dyn MemoryBankController> {
+    fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
         let ram_size = Self::find_ram_size(memory);
         let bank_count = Self::find_bank_count(memory);
         let mbc_kind = Self::find_mbc(memory);
@@ -43,9 +43,9 @@ impl Cartridge {
         eprintln!("MBC Type: {:?}", mbc_kind);
 
         match mbc_kind {
-            MbcKind::None => Box::new(NoMbc {}),
-            MbcKind::Mbc1 => {
-                let mbc = Mbc1 {
+            MBCKind::None => Box::new(NoMBC {}),
+            MBCKind::MBC1 => {
+                let mbc = MBC1 {
                     ram_size,
                     ram: vec![0; ram_byte_count as usize],
                     bank_count,
@@ -54,9 +54,9 @@ impl Cartridge {
 
                 Box::new(mbc)
             }
-            MbcKind::Mbc1WithBattery => {
+            MBCKind::MBC1WithBattery => {
                 // TODO: Implement Saving
-                let mbc = Mbc1 {
+                let mbc = MBC1 {
                     ram_size,
                     ram: vec![0; ram_byte_count as usize],
                     bank_count,
@@ -65,7 +65,7 @@ impl Cartridge {
 
                 Box::new(mbc)
             }
-            MbcKind::Mbc3WithBattery => {
+            MBCKind::MBC3WithBattery => {
                 // TODO: Implement Saving
                 let mbc = MBC3 {
                     ram_size,
@@ -75,7 +75,7 @@ impl Cartridge {
 
                 Box::new(mbc)
             }
-            MbcKind::Mbc3 => {
+            MBCKind::MBC3 => {
                 let mbc = MBC3 {
                     ram_size,
                     ram: vec![0; ram_byte_count as usize],
@@ -84,7 +84,7 @@ impl Cartridge {
 
                 Box::new(mbc)
             }
-            MbcKind::Mbc5 => todo!("Implement MBC5"),
+            MBCKind::MBC5 => todo!("Implement MBC5"),
         }
     }
 
@@ -113,18 +113,18 @@ impl Cartridge {
         id.into()
     }
 
-    fn find_mbc(memory: &[u8]) -> MbcKind {
+    fn find_mbc(memory: &[u8]) -> MBCKind {
         let id = memory[MBC_TYPE_ADDRESS];
 
         // TODO: Refactor this to match the other enums in this module
         match id {
-            0x00 => MbcKind::None,
-            0x01 => MbcKind::Mbc1,
-            0x02 => MbcKind::Mbc1,
-            0x03 => MbcKind::Mbc1WithBattery,
-            0x19 => MbcKind::Mbc5,
-            0x13 => MbcKind::Mbc3WithBattery,
-            0x11 => MbcKind::Mbc3,
+            0x00 => MBCKind::None,
+            0x01 => MBCKind::MBC1,
+            0x02 => MBCKind::MBC1,
+            0x03 => MBCKind::MBC1WithBattery,
+            0x19 => MBCKind::MBC5,
+            0x13 => MBCKind::MBC3WithBattery,
+            0x11 => MBCKind::MBC3,
             _ => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
@@ -132,7 +132,7 @@ impl Cartridge {
 
 impl BusIo for Cartridge {
     fn read_byte(&self, addr: u16) -> u8 {
-        use MbcResult::*;
+        use MBCResult::*;
 
         match self.mbc.handle_read(addr) {
             Address(addr) => self.memory[addr],
@@ -146,7 +146,7 @@ impl BusIo for Cartridge {
 }
 
 #[derive(Debug)]
-struct Mbc1 {
+struct MBC1 {
     /// 5-bit number
     rom_bank: u8,
     /// 2-bit number
@@ -158,7 +158,7 @@ struct Mbc1 {
     ram_enabled: bool,
 }
 
-impl Default for Mbc1 {
+impl Default for MBC1 {
     fn default() -> Self {
         Self {
             rom_bank: 0x01,
@@ -172,7 +172,7 @@ impl Default for Mbc1 {
     }
 }
 
-impl Mbc1 {
+impl MBC1 {
     fn zero_bank(&self) -> u8 {
         use BankCount::*;
 
@@ -238,9 +238,9 @@ impl Mbc1 {
     }
 }
 
-impl MemoryBankController for Mbc1 {
-    fn handle_read(&self, addr: u16) -> MbcResult {
-        use MbcResult::*;
+impl MBCIo for MBC1 {
+    fn handle_read(&self, addr: u16) -> MBCResult {
+        use MBCResult::*;
 
         match addr {
             0x0000..=0x3FFF => {
@@ -307,9 +307,9 @@ struct MBC3 {
     ram: Vec<u8>,
 }
 
-impl MemoryBankController for MBC3 {
-    fn handle_read(&self, addr: u16) -> MbcResult {
-        use MbcResult::*;
+impl MBCIo for MBC3 {
+    fn handle_read(&self, addr: u16) -> MBCResult {
+        use MBCResult::*;
 
         let res = match addr {
             0x0000..=0x3FFF => Address(addr as usize),
@@ -363,11 +363,11 @@ impl MemoryBankController for MBC3 {
 }
 
 #[derive(Debug)]
-struct NoMbc {}
+struct NoMBC {}
 
-impl MemoryBankController for NoMbc {
-    fn handle_read(&self, addr: u16) -> MbcResult {
-        MbcResult::Address(addr as usize)
+impl MBCIo for NoMBC {
+    fn handle_read(&self, addr: u16) -> MBCResult {
+        MBCResult::Address(addr as usize)
     }
 
     fn handle_write(&mut self, _addr: u16, _byte: u8) {
@@ -375,28 +375,28 @@ impl MemoryBankController for NoMbc {
     }
 }
 
-trait MemoryBankController {
-    fn handle_read(&self, addr: u16) -> MbcResult;
+trait MBCIo {
+    fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
 
 #[derive(Debug, Clone, Copy)]
-enum MbcResult {
+enum MBCResult {
     Address(usize),
     Value(u8),
 }
 
 #[derive(Debug, Clone, Copy)]
-enum MbcKind {
+enum MBCKind {
     None,
-    Mbc1,
-    Mbc1WithBattery,
-    Mbc5,
-    Mbc3WithBattery,
-    Mbc3,
+    MBC1,
+    MBC1WithBattery,
+    MBC5,
+    MBC3WithBattery,
+    MBC3,
 }
 
-impl Default for MbcKind {
+impl Default for MBCKind {
     fn default() -> Self {
         Self::None
     }
@@ -515,14 +515,14 @@ impl From<u8> for BankCount {
     }
 }
 
-impl std::fmt::Debug for Box<dyn MemoryBankController> {
+impl std::fmt::Debug for Box<dyn MBCIo> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!("Implement Debug for Box<dyn MBC> Trait Object");
     }
 }
 
-impl Default for Box<dyn MemoryBankController> {
+impl Default for Box<dyn MBCIo> {
     fn default() -> Self {
-        Box::new(Mbc1::default())
+        Box::new(MBC1::default())
     }
 }
