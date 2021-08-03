@@ -43,7 +43,6 @@ impl<T> SampleProducer<T> {
         self.inner.push(value)
     }
 
-    #[inline]
     pub(crate) fn two_available(&self) -> bool {
         self.inner.slots() > 2
     }

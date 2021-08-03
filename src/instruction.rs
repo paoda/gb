@@ -1456,7 +1456,6 @@ impl Instruction {
         }
     }
 
-    #[inline]
     fn unprefixed(byte: u8) -> Self {
         use Instruction::*;
 
@@ -1573,7 +1572,6 @@ impl Instruction {
         }
     }
 
-    #[inline]
     fn prefixed(byte: u8) -> Self {
         use Instruction::*;
 
@@ -1934,7 +1932,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn group1(code: u8) -> Group1RegisterPair {
         use Group1RegisterPair::*;
 
@@ -1947,7 +1944,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn group2(code: u8) -> Group2RegisterPair {
         use Group2RegisterPair::*;
 
@@ -1960,7 +1956,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn group3(code: u8) -> Group3RegisterPair {
         use Group3RegisterPair::*;
 
@@ -1973,7 +1968,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn register(code: u8) -> Register {
         use Register::*;
 
@@ -1990,7 +1984,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn jump_cond(code: u8) -> JumpCondition {
         use JumpCondition::*;
 
@@ -2003,7 +1996,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn flag_instr(code: u8) -> Instruction {
         use Instruction::*;
 
@@ -2020,7 +2012,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn alu_reg_instr(alu_code: u8, reg_code: u8) -> Instruction {
         use Instruction::*;
 
@@ -2037,7 +2028,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn alu_imm_instr(code: u8) -> Instruction {
         use Instruction::*;
 
@@ -2054,7 +2044,6 @@ mod table {
         }
     }
 
-    #[inline]
     pub(crate) fn prefix_alu(alu_code: u8, reg_code: u8) -> Instruction {
         use Instruction::*;
 
