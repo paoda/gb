@@ -4,14 +4,14 @@ use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
-const SCALE: f64 = 2.0;
+const WINDOW_SCALE: f64 = 2.0;
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())
@@ -38,23 +38,20 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
-    // `rom` is a required value in every situation so this will
-    // always exist.
     let rom_path = m
         .value_of("rom")
         .expect("Required value 'rom' was provided");
 
     let mut game_boy =
-        gb::emu::init(m.value_of("boot"), rom_path).expect("Initialized DMG-01 Emulator");
-    let cartridge_title = gb::emu::rom_title(&game_boy);
+        gb::emu::init(m.value_of("boot"), rom_path).expect("Initialize DMG-01 Emulator");
+    let rom_title = gb::emu::rom_title(&game_boy);
 
-    // Initialize Gamepad Support
-    let mut gamepad = Gilrs::new().expect("Initialized Gilrs for Controller Input");
+    let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
 
     // Initialize GUI
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
-    let window = create_window(&event_loop, cartridge_title)?;
+    let window = create_window(&event_loop, rom_title)?;
 
     let mut pixels = {
         let size = window.inner_size();
@@ -65,21 +62,20 @@ fn main() -> Result<()> {
             .build()?
     };
 
+    // Initialize Audio
     let spsc: AudioSPSC<f32> = Default::default();
     let (prod, cons) = spsc.init();
-
-    game_boy.apu_mut().set_producer(prod);
-
-    // Initialize Audio
     let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
     let sink = Sink::try_new(&stream_handle)?;
     sink.append(cons);
+    game_boy.apu_mut().set_producer(prod);
 
     std::thread::spawn(move || {
         sink.sleep_until_end();
     });
 
-    let mut now = Instant::now();
+    let mut start = Instant::now();
+    let frame_time = Duration::from_secs_f64(1.0 / 60.0); // 60 Hz on Host
     let mut cycle_count: Cycle = Default::default();
 
     event_loop.run(move |event, _, control_flow| {
@@ -104,14 +100,17 @@ fn main() -> Result<()> {
                 pixels.resize_surface(size.width, size.height);
             }
 
-            let delta = now.elapsed().subsec_nanos();
-            now = Instant::now();
+            let mut diff = Instant::now() - start;
+            while diff.subsec_nanos() < frame_time.subsec_nanos() {
+                if cycle_count < gb::emu::CYCLES_IN_FRAME {
+                    cycle_count += gb::emu::run_frame(&mut game_boy, &mut gamepad, &input);
+                }
 
-            let pending = Cycle::new(delta / gb::emu::SM83_CYCLE_TIME.subsec_nanos());
-            cycle_count += gb::emu::run(&mut game_boy, &mut gamepad, &input, pending);
+                diff = Instant::now() - start;
+            }
+            start = Instant::now();
 
             if cycle_count >= gb::emu::CYCLES_IN_FRAME {
-                // Draw Frame
                 cycle_count %= gb::emu::CYCLES_IN_FRAME;
 
                 gb::emu::draw(game_boy.ppu(), pixels.get_frame());
@@ -138,7 +137,10 @@ fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
 fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
     use winit::platform::windows::WindowBuilderExtWindows;
 
-    let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
+    let size = LogicalSize::new(
+        (GB_WIDTH as f64) * WINDOW_SCALE,
+        (GB_HEIGHT as f64) * WINDOW_SCALE,
+    );
     Ok(WindowBuilder::new()
         .with_title(title)
         .with_inner_size(size)

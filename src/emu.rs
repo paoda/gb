@@ -33,26 +33,39 @@ pub fn run(
     game_boy: &mut SM83,
     gamepad: &mut Gilrs,
     input: &WinitInputHelper,
-    pending: Cycle,
+    target: Cycle,
 ) -> Cycle {
     let mut elapsed = Cycle::new(0);
 
-    while elapsed < pending {
-        elapsed += run_unsynced(game_boy, gamepad, input);
+    while elapsed < target {
+        if GAMEPAD_ENABLED {
+            if let Some(event) = gamepad.next_event() {
+                joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
+            }
+        }
+
+        joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+        elapsed += game_boy.step();
     }
 
     elapsed
 }
 
-pub fn run_unsynced(game_boy: &mut SM83, gamepad: &mut Gilrs, input: &WinitInputHelper) -> Cycle {
-    if GAMEPAD_ENABLED {
-        if let Some(event) = gamepad.next_event() {
-            joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
+pub fn run_frame(game_boy: &mut SM83, gamepad: &mut Gilrs, input: &WinitInputHelper) -> Cycle {
+    let mut elapsed = Cycle::new(0);
+
+    while elapsed < CYCLES_IN_FRAME {
+        if GAMEPAD_ENABLED {
+            if let Some(event) = gamepad.next_event() {
+                joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
+            }
         }
+
+        joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+        elapsed += game_boy.step();
     }
 
-    joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
-    game_boy.step()
+    elapsed
 }
 
 pub fn draw(ppu: &Ppu, frame: &mut [u8]) {
