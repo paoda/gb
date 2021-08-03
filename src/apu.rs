@@ -64,28 +64,29 @@ impl BusIo for Apu {
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr & 0x00FF {
-            0x10 => self.ch1.set_sweep(byte),
-            0x11 => self.ch1.set_duty(byte),
-            0x12 => self.ch1.set_envelope(byte),
-            0x13 => self.ch1.set_freq_lo(byte),
-            0x14 => self.ch1.set_freq_hi(byte),
-            0x16 => self.ch2.set_duty(byte),
-            0x17 => self.ch2.set_envelope(byte),
-            0x18 => self.ch2.set_freq_lo(byte),
-            0x19 => self.ch2.set_freq_hi(byte),
-            0x1A => self.ch3.set_enabled(byte),
-            0x1B => self.ch3.set_len(byte),
-            0x1C => self.ch3.set_volume(byte),
-            0x1D => self.ch3.set_freq_lo(byte),
-            0x1E => self.ch3.set_freq_hi(byte),
-            0x20 => self.ch4.set_len(byte),
-            0x21 => self.ch4.set_envelope(byte),
-            0x22 => self.ch4.set_poly(byte),
-            0x23 => self.ch4.set_freq_data(byte),
-            0x24 => self.ctrl.set_channel(byte),
-            0x25 => self.ctrl.set_output(byte),
+            0x10 if self.ctrl.enabled => self.ch1.set_sweep(byte),
+            0x11 if self.ctrl.enabled => self.ch1.set_duty(byte),
+            0x12 if self.ctrl.enabled => self.ch1.set_envelope(byte),
+            0x13 if self.ctrl.enabled => self.ch1.set_freq_lo(byte),
+            0x14 if self.ctrl.enabled => self.ch1.set_freq_hi(byte),
+            0x16 if self.ctrl.enabled => self.ch2.set_duty(byte),
+            0x17 if self.ctrl.enabled => self.ch2.set_envelope(byte),
+            0x18 if self.ctrl.enabled => self.ch2.set_freq_lo(byte),
+            0x19 if self.ctrl.enabled => self.ch2.set_freq_hi(byte),
+            0x1A if self.ctrl.enabled => self.ch3.set_enabled(byte),
+            0x1B if self.ctrl.enabled => self.ch3.set_len(byte),
+            0x1C if self.ctrl.enabled => self.ch3.set_volume(byte),
+            0x1D if self.ctrl.enabled => self.ch3.set_freq_lo(byte),
+            0x1E if self.ctrl.enabled => self.ch3.set_freq_hi(byte),
+            0x20 if self.ctrl.enabled => self.ch4.set_len(byte),
+            0x21 if self.ctrl.enabled => self.ch4.set_envelope(byte),
+            0x22 if self.ctrl.enabled => self.ch4.set_poly(byte),
+            0x23 if self.ctrl.enabled => self.ch4.set_frequency(byte),
+            0x24 if self.ctrl.enabled => self.ctrl.set_channel(byte),
+            0x25 if self.ctrl.enabled => self.ctrl.set_output(byte),
             0x26 => self.set_status(byte),
             0x30..=0x3F => self.ch3.write_byte(addr, byte),
+            _ if !self.ctrl.enabled => {}
             _ => eprintln!(
                 "Wrote {:#04X} to unused IO register {:#06X} [APU]",
                 byte, addr
@@ -135,7 +136,7 @@ impl Apu {
             self.sample_counter %= SM83_CLOCK_SPEED;
 
             if let Some(ref mut prod) = self.prod {
-                if prod.two_available() {
+                if prod.available_block() {
                     // Sample the APU
                     let ch1_amplitude = self.ch1.amplitude();
                     let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
@@ -172,14 +173,21 @@ impl Apu {
     pub(crate) fn set_status(&mut self, byte: u8) {
         self.ctrl.enabled = (byte >> 7) & 0x01 == 0x01;
 
-        if !self.ctrl.enabled {
-            self.reset();
+        if self.ctrl.enabled {
+            // Frame Sequencer reset to Step 0
+            self.frame_seq_state = Default::default();
+
+            // Square Duty units are reset to first step
+            self.ch1.duty_pos = 0;
+            self.ch2.duty_pos = 0;
+
+            // Wave Channel's sample buffer reset to 0
         }
 
-        self.ch1.enabled = self.ctrl.enabled;
-        self.ch2.enabled = self.ctrl.enabled;
-        self.ch3.enabled = self.ctrl.enabled;
-        self.ch4.enabled = self.ctrl.enabled;
+        if !self.ctrl.enabled {
+            self.reset();
+        } else {
+        }
     }
 
     fn reset(&mut self) {
@@ -188,15 +196,18 @@ impl Apu {
         self.ch1.sweep = Default::default();
         self.ch1.duty = Default::default();
         self.ch1.envelope = Default::default();
-        self.ch1.freq_hi = Default::default(); // FIXME: What about frequency low?
+        self.ch1.freq_lo = Default::default();
+        self.ch1.freq_hi = Default::default();
 
         self.ch2.duty = Default::default();
         self.ch2.envelope = Default::default();
+        self.ch2.freq_lo = Default::default();
         self.ch2.freq_hi = Default::default();
 
         self.ch3.enabled = Default::default();
         self.ch3.len = Default::default();
         self.ch3.volume = Default::default();
+        self.ch3.freq_lo = Default::default();
         self.ch3.freq_hi = Default::default();
 
         self.ch4.len = Default::default();
@@ -204,15 +215,17 @@ impl Apu {
         self.ch4.poly = Default::default();
         self.ch4.freq = Default::default();
 
-        self.ch2 = Default::default();
-        self.ch3 = Default::default();
-        self.ch4 = Default::default();
         self.ctrl.channel = Default::default();
         self.ctrl.output = Default::default();
+
+        // Disable the rest of the channels
+        self.ch1.enabled = Default::default();
+        self.ch2.enabled = Default::default();
+        self.ch4.enabled = Default::default();
     }
 
     fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
-        if freq_hi.idk() && *length_timer > 0 {
+        if freq_hi.length_disable() && *length_timer > 0 {
             *length_timer -= 1;
 
             // Check in this scope ensures (only) the above subtraction
@@ -223,8 +236,8 @@ impl Apu {
         }
     }
 
-    fn clock_length_ch4(freq_data: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
-        if freq_data.idk() && *length_timer > 0 {
+    fn clock_length_ch4(freq: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
+        if freq.length_disable() && *length_timer > 0 {
             *length_timer -= 1;
 
             // Check in this scope ensures (only) the above subtraction
@@ -262,23 +275,20 @@ impl Apu {
     }
 
     fn handle_sweep(&mut self) {
-        if self.ch1.sweep_timer > 0 {
+        if self.ch1.sweep_timer != 0 {
             self.ch1.sweep_timer -= 1;
         }
 
         if self.ch1.sweep_timer == 0 {
-            self.ch1.sweep_timer = if self.ch1.sweep.period() != 0 {
-                self.ch1.sweep.period()
-            } else {
-                8
-            };
+            let period = self.ch1.sweep.period();
+            self.ch1.sweep_timer = if period == 0 { 8 } else { period };
 
-            if self.ch1.sweep_enabled && self.ch1.sweep.period() != 0 {
+            if self.ch1.sweep_enabled && period != 0 {
                 let new_freq = self.ch1.calc_sweep_freq();
 
                 if new_freq <= 2047 && self.ch1.sweep.shift_count() != 0 {
                     self.ch1.set_frequency(new_freq);
-                    self.ch1.shadow_freq = new_freq & 0x07FF;
+                    self.ch1.shadow_freq = new_freq;
 
                     let _ = self.ch1.calc_sweep_freq();
                 }
@@ -371,6 +381,7 @@ impl SoundControl {
             | (apu.ch3.enabled as u8) << 2
             | (apu.ch2.enabled as u8) << 1
             | apu.ch1.enabled as u8
+            | 0x70
     }
 }
 
@@ -431,9 +442,7 @@ impl Channel1 {
 
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
     pub(crate) fn set_sweep(&mut self, byte: u8) {
-        if self.enabled {
-            self.sweep = byte.into()
-        }
+        self.sweep = byte.into()
     }
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
@@ -443,10 +452,8 @@ impl Channel1 {
 
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn set_duty(&mut self, byte: u8) {
-        if self.enabled {
-            self.duty = byte.into();
-            self.length_timer = 64 - self.duty.sound_length() as u16;
-        }
+        self.duty = byte.into();
+        self.length_timer = 64 - self.duty.sound_length() as u16;
     }
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
@@ -456,16 +463,12 @@ impl Channel1 {
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        if self.enabled {
-            self.envelope = byte.into()
-        }
+        self.envelope = byte.into()
     }
 
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
     pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_lo = byte;
-        }
+        self.freq_lo = byte;
     }
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
@@ -475,46 +478,44 @@ impl Channel1 {
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_hi = byte.into();
+        self.freq_hi = byte.into();
 
-            // If this bit is set, a trigger event occurs
-            if self.freq_hi.initial() {
-                // Envelope Behaviour during trigger event
-                self.period_timer = self.envelope.period();
-                self.current_volume = self.envelope.init_vol();
+        // If this bit is set, a trigger event occurs
+        if self.freq_hi.initial() {
+            // Envelope Behaviour during trigger event
+            self.period_timer = self.envelope.period();
+            self.current_volume = self.envelope.init_vol();
 
-                // Sweep behaviour during trigger event
-                self.shadow_freq = self.frequency() & 0x07FF; // Mask should be redundant
-                self.sweep_timer = if self.sweep.period() != 0 {
-                    self.sweep.period()
-                } else {
-                    8
-                };
+            // Sweep behaviour during trigger event
+            let sweep_period = self.sweep.period();
+            let sweep_shift = self.sweep.shift_count();
+            self.shadow_freq = self.frequency();
+            self.sweep_timer = if sweep_period == 0 { 8 } else { sweep_period };
 
-                if self.sweep.period() != 0 || self.sweep.shift_count() != 0 {
-                    self.sweep_enabled = true;
-                }
-
-                if self.sweep.shift_count() != 0 {
-                    let _ = self.calc_sweep_freq();
-                }
-
-                // Length behaviour during trigger event
-                if self.length_timer == 0 {
-                    self.length_timer = 64;
-                }
+            if sweep_period != 0 || sweep_shift != 0 {
+                self.sweep_enabled = true;
             }
+
+            if sweep_shift != 0 {
+                let _ = self.calc_sweep_freq();
+            }
+
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
+            }
+
+            self.enabled = true;
         }
     }
 
     fn calc_sweep_freq(&mut self) -> u16 {
         use SweepDirection::*;
-        let shifted_shadow_freq = self.shadow_freq >> self.sweep.shift_count();
 
+        let shadow_freq_shifted = self.shadow_freq >> self.sweep.shift_count();
         let new_freq = match self.sweep.direction() {
-            Increase => self.shadow_freq + shifted_shadow_freq,
-            Decrease => self.shadow_freq - shifted_shadow_freq,
+            Increase => self.shadow_freq + shadow_freq_shifted,
+            Decrease => self.shadow_freq - shadow_freq_shifted,
         };
 
         // Overflow check
@@ -587,10 +588,8 @@ impl Channel2 {
 
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn set_duty(&mut self, byte: u8) {
-        if self.enabled {
-            self.duty = byte.into();
-            self.length_timer = 64 - self.duty.sound_length() as u16;
-        }
+        self.duty = byte.into();
+        self.length_timer = 64 - self.duty.sound_length() as u16;
     }
 
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
@@ -600,16 +599,12 @@ impl Channel2 {
 
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        if self.enabled {
-            self.envelope = byte.into()
-        }
+        self.envelope = byte.into()
     }
 
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
     pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_lo = byte;
-        }
+        self.freq_lo = byte;
     }
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
@@ -619,19 +614,19 @@ impl Channel2 {
 
     /// 0xFF19 | NR24 - Channel 2 Frequency high
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_hi = byte.into();
+        self.freq_hi = byte.into();
 
-            if self.freq_hi.initial() {
-                // Envelope behaviour during trigger event
-                self.period_timer = self.envelope.period();
-                self.current_volume = self.envelope.init_vol();
+        if self.freq_hi.initial() {
+            // Envelope behaviour during trigger event
+            self.period_timer = self.envelope.period();
+            self.current_volume = self.envelope.init_vol();
 
-                // Length behaviour during trigger event
-                if self.length_timer == 0 {
-                    self.length_timer = 64;
-                }
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
             }
+
+            self.enabled = true;
         }
     }
 
@@ -672,7 +667,11 @@ impl BusIo for Channel3 {
     }
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize] = byte;
+        if self.enabled {
+            self.wave_ram[self.offset as usize] = byte;
+        } else {
+            self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize] = byte;
+        }
     }
 }
 
@@ -696,10 +695,8 @@ impl Channel3 {
 
     /// 0xFF1B | NR31 - Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
-        if self.enabled {
-            self.len = byte;
-            self.length_timer = 256 - self.len as u16;
-        }
+        self.len = byte;
+        self.length_timer = 256 - self.len as u16;
     }
 
     /// 0xFF1C | NR32 - Channel 3 Volume
@@ -711,22 +708,18 @@ impl Channel3 {
     pub(crate) fn set_volume(&mut self, byte: u8) {
         use Ch3Volume::*;
 
-        if self.enabled {
-            self.volume = match (byte >> 5) & 0x03 {
-                0b00 => Mute,
-                0b01 => Full,
-                0b10 => Half,
-                0b11 => Quarter,
-                _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
-            };
-        }
+        self.volume = match (byte >> 5) & 0x03 {
+            0b00 => Mute,
+            0b01 => Full,
+            0b10 => Half,
+            0b11 => Quarter,
+            _ => unreachable!("{:#04X} is not a valid value for Channel3Volume", byte),
+        };
     }
 
     /// 0xFF1D | NR33 - Channel 3 Frequency low (lower 8 bits)
     pub(crate) fn set_freq_lo(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_lo = byte;
-        }
+        self.freq_lo = byte;
     }
 
     /// 0xFF1E | NR34 - Channel 3 Frequency high
@@ -736,15 +729,15 @@ impl Channel3 {
 
     /// 0xFF1E | NR34 - Channel 3 Frequency high
     pub(crate) fn set_freq_hi(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq_hi = byte.into();
+        self.freq_hi = byte.into();
 
-            if self.freq_hi.initial() {
-                // Length behaviour during trigger event
-                if self.length_timer == 0 {
-                    self.length_timer = 256;
-                }
+        if self.freq_hi.initial() {
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 256;
             }
+
+            self.enabled = true;
         }
     }
 
@@ -760,13 +753,13 @@ impl Channel3 {
         }
 
         if self.freq_timer == 0 {
-            self.freq_timer = (2048 - self.frequency()) * 4;
-            self.offset = (self.offset + 1) % 8;
+            self.freq_timer = (2048 - self.frequency()) * 2;
+            self.offset = (self.offset + 1) % (WAVE_PATTERN_RAM_LEN * 2) as u8;
         }
     }
 
     fn read_sample(&self, index: u8) -> u8 {
-        let i = index as usize / 2;
+        let i = (index / 2) as usize;
 
         if index % 2 == 0 {
             // We grab the high nibble on even indexes
@@ -816,10 +809,8 @@ impl Channel4 {
 
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
-        if self.enabled {
-            self.len = byte & 0x3F;
-            self.length_timer = 256 - self.len as u16;
-        }
+        self.len = byte & 0x3F;
+        self.length_timer = 256 - self.len as u16;
     }
 
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
@@ -829,9 +820,7 @@ impl Channel4 {
 
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        if self.enabled {
-            self.envelope = byte.into()
-        }
+        self.envelope = byte.into()
     }
 
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
@@ -841,9 +830,7 @@ impl Channel4 {
 
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
     pub(crate) fn set_poly(&mut self, byte: u8) {
-        if self.enabled {
-            self.poly = byte.into();
-        }
+        self.poly = byte.into();
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
@@ -852,23 +839,23 @@ impl Channel4 {
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
-    pub(crate) fn set_freq_data(&mut self, byte: u8) {
-        if self.enabled {
-            self.freq = byte.into();
+    pub(crate) fn set_frequency(&mut self, byte: u8) {
+        self.freq = byte.into();
 
-            if self.freq.initial() {
-                // Envelope behaviour during trigger event
-                self.period_timer = self.envelope.period();
-                self.current_volume = self.envelope.init_vol();
+        if self.freq.initial() {
+            // Envelope behaviour during trigger event
+            self.period_timer = self.envelope.period();
+            self.current_volume = self.envelope.init_vol();
 
-                // Length behaviour during trigger event
-                if self.length_timer == 0 {
-                    self.length_timer = 64;
-                }
-
-                // LFSR behaviour during trigger event
-                self.lf_shift = 0x7FFF;
+            // Length behaviour during trigger event
+            if self.length_timer == 0 {
+                self.length_timer = 64;
             }
+
+            // LFSR behaviour during trigger event
+            self.lf_shift = 0x7FFF;
+
+            self.enabled = true;
         }
     }
 

@@ -43,8 +43,16 @@ impl<T> SampleProducer<T> {
         self.inner.push(value)
     }
 
-    pub(crate) fn two_available(&self) -> bool {
+    pub(crate) fn available(&self) -> bool {
         self.inner.slots() > 2
+    }
+
+    pub(crate) fn available_block(&self) -> bool {
+        loop {
+            if self.inner.slots() > 2 {
+                break true;
+            }
+        }
     }
 }
 

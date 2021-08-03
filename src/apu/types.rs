@@ -178,12 +178,12 @@ pub(crate) mod ch4 {
         pub struct Frequency(u8);
         impl Debug;
         _initial, _: 7;
-        _idk, _: 6; // TODO: same as FrequencyHigh, figure out what this is
+        _length_disable, _: 6; // TODO: same as FrequencyHigh, figure out what this is
     }
 
     impl Frequency {
-        pub(crate) fn idk(&self) -> bool {
-            self._idk()
+        pub(crate) fn length_disable(&self) -> bool {
+            self._length_disable()
         }
 
         pub(crate) fn initial(&self) -> bool {
@@ -224,7 +224,7 @@ pub(crate) mod common {
         pub struct FrequencyHigh(u8);
         impl Debug;
         _initial, _: 7;
-        _idk, _: 6; // TODO: Figure out what the hell this is
+        _length_disable, _: 6; // TODO: Figure out what the hell this is
         pub freq_bits, set_freq_bits: 2, 0;
     }
 
@@ -233,8 +233,8 @@ pub(crate) mod common {
             self._initial()
         }
 
-        pub(crate) fn idk(&self) -> bool {
-            self._idk()
+        pub(crate) fn length_disable(&self) -> bool {
+            self._length_disable()
         }
     }
 
