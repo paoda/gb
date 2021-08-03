@@ -7,6 +7,7 @@ use crate::bus::BusIo;
 const RAM_SIZE_ADDRESS: usize = 0x0149;
 const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
+const ROM_TITLE_RANGE: std::ops::RangeInclusive<usize> = 0x0134..=0x0143;
 
 #[derive(Debug, Default)]
 pub(crate) struct Cartridge {
@@ -88,14 +89,14 @@ impl Cartridge {
     }
 
     fn find_title(memory: &[u8]) -> Option<String> {
-        // FIXME: Get rid of magic values and handle cases
-        // where 0x134..0x143 reads past the length of the
-        // string
+        let slice = &memory[ROM_TITLE_RANGE];
+        let with_nulls = std::str::from_utf8(slice).ok();
+        let trimmed = with_nulls.map(|s| s.trim_matches('\0'));
 
-        let slice = &memory[0x134..0x143];
-
-        let str_with_nulls = std::str::from_utf8(slice).ok();
-        str_with_nulls.map(|s| s.trim_matches('\0').to_string())
+        match trimmed {
+            Some("") | None => None,
+            Some(_) => trimmed.map(String::from),
+        }
     }
 
     pub(crate) fn title(&self) -> Option<&str> {
