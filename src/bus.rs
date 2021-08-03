@@ -66,6 +66,7 @@ impl Bus {
         self.cartridge.as_ref()?.title()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn boot_mapped(&self) -> bool {
         self.boot.is_some()
     }
