@@ -671,7 +671,7 @@ impl BusIo for Channel3 {
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
         if self.enabled {
-            self.wave_ram[self.offset as usize] = byte;
+            self.wave_ram[self.offset as usize / 2] = byte;
         } else {
             self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize] = byte;
         }
