@@ -154,8 +154,11 @@ impl Apu {
                     let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
                     let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
 
-                    let left = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
-                    let right = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
+                    let left_mixed = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
+                    let right_mixed = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
+
+                    let left = (self.ctrl.channel.left_volume() + 1.0) * left_mixed;
+                    let right = (self.ctrl.channel.right_volume() + 1.0) * right_mixed;
 
                     prod.push(left)
                         .and(prod.push(right))
@@ -742,7 +745,8 @@ impl Channel3 {
     }
 
     fn amplitude(&self) -> f32 {
-        let dac_input = self.read_sample(self.offset) >> self.volume.shift_count();
+        let dac_input =
+            (self.read_sample(self.offset) >> self.volume.shift_count()) * self.enabled as u8;
 
         (dac_input as f32 / 7.5) - 1.0
     }

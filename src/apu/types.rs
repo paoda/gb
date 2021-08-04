@@ -503,10 +503,20 @@ impl From<SoundOutput> for u8 {
 bitfield! {
     pub struct ChannelControl(u8);
     impl Debug;
-    vin_so2, _: 7;
-    so2_level, _: 6, 4;
-    vin_so1, _: 3;
-    so1_level, _: 2, 0;
+    vin_left, _: 7;
+    _left_volume, _: 6, 4;
+    vin_right, _: 3;
+    _right_volume, _: 2, 0;
+}
+
+impl ChannelControl {
+    pub(crate) fn left_volume(&self) -> f32 {
+        self._left_volume() as f32
+    }
+
+    pub(crate) fn right_volume(&self) -> f32 {
+        self._right_volume() as f32
+    }
 }
 
 impl Copy for ChannelControl {}
