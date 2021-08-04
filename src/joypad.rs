@@ -120,49 +120,57 @@ pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
 
     if input.key_pressed(VirtualKeyCode::Down) {
         state.dpad_down.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Down) {
+    }
+    if input.key_released(VirtualKeyCode::Down) {
         state.dpad_down.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::Up) {
         state.dpad_up.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Up) {
+    }
+    if input.key_released(VirtualKeyCode::Up) {
         state.dpad_up.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::Left) {
         state.dpad_left.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Left) {
+    }
+    if input.key_released(VirtualKeyCode::Left) {
         state.dpad_left.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::Right) {
         state.dpad_right.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Right) {
+    }
+    if input.key_released(VirtualKeyCode::Right) {
         state.dpad_right.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::T) {
         state.start.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::T) {
+    }
+    if input.key_released(VirtualKeyCode::T) {
         state.start.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::Y) {
         state.select.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Y) {
+    }
+    if input.key_released(VirtualKeyCode::Y) {
         state.select.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::Z) {
         state.south.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::Z) {
+    }
+    if input.key_released(VirtualKeyCode::Z) {
         state.south.update(false, irq);
     }
 
     if input.key_pressed(VirtualKeyCode::X) {
         state.east.update(true, irq);
-    } else if input.key_released(VirtualKeyCode::X) {
+    }
+    if input.key_released(VirtualKeyCode::X) {
         state.east.update(false, irq);
     }
 }
