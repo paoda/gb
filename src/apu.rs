@@ -663,7 +663,7 @@ pub(crate) struct Channel3 {
 impl BusIo for Channel3 {
     fn read_byte(&self, addr: u16) -> u8 {
         if self.enabled {
-            self.wave_ram[self.offset as usize]
+            self.wave_ram[self.offset as usize / 2]
         } else {
             self.wave_ram[(addr - Self::WAVE_RAM_START_ADDR) as usize]
         }
