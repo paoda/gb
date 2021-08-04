@@ -11,7 +11,7 @@ pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_
 pub const CYCLES_IN_FRAME: Cycle = Cycle::new(456 * 154); // 456 Cycles times 154 scanlines
 pub(crate) const SM83_CLOCK_SPEED: u64 = 0x40_0000; // Hz which is 4.194304Mhz
 const DEFAULT_TITLE: &str = "DMG-01 Emulator";
-const GAMEPAD_ENABLED: bool = false;
+const GAMEPAD_ENABLED: bool = true;
 
 pub fn init(boot_path: Option<&str>, rom_path: &str) -> Result<SM83> {
     let mut cpu = match boot_path {
@@ -37,14 +37,14 @@ pub fn run(
 ) -> Cycle {
     let mut elapsed = Cycle::new(0);
 
-    while elapsed < target {
-        if GAMEPAD_ENABLED {
-            if let Some(event) = gamepad.next_event() {
-                joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
-            }
+    if GAMEPAD_ENABLED {
+        if let Some(event) = gamepad.next_event() {
+            joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
         }
+    }
 
-        joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+    joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+    while elapsed < target {
         elapsed += game_boy.step();
     }
 
@@ -54,14 +54,14 @@ pub fn run(
 pub fn run_frame(game_boy: &mut SM83, gamepad: &mut Gilrs, input: &WinitInputHelper) -> Cycle {
     let mut elapsed = Cycle::new(0);
 
-    while elapsed < CYCLES_IN_FRAME {
-        if GAMEPAD_ENABLED {
-            if let Some(event) = gamepad.next_event() {
-                joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
-            }
+    if GAMEPAD_ENABLED {
+        if let Some(event) = gamepad.next_event() {
+            joypad::handle_gamepad_input(game_boy.joypad_mut(), event);
         }
+    }
 
-        joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+    joypad::handle_keyboard_input(game_boy.joypad_mut(), input);
+    while elapsed < CYCLES_IN_FRAME {
         elapsed += game_boy.step();
     }
 
