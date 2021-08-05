@@ -44,10 +44,8 @@ impl BusIo for Apu {
             0x17 => self.ch2.envelope(),
             0x19 => self.ch2.freq_hi(),
             0x1A => self.ch3.enabled(),
-            0x1B => self.ch3.len(),
             0x1C => self.ch3.volume(),
             0x1E => self.ch3.freq_hi(),
-            0x20 => self.ch4.len(),
             0x21 => self.ch4.envelope(),
             0x22 => self.ch4.poly(),
             0x23 => self.ch4.frequency(),
@@ -692,11 +690,6 @@ impl Channel3 {
     }
 
     /// 0xFF1B | NR31 - Sound Length
-    pub(crate) fn len(&self) -> u8 {
-        self.len | 0xFF
-    }
-
-    /// 0xFF1B | NR31 - Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
         self.len = byte;
         self.length_timer = 256 - self.len as u16;
@@ -806,11 +799,6 @@ pub(crate) struct Channel4 {
 }
 
 impl Channel4 {
-    /// 0xFF20 | NR41 - Channel 4 Sound Length
-    pub(crate) fn len(&self) -> u8 {
-        self.len | 0xFF
-    }
-
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
         self.len = byte & 0x3F;
