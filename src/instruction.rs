@@ -12,6 +12,7 @@ use crate::bus::BusIo;
 use crate::cpu::{Cpu, Flags, HaltState, ImeState, Register as CpuRegister, RegisterPair};
 
 #[allow(clippy::upper_case_acronyms)]
+#[derive(Clone, Copy)]
 pub(crate) enum Instruction {
     NOP,
     STOP,
