@@ -1531,7 +1531,8 @@ impl Instruction {
 
     /// Set program counter to Address.
     ///
-    /// This is explicitly meant to emulate the exact behaviour of JP, JR RET, RETI and CALL
+    /// This is explicitly meant to emulate the exact behaviour of [`Instruction::JP`], [`Instruction::JR`]
+    /// [`Instruction::RET`], [`Instruction::RETI`]
     /// (4 cycles)
     fn jump(cpu: &mut Cpu, addr: u16) {
         cpu.set_register_pair(RegisterPair::PC, addr);

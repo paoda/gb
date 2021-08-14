@@ -104,10 +104,10 @@ impl Cpu {
         Instruction::execute(self, instruction)
     }
 
-    /// Perform the [`Cpu::fetch()`] [`Cpu::decode(opcode)`] [`Cpu::execute(instr)`]
+    /// Perform the [`Cpu::fetch()`] [`Cpu::decode()`] [`Cpu::execute()`]
     /// routine.
     ///
-    /// Handle HALT state and interrupts.
+    /// Handle HALT and interrupts.
     pub fn step(&mut self) -> Cycle {
         // Log instructions
         // if self.reg.pc > 0xFF {
