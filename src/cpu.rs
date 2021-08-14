@@ -75,6 +75,8 @@ impl Cpu {
 }
 
 impl Cpu {
+    /// Fetch an [Instruction] from the memory bus
+    /// (4 cycles)
     fn fetch(&mut self) -> u8 {
         let byte = self.read_byte(self.reg.pc);
         self.bus.clock();
@@ -82,6 +84,10 @@ impl Cpu {
         byte
     }
 
+    /// Decode a byte into an [SM83](Cpu) [Instruction]
+    ///
+    /// If opcode == 0xCB, then decoding costs 4 cycles.
+    /// Otherwise, decoding is free
     pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
         if opcode == 0xCB {
             Instruction::decode(self.fetch(), true)
@@ -90,10 +96,18 @@ impl Cpu {
         }
     }
 
+    /// Execute an [Instruction].
+    ///
+    /// The amount of cycles necessary to execute an instruction range from
+    /// 0 to 20 T-cycles
     fn execute(&mut self, instruction: Instruction) -> Cycle {
         Instruction::execute(self, instruction)
     }
 
+    /// Perform the [`Cpu::fetch()`] [`Cpu::decode(opcode)`] [`Cpu::execute(instr)`]
+    /// routine.
+    ///
+    /// Handle HALT state and interrupts.
     pub fn step(&mut self) -> Cycle {
         // // Log instructions
         // if self.reg.pc > 0xFF {
