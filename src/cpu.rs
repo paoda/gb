@@ -15,7 +15,7 @@ pub struct Cpu {
     flags: Flags,
     ime: ImeState,
     // TODO: Merge halted and state properties
-    halted: Option<HaltState>,
+    halted: Option<HaltKind>,
     state: State,
 }
 
@@ -53,7 +53,7 @@ impl Cpu {
         self.ime = state;
     }
 
-    pub(crate) fn halt(&mut self, state: HaltState) {
+    pub(crate) fn halt(&mut self, state: HaltKind) {
         self.halted = Some(state);
     }
 
@@ -61,8 +61,8 @@ impl Cpu {
         self.halted = None;
     }
 
-    pub(crate) fn halted(&self) -> Option<&HaltState> {
-        self.halted.as_ref()
+    pub(crate) fn halted(&self) -> Option<HaltKind> {
+        self.halted
     }
 
     pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
@@ -109,33 +109,33 @@ impl Cpu {
     ///
     /// Handle HALT state and interrupts.
     pub fn step(&mut self) -> Cycle {
-        // // Log instructions
+        // Log instructions
         // if self.reg.pc > 0xFF {
         //     let out = std::io::stdout();
-        //     let _ = self._print_debug(out.lock());
+        //     let _ = self._print_logs(out.lock());
         // }
 
-        // FIXME: The Halt instruction takes more cycles than it should in Blargg's 2nd cpu_instrs test
-        let elapsed = match self.halted() {
-            Some(state) => {
-                use HaltState::*;
+        if let Some(elapsed) = self.handle_interrupt() {
+            return elapsed;
+        }
 
-                match state {
-                    ImeEnabled | NonePending => {
-                        self.bus.clock();
-                        Cycle::new(4)
-                    }
-                    SomePending => todo!("Implement HALT bug"),
-                }
-            }
-            None => {
-                let opcode = self.fetch();
-                let instr = self.decode(opcode);
-                let elapsed = self.execute(instr);
-                self.handle_ei();
-                elapsed
-            }
-        };
+        if let Some(kind) = self.halted() {
+            use HaltKind::*;
+
+            self.bus.clock();
+
+            let elapsed = match kind {
+                ImeEnabled | NonePending => Cycle::new(4),
+                SomePending => todo!("Implement HALT bug"),
+            };
+
+            return elapsed;
+        }
+
+        let opcode = self.fetch();
+        let instr = self.decode(opcode);
+        let elapsed = self.execute(instr);
+        self.handle_ei();
 
         // For use in Blargg's Test ROMs
         if self.read_byte(0xFF02) == 0x81 {
@@ -144,8 +144,6 @@ impl Cpu {
             eprint!("{}", c);
         }
 
-        // TODO: Is this in the wrong place?
-        self.handle_interrupts();
         elapsed
     }
 }
@@ -189,72 +187,76 @@ impl Cpu {
         self.read_byte(0xFFFF)
     }
 
-    fn handle_interrupts(&mut self) {
-        let req = self.int_request();
-        let enabled = self.int_enable();
+    fn handle_interrupt(&mut self) -> Option<Cycle> {
+        let irq = self.int_request();
+        let enable = self.int_enable();
 
+        // TODO: Ensure that this behaviour is correct
         if self.halted.is_some() {
             // When we're here either a HALT with IME set or
             // a HALT with IME not set and No pending Interrupts was called
 
-            if req & enabled != 0 {
+            if irq & enable != 0 {
                 // The if self.ime() below correctly follows the "resuming from HALT" behaviour so
                 // nothing actually needs to be added here. This is just documentation
                 // since it's a bit weird why nothing is being done
 
-                self.resume()
+                self.resume();
             }
         }
 
-        if let ImeState::Enabled = self.ime() {
-            let mut req: InterruptFlag = req.into();
-            let enabled: InterruptEnable = enabled.into();
+        match self.ime() {
+            ImeState::Enabled => {
+                let mut irq: InterruptFlag = irq.into();
+                let enable: InterruptEnable = enable.into();
 
-            let vector = if req.vblank() && enabled.vblank() {
-                // Handle VBlank Interrupt
-                req.set_vblank(false);
+                let rst_vector = if irq.vblank() && enable.vblank() {
+                    // Handle VBlank Interrupt
+                    irq.set_vblank(false);
 
-                // INT 40h
-                Some(0x40)
-            } else if req.lcd_stat() && enabled.lcd_stat() {
-                // Handle LCD STAT Interrupt
-                req.set_lcd_stat(false);
+                    // INT 40h
+                    Some(0x40)
+                } else if irq.lcd_stat() && enable.lcd_stat() {
+                    // Handle LCD STAT Interrupt
+                    irq.set_lcd_stat(false);
 
-                // INT 48h
-                Some(0x48)
-            } else if req.timer() && enabled.timer() {
-                // Handle Timer Interrupt
-                req.set_timer(false);
+                    // INT 48h
+                    Some(0x48)
+                } else if irq.timer() && enable.timer() {
+                    // Handle Timer Interrupt
+                    irq.set_timer(false);
 
-                // INT 50h
-                Some(0x50)
-            } else if req.serial() && enabled.serial() {
-                // Handle Serial Interrupt
-                req.set_serial(false);
+                    // INT 50h
+                    Some(0x50)
+                } else if irq.serial() && enable.serial() {
+                    // Handle Serial Interrupt
+                    irq.set_serial(false);
 
-                // INT 58h
-                Some(0x58)
-            } else if req.joypad() && enabled.joypad() {
-                // Handle Joypad Interrupt
-                req.set_joypad(false);
+                    // INT 58h
+                    Some(0x58)
+                } else if irq.joypad() && enable.joypad() {
+                    // Handle Joypad Interrupt
+                    irq.set_joypad(false);
 
-                // INT 60h
-                Some(0x60)
-            } else {
-                None
-            };
+                    // INT 60h
+                    Some(0x60)
+                } else {
+                    None
+                };
 
-            let _ = match vector {
-                Some(address) => {
-                    //  Write the Changes to 0xFF0F and 0xFFFF registers
-                    self.write_byte(0xFF0F, req.into());
+                match rst_vector {
+                    Some(vector) => {
+                        //  Write the Changes to 0xFF0F and 0xFFFF registers
+                        self.write_byte(0xFF0F, irq.into());
 
-                    // Disable all future interrupts
-                    self.set_ime(ImeState::Disabled);
-                    Instruction::reset(self, address)
+                        // Disable all future interrupts
+                        self.set_ime(ImeState::Disabled);
+                        Some(Instruction::reset(self, vector))
+                    }
+                    None => None,
                 }
-                None => Cycle::new(0), // NO Interrupts were enabled and / or requested
-            };
+            }
+            _ => None,
         }
     }
 }
@@ -512,7 +514,7 @@ impl From<u8> for Flags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum HaltState {
+pub(crate) enum HaltKind {
     ImeEnabled,
     NonePending,
     SomePending,

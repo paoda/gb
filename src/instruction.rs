@@ -9,7 +9,7 @@ use self::table::{
 };
 use self::table::{Group1RegisterPair, Group2RegisterPair, Group3RegisterPair, Register};
 use crate::bus::{Bus, BusIo};
-use crate::cpu::{Cpu, Flags, HaltState, ImeState, Register as CpuRegister, RegisterPair};
+use crate::cpu::{Cpu, Flags, HaltKind, ImeState, Register as CpuRegister, RegisterPair};
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy)]
@@ -588,14 +588,14 @@ impl Instruction {
             }
             Instruction::HALT => {
                 // HALT | Enter CPU low power consumption mode until interrupt occurs
-                use HaltState::*;
+                use HaltKind::*;
 
-                let halt_state = match *cpu.ime() {
+                let kind = match *cpu.ime() {
                     ImeState::Enabled => ImeEnabled,
                     _ if cpu.int_request() & cpu.int_enable() != 0 => SomePending,
                     _ => NonePending,
                 };
-                cpu.halt(halt_state);
+                cpu.halt(kind);
                 Cycle::new(4)
             }
             Instruction::ADC(source) => match source {
