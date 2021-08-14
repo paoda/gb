@@ -118,7 +118,7 @@ impl Cpu {
                 let opcode = self.fetch();
                 let instr = self.decode(opcode);
                 let elapsed = self.execute(instr);
-                self.check_ime();
+                self.handle_ei();
                 elapsed
             }
         };
@@ -159,18 +159,11 @@ impl Cpu {
         &mut self.bus.joypad
     }
 
-    fn check_ime(&mut self) {
+    fn handle_ei(&mut self) {
         match self.ime {
-            ImeState::Pending => {
-                // This is within the context of the EI instruction, we need to not update EI until the end of the
-                // next executed Instruction
-                self.ime = ImeState::PendingEnd;
-            }
-            ImeState::PendingEnd => {
-                // The Instruction after EI has now been executed, so we want to enable the IME flag here
-                self.ime = ImeState::Enabled;
-            }
-            ImeState::Disabled | ImeState::Enabled => {} // Do Nothing
+            ImeState::EiExecuted => self.ime = ImeState::Pending,
+            ImeState::Pending => self.ime = ImeState::Enabled,
+            ImeState::Disabled | ImeState::Enabled => {}
         }
     }
 
@@ -514,8 +507,8 @@ pub(crate) enum HaltState {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ImeState {
     Disabled,
+    EiExecuted,
     Pending,
-    PendingEnd,
     Enabled,
 }
 

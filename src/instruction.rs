@@ -971,7 +971,7 @@ impl Instruction {
             }
             Instruction::EI => {
                 // EI | Enable IME after the next instruction
-                cpu.set_ime(ImeState::Pending);
+                cpu.set_ime(ImeState::EiExecuted);
                 Cycle::new(4)
             }
             Instruction::CALL(cond) => {
