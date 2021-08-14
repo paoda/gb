@@ -122,7 +122,10 @@ fn main() -> Result<()> {
 
 #[cfg(not(windows))]
 fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
-    let size = LogicalSize::new((GB_WIDTH as f64) * SCALE, (GB_HEIGHT as f64) * SCALE);
+    let size = LogicalSize::new(
+        (GB_WIDTH as f64) * WINDOW_SCALE,
+        (GB_HEIGHT as f64) * WINDOW_SCALE,
+    );
     Ok(WindowBuilder::new()
         .with_title(title)
         .with_inner_size(size)
