@@ -3,7 +3,7 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 
 pub(crate) const SAMPLE_RATE: u32 = 48000; // Hz
 const CHANNEL_COUNT: usize = 2;
-const BUFFER_CAPACITY: usize = 512 * CHANNEL_COUNT; // # of samples * the # of channels
+const BUFFER_CAPACITY: usize = 2048 * CHANNEL_COUNT; // # of samples * the # of channels
 
 pub struct AudioSPSC<T> {
     inner: RingBuffer<T>,
