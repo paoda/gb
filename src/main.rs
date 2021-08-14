@@ -75,7 +75,7 @@ fn main() -> Result<()> {
     });
 
     let mut start = Instant::now();
-    let frame_time = Duration::from_secs_f64(1.0 / 60.0); // 60 Hz on Host
+    let frame_time = Duration::from_secs_f64(1.0 / 59.73); // 59.73 Hz on Host
     let mut cycle_count: Cycle = Default::default();
 
     event_loop.run(move |event, _, control_flow| {
