@@ -72,14 +72,20 @@ impl Bus {
     }
 
     pub(crate) fn clock(&mut self) {
-        self.ppu.clock();
-        self.timer.clock();
-        self.apu.clock(self.timer.divider);
-        self.clock_dma();
+        self.tick(4);
     }
 
-    fn clock_dma(&mut self) {
-        if let Some((src_addr, dest_addr)) = self.ppu.dma.clock() {
+    fn tick(&mut self, limit: u8) {
+        for _ in 0..limit {
+            self.timer.tick();
+            self.ppu.tick();
+            self.apu.tick(self.timer.divider);
+            self.dma_tick()
+        }
+    }
+
+    fn dma_tick(&mut self) {
+        if let Some((src_addr, dest_addr)) = self.ppu.dma.tick() {
             let byte = self.oam_read_byte(src_addr);
             self.oam_write_byte(dest_addr, byte);
         }
@@ -217,7 +223,7 @@ impl BusIo for Bus {
                     0x01 => self.serial.next,
                     0x02 => self.serial.ctrl.into(),
                     0x04 => (self.timer.divider >> 8) as u8,
-                    0x05 => self.timer.counter,
+                    0x05 => self.timer.tima(),
                     0x06 => self.timer.modulo,
                     0x07 => self.timer.ctrl.into(),
                     0x0F => self.interrupt_flag().into(),
@@ -317,7 +323,7 @@ impl BusIo for Bus {
                     0x01 => self.serial.next = byte,
                     0x02 => self.serial.ctrl = byte.into(),
                     0x04 => self.timer.divider = 0x0000,
-                    0x05 => self.timer.counter = byte,
+                    0x05 => self.timer.set_tima(byte),
                     0x06 => self.timer.modulo = byte,
                     0x07 => self.timer.ctrl = byte.into(),
                     0x0F => self.set_interrupt_flag(byte),

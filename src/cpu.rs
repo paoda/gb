@@ -65,10 +65,6 @@ impl Cpu {
         self.halted.as_ref()
     }
 
-    fn inc_pc(&mut self) {
-        self.reg.pc += 1;
-    }
-
     pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
         self.bus.load_cartridge(path)
     }
@@ -79,25 +75,16 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn fetch(&self) -> u8 {
-        self.bus.read_byte(self.reg.pc)
-    }
-
-    pub(crate) fn imm_byte(&mut self) -> u8 {
-        let byte = self.bus.read_byte(self.reg.pc);
+    fn fetch(&mut self) -> u8 {
+        let byte = self.read_byte(self.reg.pc);
+        self.bus.clock();
         self.reg.pc += 1;
         byte
     }
 
-    pub(crate) fn imm_word(&mut self) -> u16 {
-        let word = self.bus.read_word(self.reg.pc);
-        self.reg.pc += 2;
-        word
-    }
-
     pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
         if opcode == 0xCB {
-            Instruction::decode(self.imm_byte(), true)
+            Instruction::decode(self.fetch(), true)
         } else {
             Instruction::decode(opcode, false)
         }
@@ -108,44 +95,44 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> Cycle {
-        // Log instructions
-        // if !self.bus.boot_mapped() {
+        // // Log instructions
+        // if self.reg.pc > 0xFF {
         //     let out = std::io::stdout();
-        //     let _ = self._log_state(out.lock());
+        //     let _ = self._print_debug(out.lock());
         // }
 
-        // FIXME: The Halt instruction takes less cycles than it should in Blargg's 2nd cpu_instrs test
-        let cycles = match self.halted() {
+        // FIXME: The Halt instruction takes more cycles than it should in Blargg's 2nd cpu_instrs test
+        let elapsed = match self.halted() {
             Some(state) => {
                 use HaltState::*;
 
                 match state {
-                    ImeEnabled | NonePending => Cycle::new(4),
+                    ImeEnabled | NonePending => {
+                        self.bus.clock();
+                        Cycle::new(4)
+                    }
                     SomePending => todo!("Implement HALT bug"),
                 }
             }
             None => {
                 let opcode = self.fetch();
-                self.inc_pc();
-
                 let instr = self.decode(opcode);
-                let cycles = self.execute(instr);
-
+                let elapsed = self.execute(instr);
                 self.check_ime();
-
-                cycles
+                elapsed
             }
         };
 
-        let pending: u32 = cycles.into();
-        for _ in 0..pending {
-            self.bus.clock();
+        // For use in Blargg's Test ROMs
+        if self.read_byte(0xFF02) == 0x81 {
+            let c = self.read_byte(0xFF01) as char;
+            self.write_byte(0xFF02, 0x00);
+            eprint!("{}", c);
         }
 
-        // TODO: This is in the wrong place
+        // TODO: Is this in the wrong place?
         self.handle_interrupts();
-
-        cycles
+        elapsed
     }
 }
 
@@ -156,12 +143,6 @@ impl BusIo for Cpu {
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
         self.bus.write_byte(addr, byte);
-    }
-}
-
-impl Cpu {
-    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
-        self.bus.write_word(addr, word)
     }
 }
 
@@ -193,9 +174,17 @@ impl Cpu {
         }
     }
 
+    pub(crate) fn int_request(&self) -> u8 {
+        self.read_byte(0xFF0F)
+    }
+
+    pub(crate) fn int_enable(&self) -> u8 {
+        self.read_byte(0xFFFF)
+    }
+
     fn handle_interrupts(&mut self) {
-        let req = self.read_byte(0xFF0F);
-        let enabled = self.read_byte(0xFFFF);
+        let req = self.int_request();
+        let enabled = self.int_enable();
 
         if self.halted.is_some() {
             // When we're here either a HALT with IME set or
@@ -363,10 +352,9 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn _debug_log(&self, mut w: impl std::io::Write, instr: &Instruction) -> std::io::Result<()> {
-        let pc = self.reg.pc - 1;
+    fn _print_debug(&self, mut w: impl std::io::Write) -> std::io::Result<()> {
         write!(w, "A: {:02X} ", self.reg.a)?;
-        write!(w, "F: {:04b} ", u8::from(self.flags) >> 4)?;
+        write!(w, "F: {:02X} ", u8::from(self.flags))?;
         write!(w, "B: {:02X} ", self.reg.b)?;
         write!(w, "C: {:02X} ", self.reg.c)?;
         write!(w, "D: {:02X} ", self.reg.d)?;
@@ -374,31 +362,40 @@ impl Cpu {
         write!(w, "H: {:02X} ", self.reg.h)?;
         write!(w, "L: {:02X} ", self.reg.l)?;
         write!(w, "SP: {:04X} ", self.reg.sp)?;
-        write!(w, "PC: 00:{:04X} ", pc)?;
-        write!(w, "({:02X} ", self.read_byte(pc))?;
-        write!(w, "{:02X} ", self.read_byte(pc + 1))?;
-        write!(w, "{:02X} ", self.read_byte(pc + 2))?;
-        write!(w, "{:02X}) ", self.read_byte(pc + 3))?;
-        writeln!(w, "| {:?}", instr)?;
+        write!(w, "PC: 00:{:04X} ", self.reg.pc)?;
+        write!(w, "({:02X} ", self.read_byte(self.reg.pc))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
+        write!(w, "{:02X})", self.read_byte(self.reg.pc + 3))?;
+        writeln!(w, "| {:?}", self._dbg_instr())?;
         w.flush()
     }
 
-    fn _log_state(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
-        write!(writer, "A: {:02X} ", self.reg.a)?;
-        write!(writer, "F: {:02X} ", u8::from(self.flags))?;
-        write!(writer, "B: {:02X} ", self.reg.b)?;
-        write!(writer, "C: {:02X} ", self.reg.c)?;
-        write!(writer, "D: {:02X} ", self.reg.d)?;
-        write!(writer, "E: {:02X} ", self.reg.e)?;
-        write!(writer, "H: {:02X} ", self.reg.h)?;
-        write!(writer, "L: {:02X} ", self.reg.l)?;
-        write!(writer, "SP: {:04X} ", self.reg.sp)?;
-        write!(writer, "PC: 00:{:04X} ", self.reg.pc)?;
-        write!(writer, "({:02X} ", self.read_byte(self.reg.pc))?;
-        write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
-        write!(writer, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
-        writeln!(writer, "{:02X})", self.read_byte(self.reg.pc + 3))?;
-        writer.flush()
+    fn _print_logs(&self, mut w: impl std::io::Write) -> std::io::Result<()> {
+        write!(w, "A: {:02X} ", self.reg.a)?;
+        write!(w, "F: {:02X} ", u8::from(self.flags))?;
+        write!(w, "B: {:02X} ", self.reg.b)?;
+        write!(w, "C: {:02X} ", self.reg.c)?;
+        write!(w, "D: {:02X} ", self.reg.d)?;
+        write!(w, "E: {:02X} ", self.reg.e)?;
+        write!(w, "H: {:02X} ", self.reg.h)?;
+        write!(w, "L: {:02X} ", self.reg.l)?;
+        write!(w, "SP: {:04X} ", self.reg.sp)?;
+        write!(w, "PC: 00:{:04X} ", self.reg.pc)?;
+        write!(w, "({:02X} ", self.read_byte(self.reg.pc))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 1))?;
+        write!(w, "{:02X} ", self.read_byte(self.reg.pc + 2))?;
+        writeln!(w, "{:02X})", self.read_byte(self.reg.pc + 3))?;
+        w.flush()
+    }
+
+    fn _dbg_instr(&self) -> Instruction {
+        let byte = self.read_byte(self.reg.pc);
+        if byte == 0xCB {
+            Instruction::decode(self.read_byte(self.reg.pc + 1), true)
+        } else {
+            Instruction::decode(byte, false)
+        }
     }
 }
 

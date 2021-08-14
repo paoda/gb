@@ -94,7 +94,7 @@ impl BusIo for Apu {
 }
 
 impl Apu {
-    pub(crate) fn clock(&mut self, div: u16) {
+    pub(crate) fn tick(&mut self, div: u16) {
         use FrameSequencerState::*;
         self.sample_counter += SAMPLE_INCREMENT;
 

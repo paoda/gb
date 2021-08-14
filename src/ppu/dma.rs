@@ -9,7 +9,7 @@ pub(crate) struct DirectMemoryAccess {
 }
 
 impl DirectMemoryAccess {
-    pub(crate) fn clock(&mut self) -> Option<(u16, u16)> {
+    pub(crate) fn tick(&mut self) -> Option<(u16, u16)> {
         match self.state {
             DmaState::Pending => {
                 self.cycle += 1;

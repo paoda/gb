@@ -70,7 +70,7 @@ impl BusIo for Ppu {
 }
 
 impl Ppu {
-    pub(crate) fn clock(&mut self) {
+    pub(crate) fn tick(&mut self) {
         self.cycle += 1;
 
         if !self.ctrl.lcd_enabled() {

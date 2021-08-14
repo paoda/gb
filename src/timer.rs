@@ -5,18 +5,34 @@ pub(crate) struct Timer {
     /// 0xFF07 | TAC - Timer Control
     pub(crate) ctrl: TimerControl,
     /// 0xFF05 | TIMA - Timer Counter
-    pub(crate) counter: u8,
+    counter: u8,
     /// 0xFF06 | TMA - Timer Modulo
     pub(crate) modulo: u8,
     /// 0xFF04 | DIV - Divider Register
     pub(crate) divider: u16,
-    prev_and_result: Option<u8>,
+
+    and_result: Option<u8>,
     interrupt: bool,
+    state: State,
 }
 
 impl Timer {
-    pub(crate) fn clock(&mut self) {
+    pub(crate) fn tick(&mut self) {
+        use State::*;
         use TimerSpeed::*;
+
+        if let TIMAOverflow(step) | AbortedTIMAOverflow(step) = self.state {
+            if step < 4 {
+                self.state = TIMAOverflow(step + 1);
+                return;
+            }
+
+            if self.state == TIMAOverflow(step) {
+                self.counter = self.modulo;
+                self.interrupt = true;
+            }
+            self.state = Normal;
+        }
 
         self.divider = self.divider.wrapping_add(1);
 
@@ -29,27 +45,36 @@ impl Timer {
         };
 
         let bit = (self.divider >> bit) as u8 & 0x01;
-        let timer_enable = self.ctrl.enabled() as u8;
-        let and_result = bit & timer_enable;
+        let new_result = bit & self.ctrl.enabled() as u8;
 
-        if let Some(0x01) = self.prev_and_result {
-            if and_result == 0x00 {
+        if let Some(0x01) = self.and_result {
+            if new_result == 0x00 {
                 // Falling Edge, increase TIMA Register
-                self.increment_tima();
+                self.inc_counter();
             }
         }
 
-        self.prev_and_result = Some(and_result);
+        self.and_result = Some(new_result);
     }
 
-    fn increment_tima(&mut self) {
-        let (result, did_overflow) = self.counter.overflowing_add(1);
+    /// 0xFF05 | TIMA - Timer Counter
+    pub(crate) fn tima(&self) -> u8 {
+        self.counter
+    }
 
-        self.counter = if did_overflow {
-            self.interrupt = true;
-            self.modulo
-        } else {
-            result
+    /// 0xFF05 | TIMA - Timer Counter
+    pub(crate) fn set_tima(&mut self, byte: u8) {
+        use State::*;
+
+        match self.state {
+            Normal => self.counter = byte,
+            TIMAOverflow(step) => {
+                if step < 4 {
+                    self.counter = byte;
+                    self.state = AbortedTIMAOverflow(step);
+                }
+            }
+            AbortedTIMAOverflow(_) => self.counter = byte,
         }
     }
 
@@ -59,6 +84,15 @@ impl Timer {
 
     pub(crate) fn set_interrupt(&mut self, value: bool) {
         self.interrupt = value;
+    }
+
+    fn inc_counter(&mut self) {
+        let (sum, did_overflow) = self.counter.overflowing_add(1);
+        self.counter = if did_overflow { 0 } else { sum };
+
+        if did_overflow {
+            self.state = State::TIMAOverflow(0);
+        }
     }
 }
 
@@ -70,7 +104,8 @@ impl Default for Timer {
             modulo: 0,
             divider: 0,
             interrupt: false,
-            prev_and_result: None,
+            and_result: None,
+            state: State::Normal,
         }
     }
 }
@@ -131,4 +166,11 @@ impl From<TimerControl> for u8 {
     fn from(ctrl: TimerControl) -> Self {
         ctrl.0
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum State {
+    TIMAOverflow(u8),
+    AbortedTIMAOverflow(u8),
+    Normal,
 }
