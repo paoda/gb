@@ -43,6 +43,7 @@ impl<T> SampleProducer<T> {
         self.inner.push(value)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn available(&self) -> bool {
         self.inner.slots() > 2
     }

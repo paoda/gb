@@ -375,17 +375,6 @@ impl BusIo for Bus {
 }
 
 impl Bus {
-    pub(crate) fn read_word(&self, addr: u16) -> u16 {
-        (self.read_byte(addr + 1) as u16) << 8 | self.read_byte(addr) as u16
-    }
-
-    pub(crate) fn write_word(&mut self, addr: u16, word: u16) {
-        self.write_byte(addr + 1, (word >> 8) as u8);
-        self.write_byte(addr, (word & 0x00FF) as u8);
-    }
-}
-
-impl Bus {
     fn interrupt_flag(&self) -> InterruptFlag {
         // Read the current interrupt information from the PPU
         let vblank = self.ppu.int.vblank();
