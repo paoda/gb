@@ -381,12 +381,12 @@ impl Ppu {
         }
 
         if self.fifo.is_enabled() {
-            if self.x_pos == 0 && !self.fifo.back.is_empty() && self.scanline_start {
+            if self.x_pos == 0 && self.scanline_start {
                 self.to_discard = self.pos.scroll_x % 8;
                 self.scanline_start = false;
             }
 
-            if self.to_discard > 0 {
+            if self.to_discard > 0 && !self.fifo.back.is_empty() {
                 let _ = self.fifo.back.pop_front();
                 self.to_discard -= 1;
 
