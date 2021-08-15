@@ -231,20 +231,23 @@ impl Ppu {
     fn draw(&mut self, _cycle: u32) {
         use FetcherState::*;
 
-        let iter = &mut self.obj_buffer.iter();
+        let mut iter = self.obj_buffer.iter_mut();
+        let default = &mut None;
 
         let obj_attr = loop {
-            match iter.flatten().next() {
-                Some(attr) => {
-                    if attr.x <= (self.x_pos + 8) {
-                        self.fetch.back.reset();
-                        self.fetch.back.pause();
-                        self.fifo.pause();
+            match iter.next() {
+                Some(attr_opt) => {
+                    if let Some(attr) = attr_opt {
+                        if attr.x <= (self.x_pos + 8) {
+                            self.fetch.back.reset();
+                            self.fetch.back.pause();
+                            self.fifo.pause();
 
-                        break Some(*attr);
+                            break attr_opt;
+                        }
                     }
                 }
-                None => break None,
+                None => break default,
             }
         };
 
@@ -289,13 +292,12 @@ impl Ppu {
                     let tbpp = Pixels::from_bytes(high, low);
 
                     let palette_kind = attr.flags.palette();
-
-                    let end = Pixels::PIXEL_COUNT - self.fifo.obj.len();
-                    let start = Pixels::PIXEL_COUNT - end;
-
                     let x_flip = attr.flags.x_flip();
 
-                    for i in start..Pixels::PIXEL_COUNT {
+                    let pixel_count = (attr.x - self.x_pos) as usize;
+                    let start = self.fifo.obj.len();
+
+                    for i in start..pixel_count {
                         let x = if x_flip { 7 - i } else { i };
 
                         let priority = attr.flags.priority();
@@ -312,7 +314,7 @@ impl Ppu {
 
                     self.fetch.back.resume();
                     self.fifo.resume();
-                    self.obj_buffer.remove(&attr);
+                    let _ = std::mem::take(obj_attr);
 
                     self.fetch.obj.next(ToFifoTwo);
                 }
@@ -608,34 +610,8 @@ impl<'a> From<&'a [u8; 4]> for ObjectAttribute {
 
 #[derive(Debug)]
 struct ObjectBuffer {
-    buf: [Option<ObjectAttribute>; OBJECT_LIMIT],
+    inner: [Option<ObjectAttribute>; OBJECT_LIMIT],
     len: usize,
-}
-
-impl ObjectBuffer {
-    fn iter(&self) -> std::slice::Iter<'_, Option<ObjectAttribute>> {
-        self.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a ObjectBuffer {
-    type Item = &'a Option<ObjectAttribute>;
-
-    type IntoIter = std::slice::Iter<'a, Option<ObjectAttribute>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.buf.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut ObjectBuffer {
-    type Item = &'a Option<ObjectAttribute>;
-
-    type IntoIter = std::slice::Iter<'a, Option<ObjectAttribute>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.buf.iter()
-    }
 }
 
 impl ObjectBuffer {
@@ -644,31 +620,24 @@ impl ObjectBuffer {
     }
 
     fn clear(&mut self) {
-        self.buf = [Default::default(); 10];
+        self.inner = [Default::default(); 10];
         self.len = 0;
     }
 
     fn add(&mut self, attr: ObjectAttribute) {
-        self.buf[self.len] = Some(attr);
+        self.inner[self.len] = Some(attr);
         self.len += 1;
     }
 
-    fn remove(&mut self, attr: &ObjectAttribute) {
-        let maybe_index = self.buf.iter().position(|maybe_attr| match maybe_attr {
-            Some(other_attr) => attr == other_attr,
-            None => false,
-        });
-
-        if let Some(i) = maybe_index {
-            self.buf[i] = None;
-        }
+    fn iter_mut(&mut self) -> std::slice::IterMut<'_, Option<ObjectAttribute>> {
+        self.inner.iter_mut()
     }
 }
 
 impl Default for ObjectBuffer {
     fn default() -> Self {
         Self {
-            buf: [Default::default(); OBJECT_LIMIT],
+            inner: [Default::default(); OBJECT_LIMIT],
             len: Default::default(),
         }
     }
