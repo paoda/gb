@@ -5,7 +5,7 @@ use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
 use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
-use types::{ChannelControl, FrameSequencerState, SoundOutput};
+use types::{ChannelControl, SoundOutput};
 
 pub mod gen;
 mod types;
@@ -26,8 +26,7 @@ pub struct Apu {
     ch4: Channel4,
 
     // Frame Sequencer
-    frame_seq_state: FrameSequencerState,
-    div_prev: Option<u8>,
+    div_prev: Option<u16>,
 
     prod: Option<SampleProducer<f32>>,
     sample_counter: u64,
@@ -95,40 +94,29 @@ impl BusIo for Apu {
 
 impl Apu {
     pub(crate) fn tick(&mut self, div: u16) {
-        use FrameSequencerState::*;
         self.sample_counter += SAMPLE_INCREMENT;
 
-        // the 5th bit of the high byte
-        let bit_5 = (div >> 13 & 0x01) as u8;
-
-        if let Some(0x01) = self.div_prev {
-            if bit_5 == 0x00 {
-                // Falling Edge, step the Frame Sequencer
-                self.frame_seq_state.step();
-
-                match self.frame_seq_state {
-                    Step0Length => self.handle_length(),
-                    Step2LengthAndSweep => {
-                        self.handle_length();
-                        self.handle_sweep();
-                    }
-                    Step4Length => self.handle_length(),
-                    Step6LengthAndSweep => {
-                        self.handle_length();
-                        self.handle_sweep();
-                    }
-                    Step7VolumeEnvelope => self.handle_volume(),
-                    Step1Nothing | Step3Nothing | Step5Nothing => {}
-                };
-            }
+        // Length Control (256Hz)
+        if self.falling_edge(13, div) {
+            self.handle_length();
         }
+
+        // Sweep (128Hz)
+        if self.falling_edge(14, div) {
+            self.handle_sweep();
+        }
+
+        // Volume Envelope (64Hz)
+        if self.falling_edge(15, div) {
+            self.handle_volume();
+        }
+
+        self.div_prev = Some(div);
 
         self.ch1.clock();
         self.ch2.clock();
         self.ch3.clock();
         self.ch4.clock();
-
-        self.div_prev = Some(bit_5);
 
         if self.sample_counter >= SM83_CLOCK_SPEED {
             self.sample_counter %= SM83_CLOCK_SPEED;
@@ -176,7 +164,8 @@ impl Apu {
 
         if self.ctrl.enabled {
             // Frame Sequencer reset to Step 0
-            self.frame_seq_state = Default::default();
+            // TODO: With the current implementation of the frame sequencer,
+            // what does this even mean?
 
             // Square Duty units are reset to first step
             self.ch1.duty_pos = 0;
@@ -337,6 +326,13 @@ impl Apu {
             &mut self.ch4.period_timer,
             &mut self.ch4.current_volume,
         );
+    }
+
+    fn falling_edge(&self, bit: u8, div: u16) -> bool {
+        match self.div_prev {
+            Some(p) => (p >> bit & 0x01) == 0x01 && (div >> bit & 0x01) == 0x00,
+            None => false,
+        }
     }
 }
 

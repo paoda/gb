@@ -427,41 +427,6 @@ pub(crate) mod common {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum FrameSequencerState {
-    Step0Length,
-    Step1Nothing,
-    Step2LengthAndSweep,
-    Step3Nothing,
-    Step4Length,
-    Step5Nothing,
-    Step6LengthAndSweep,
-    Step7VolumeEnvelope,
-}
-
-impl FrameSequencerState {
-    pub(crate) fn step(&mut self) {
-        use FrameSequencerState::*;
-
-        *self = match *self {
-            Step0Length => Step1Nothing,
-            Step1Nothing => Step2LengthAndSweep,
-            Step2LengthAndSweep => Step3Nothing,
-            Step3Nothing => Step4Length,
-            Step4Length => Step5Nothing,
-            Step5Nothing => Step6LengthAndSweep,
-            Step6LengthAndSweep => Step7VolumeEnvelope,
-            Step7VolumeEnvelope => Step0Length,
-        };
-    }
-}
-
-impl Default for FrameSequencerState {
-    fn default() -> Self {
-        Self::Step0Length
-    }
-}
-
 bitfield! {
     pub struct SoundOutput(u8);
     impl Debug;
