@@ -252,10 +252,10 @@ impl Ppu {
             match self.fetch.obj.state {
                 TileNumber => {
                     self.fetch.obj.tile.with_id(attr.tile_index);
-                    self.fetch.obj.next(ToLowByteSleep);
+                    self.fetch.obj.next(SleepOne);
                 }
-                ToLowByteSleep => self.fetch.obj.next(TileLowByte),
-                TileLowByte => {
+                SleepOne => self.fetch.obj.next(TileLow),
+                TileLow => {
                     let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
@@ -263,10 +263,10 @@ impl Ppu {
                     let byte = self.read_byte(addr);
                     self.fetch.obj.tile.with_low_byte(byte);
 
-                    self.fetch.obj.next(ToHighByteSleep);
+                    self.fetch.obj.next(SleepTwo);
                 }
-                ToHighByteSleep => self.fetch.obj.next(TileHighByte),
-                TileHighByte => {
+                SleepTwo => self.fetch.obj.next(TileHigh),
+                TileHigh => {
                     let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
@@ -274,10 +274,10 @@ impl Ppu {
                     let byte = self.read_byte(addr + 1);
                     self.fetch.obj.tile.with_high_byte(byte);
 
-                    self.fetch.obj.next(ToFifoSleep);
+                    self.fetch.obj.next(SleepThree);
                 }
-                ToFifoSleep => self.fetch.obj.next(SendToFifoOne),
-                SendToFifoOne => {
+                SleepThree => self.fetch.obj.next(ToFifoOne),
+                ToFifoOne => {
                     // Load into Fifo
                     let (high, low) = self
                         .fetch
@@ -314,9 +314,9 @@ impl Ppu {
                     self.fifo.resume();
                     self.obj_buffer.remove(&attr);
 
-                    self.fetch.obj.next(SendToFifoTwo);
+                    self.fetch.obj.next(ToFifoTwo);
                 }
-                SendToFifoTwo => self.fetch.obj.reset(),
+                ToFifoTwo => self.fetch.obj.reset(),
             }
         }
 
@@ -346,31 +346,31 @@ impl Ppu {
                     self.fetch.back.tile.with_id(id);
 
                     // Move on to the Next state in 2 T-cycles
-                    self.fetch.back.next(ToLowByteSleep);
+                    self.fetch.back.next(SleepOne);
                 }
-                ToLowByteSleep => self.fetch.back.next(TileLowByte),
-                TileLowByte => {
+                SleepOne => self.fetch.back.next(TileLow),
+                TileLow => {
                     let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let low = self.read_byte(addr);
                     self.fetch.back.tile.with_low_byte(low);
 
-                    self.fetch.back.next(ToHighByteSleep);
+                    self.fetch.back.next(SleepTwo);
                 }
-                ToHighByteSleep => self.fetch.back.next(TileHighByte),
-                TileHighByte => {
+                SleepTwo => self.fetch.back.next(TileHigh),
+                TileHigh => {
                     let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let high = self.read_byte(addr + 1);
                     self.fetch.back.tile.with_high_byte(high);
 
-                    self.fetch.back.next(ToFifoSleep);
+                    self.fetch.back.next(SleepThree);
                 }
-                ToFifoSleep => self.fetch.back.next(SendToFifoOne),
-                SendToFifoOne => {
-                    self.fetch.back.next(SendToFifoTwo);
+                SleepThree => self.fetch.back.next(ToFifoOne),
+                ToFifoOne => {
+                    self.fetch.back.next(ToFifoTwo);
                 }
-                SendToFifoTwo => {
+                ToFifoTwo => {
                     if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo) {
                         self.fetch.x_pos += 1;
                         self.fetch.back.next(TileNumber);
@@ -903,13 +903,13 @@ impl WindowLineCounter {
 #[derive(Debug, Clone, Copy)]
 enum FetcherState {
     TileNumber,
-    ToLowByteSleep,
-    TileLowByte,
-    ToHighByteSleep,
-    TileHighByte,
-    ToFifoSleep,
-    SendToFifoOne,
-    SendToFifoTwo,
+    SleepOne,
+    TileLow,
+    SleepTwo,
+    TileHigh,
+    SleepThree,
+    ToFifoOne,
+    ToFifoTwo,
 }
 
 impl Default for FetcherState {
