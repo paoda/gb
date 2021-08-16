@@ -590,12 +590,12 @@ impl Instruction {
                 // HALT | Enter CPU low power consumption mode until interrupt occurs
                 use HaltKind::*;
 
-                let kind = match *cpu.ime() {
+                let kind = match cpu.ime() {
                     ImeState::Enabled => ImeEnabled,
                     _ if cpu.int_request() & cpu.int_enable() != 0 => SomePending,
                     _ => NonePending,
                 };
-                cpu.halt(kind);
+                cpu.halt_cpu(kind);
                 Cycle::new(4)
             }
             Instruction::ADC(source) => match source {

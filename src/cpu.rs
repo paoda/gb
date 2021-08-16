@@ -14,8 +14,6 @@ pub struct Cpu {
     reg: Registers,
     flags: Flags,
     ime: ImeState,
-    // TODO: Merge halted and state properties
-    halted: Option<HaltKind>,
     state: State,
 }
 
@@ -45,24 +43,34 @@ impl Cpu {
         })
     }
 
-    pub(crate) fn ime(&self) -> &ImeState {
-        &self.ime
+    pub(crate) fn ime(&self) -> ImeState {
+        self.ime
     }
 
     pub(crate) fn set_ime(&mut self, state: ImeState) {
         self.ime = state;
     }
 
-    pub(crate) fn halt(&mut self, state: HaltKind) {
-        self.halted = Some(state);
+    pub(crate) fn halt_cpu(&mut self, kind: HaltKind) {
+        self.state = State::Halt(kind);
     }
 
-    fn resume(&mut self) {
-        self.halted = None;
+    fn resume_execution(&mut self) {
+        self.state = State::Execute;
     }
 
-    pub(crate) fn halted(&self) -> Option<HaltKind> {
-        self.halted
+    pub(crate) fn is_halted(&self) -> bool {
+        match self.state {
+            State::Halt(_) => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn halt_kind(&self) -> Option<HaltKind> {
+        match self.state {
+            State::Halt(kind) => Some(kind),
+            _ => None,
+        }
     }
 
     pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
@@ -119,7 +127,7 @@ impl Cpu {
             return elapsed;
         }
 
-        if let Some(kind) = self.halted() {
+        if let Some(kind) = self.halt_kind() {
             use HaltKind::*;
 
             self.bus.clock();
@@ -192,7 +200,7 @@ impl Cpu {
         let enable = self.int_enable();
 
         // TODO: Ensure that this behaviour is correct
-        if self.halted.is_some() {
+        if self.is_halted() {
             // When we're here either a HALT with IME set or
             // a HALT with IME not set and No pending Interrupts was called
 
@@ -201,7 +209,7 @@ impl Cpu {
                 // nothing actually needs to be added here. This is just documentation
                 // since it's a bit weird why nothing is being done
 
-                self.resume();
+                self.resume_execution();
             }
         }
 
@@ -264,7 +272,7 @@ impl Cpu {
 #[derive(Debug, Clone, Copy)]
 enum State {
     Execute,
-    // Halt,
+    Halt(HaltKind),
     // Stop,
 }
 
