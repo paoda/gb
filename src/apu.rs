@@ -164,8 +164,7 @@ impl Apu {
 
         if self.ctrl.enabled {
             // Frame Sequencer reset to Step 0
-            // TODO: With the current implementation of the frame sequencer,
-            // what does this even mean?
+            // TODO: With the current implementation of the frame sequencer, what does this even mean?
 
             // Square Duty units are reset to first step
             self.ch1.duty_pos = 0;
@@ -181,8 +180,6 @@ impl Apu {
     }
 
     fn reset(&mut self) {
-        // TODO: Clear readable sound registers
-
         self.ch1.sweep = Default::default();
         self.ch1.duty = Default::default();
         self.ch1.envelope = Default::default();
@@ -426,7 +423,6 @@ impl Channel1 {
         }
 
         if self.freq_timer == 0 {
-            // TODO: Why is this 2048?
             self.freq_timer = (2048 - self.frequency()) * 4;
             self.duty_pos = (self.duty_pos + 1) % 8;
         }
@@ -572,7 +568,6 @@ impl Channel2 {
         }
 
         if self.freq_timer == 0 {
-            // TODO: Why is this 2048?
             self.freq_timer = (2048 - self.frequency()) * 4;
             self.duty_pos = (self.duty_pos + 1) % 8;
         }

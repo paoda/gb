@@ -114,10 +114,7 @@ impl Cartridge {
     }
 
     fn find_mbc(memory: &[u8]) -> MBCKind {
-        let id = memory[MBC_TYPE_ADDRESS];
-
-        // TODO: Refactor this to match the other enums in this module
-        match id {
+        match memory[MBC_TYPE_ADDRESS] {
             0x00 => MBCKind::None,
             0x01 => MBCKind::MBC1,
             0x02 => MBCKind::MBC1,
@@ -125,7 +122,7 @@ impl Cartridge {
             0x19 => MBCKind::MBC5,
             0x13 => MBCKind::MBC3WithBattery,
             0x11 => MBCKind::MBC3,
-            _ => unimplemented!("id {:#04X} is an unsupported MBC", id),
+            id => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
 }

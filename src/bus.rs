@@ -240,7 +240,6 @@ impl BusIo for Bus {
                     0x49 => self.ppu.monochrome.obj_palette_1.into(),
                     0x4A => self.ppu.pos.window_y,
                     0x4B => self.ppu.pos.window_x,
-                    0x4D => 0xFF, // TODO: CGB Specific Register
                     _ => {
                         eprintln!("Read 0xFF from unused IO register {:#06X}.", addr);
                         0xFF
@@ -312,7 +311,7 @@ impl BusIo for Bus {
                     _ => {}
                 }
             }
-            0xFEA0..=0xFEFF => {} // TODO: As far as I know, writes to here do nothing.
+            0xFEA0..=0xFEFF => {} // FIXME: As far as I know, writes to here do nothing.
             0xFF00..=0xFF7F => {
                 // IO Registers
 

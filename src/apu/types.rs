@@ -178,7 +178,7 @@ pub(crate) mod ch4 {
         pub struct Frequency(u8);
         impl Debug;
         _initial, _: 7;
-        _length_disable, _: 6; // TODO: same as FrequencyHigh, figure out what this is
+        _length_disable, _: 6;
     }
 
     impl Frequency {
@@ -224,7 +224,7 @@ pub(crate) mod common {
         pub struct FrequencyHigh(u8);
         impl Debug;
         _initial, _: 7;
-        _length_disable, _: 6; // TODO: Figure out what the hell this is
+        _length_disable, _: 6;
         pub freq_bits, set_freq_bits: 2, 0;
     }
 
@@ -342,7 +342,7 @@ pub(crate) mod common {
         pub struct SoundDuty(u8);
         impl Debug;
         from into WavePattern, _wave_pattern, _: 7, 6;
-        _sound_length, _: 5, 0; // TODO: Getter only used if bit 6 in NR14 is set
+        _sound_length, _: 5, 0;
     }
 
     impl SoundDuty {

@@ -63,16 +63,16 @@ fn main() -> Result<()> {
     };
 
     // Initialize Audio
-    let spsc: AudioSPSC<f32> = Default::default();
-    let (prod, cons) = spsc.init();
-    let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
-    let sink = Sink::try_new(&stream_handle)?;
-    sink.append(cons);
-    game_boy.apu_mut().set_producer(prod);
+    // let spsc: AudioSPSC<f32> = Default::default();
+    // let (prod, cons) = spsc.init();
+    // let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
+    // let sink = Sink::try_new(&stream_handle)?;
+    // sink.append(cons);
+    // game_boy.apu_mut().set_producer(prod);
 
-    std::thread::spawn(move || {
-        sink.sleep_until_end();
-    });
+    // std::thread::spawn(move || {
+    //     sink.sleep_until_end();
+    // });
 
     let mut start = Instant::now();
     let frame_time = Duration::from_secs_f64(1.0 / 59.73); // 59.73 Hz on Host
