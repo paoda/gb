@@ -12,6 +12,7 @@ use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
 const WINDOW_SCALE: f64 = 2.0;
+const AUDIO_ENABLED: bool = true;
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())
@@ -63,16 +64,18 @@ fn main() -> Result<()> {
     };
 
     // Initialize Audio
-    let spsc: AudioSPSC<f32> = Default::default();
-    let (prod, cons) = spsc.init();
-    let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
-    let sink = Sink::try_new(&stream_handle)?;
-    sink.append(cons);
-    game_boy.apu_mut().attach_producer(prod);
+    if AUDIO_ENABLED {
+        let spsc: AudioSPSC<f32> = Default::default();
+        let (prod, cons) = spsc.init();
+        let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
+        let sink = Sink::try_new(&stream_handle)?;
+        sink.append(cons);
+        game_boy.apu_mut().attach_producer(prod);
 
-    std::thread::spawn(move || {
-        sink.sleep_until_end();
-    });
+        std::thread::spawn(move || {
+            sink.sleep_until_end();
+        });
+    }
 
     let mut start = Instant::now();
     let frame_time = Duration::from_secs_f64(1.0 / 59.73); // 59.73 Hz on Host
