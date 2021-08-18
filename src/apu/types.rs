@@ -531,13 +531,9 @@ pub(super) mod fs {
 
             self.step = (self.step + 1) % 8;
             self.state = match self.step {
-                0 => Length,
-                1 => Nothing,
-                2 => LengthAndSweep,
-                3 => Nothing,
-                4 => Length,
-                5 => Nothing,
-                6 => LengthAndSweep,
+                1 | 3 | 5 => Nothing,
+                0 | 4 => Length,
+                2 | 6 => LengthAndSweep,
                 7 => Envelope,
                 _ => unreachable!("Step {} is invalid for the Frame Sequencer", self.step),
             };

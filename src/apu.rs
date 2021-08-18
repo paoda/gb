@@ -101,8 +101,6 @@ impl Apu {
         if self.falling_edge(12, div) {
             use FrameSequencerState::*;
 
-            self.sequencer.next();
-
             match self.sequencer.state() {
                 Length => self.handle_length(),
                 LengthAndSweep => {
@@ -112,6 +110,8 @@ impl Apu {
                 Envelope => self.handle_envelope(),
                 Nothing => {}
             }
+
+            self.sequencer.next();
         }
 
         self.div_prev = Some(div);
