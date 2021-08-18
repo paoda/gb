@@ -73,7 +73,7 @@ pub(crate) mod ch1 {
     }
 }
 
-pub(crate) mod ch3 {
+pub(super) mod ch3 {
     #[derive(Debug, Clone, Copy)]
     pub(crate) enum Volume {
         Mute = 0,
@@ -102,7 +102,7 @@ pub(crate) mod ch3 {
     }
 }
 
-pub(crate) mod ch4 {
+pub(super) mod ch4 {
     use super::bitfield;
 
     bitfield! {
@@ -217,7 +217,7 @@ pub(crate) mod ch4 {
     }
 }
 
-pub(crate) mod common {
+pub(super) mod common {
     use super::bitfield;
 
     bitfield! {
@@ -506,5 +506,58 @@ impl From<u8> for ChannelControl {
 impl From<ChannelControl> for u8 {
     fn from(ctrl: ChannelControl) -> Self {
         ctrl.0
+    }
+}
+
+pub(super) mod fs {
+    #[derive(Debug)]
+    pub(crate) struct FrameSequencer {
+        step: u8,
+        state: FrameSequencerState,
+    }
+
+    impl Default for FrameSequencer {
+        fn default() -> Self {
+            Self {
+                step: Default::default(),
+                state: FrameSequencerState::Length,
+            }
+        }
+    }
+
+    impl FrameSequencer {
+        pub(crate) fn next(&mut self) {
+            use FrameSequencerState::*;
+
+            self.step = (self.step + 1) % 8;
+            self.state = match self.step {
+                0 => Length,
+                1 => Nothing,
+                2 => LengthAndSweep,
+                3 => Nothing,
+                4 => Length,
+                5 => Nothing,
+                6 => LengthAndSweep,
+                7 => Envelope,
+                _ => unreachable!("Step {} is invalid for the Frame Sequencer", self.step),
+            };
+        }
+
+        pub(crate) fn state(&self) -> FrameSequencerState {
+            self.state
+        }
+
+        pub(crate) fn reset(&mut self) {
+            self.step = Default::default();
+            self.state = FrameSequencerState::Length;
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub(crate) enum FrameSequencerState {
+        Length,
+        Nothing,
+        LengthAndSweep,
+        Envelope,
     }
 }

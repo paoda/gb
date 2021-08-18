@@ -5,6 +5,7 @@ use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
 use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
+use types::fs::{FrameSequencer, FrameSequencerState};
 use types::{ChannelControl, SoundOutput};
 
 pub mod gen;
@@ -25,7 +26,7 @@ pub struct Apu {
     /// Noise
     ch4: Channel4,
 
-    // Frame Sequencer
+    sequencer: FrameSequencer,
     div_prev: Option<u16>,
 
     prod: Option<SampleProducer<f32>>,
@@ -42,7 +43,7 @@ impl BusIo for Apu {
             0x16 => self.ch2.duty(),
             0x17 => self.ch2.envelope(),
             0x19 => self.ch2.freq_hi(),
-            0x1A => self.ch3.enabled(),
+            0x1A => self.ch3.dac_enabled(),
             0x1C => self.ch3.volume(),
             0x1E => self.ch3.freq_hi(),
             0x21 => self.ch4.envelope(),
@@ -70,7 +71,7 @@ impl BusIo for Apu {
             0x17 if self.ctrl.enabled => self.ch2.set_envelope(byte),
             0x18 if self.ctrl.enabled => self.ch2.set_freq_lo(byte),
             0x19 if self.ctrl.enabled => self.ch2.set_freq_hi(byte),
-            0x1A if self.ctrl.enabled => self.ch3.set_enabled(byte),
+            0x1A if self.ctrl.enabled => self.ch3.set_dac_enabled(byte),
             0x1B if self.ctrl.enabled => self.ch3.set_len(byte),
             0x1C if self.ctrl.enabled => self.ch3.set_volume(byte),
             0x1D if self.ctrl.enabled => self.ch3.set_freq_lo(byte),
@@ -96,19 +97,21 @@ impl Apu {
     pub(crate) fn tick(&mut self, div: u16) {
         self.sample_counter += SAMPLE_INCREMENT;
 
-        // Length Control (256Hz)
-        if self.falling_edge(13, div) {
-            self.handle_length();
-        }
+        // Frame Sequencer (512Hz)
+        if self.falling_edge(12, div) {
+            use FrameSequencerState::*;
 
-        // Sweep (128Hz)
-        if self.falling_edge(14, div) {
-            self.handle_sweep();
-        }
+            self.sequencer.next();
 
-        // Volume Envelope (64Hz)
-        if self.falling_edge(15, div) {
-            self.handle_volume();
+            match self.sequencer.state() {
+                Length => self.handle_length(),
+                LengthAndSweep => {
+                    self.handle_length();
+                    self.handle_sweep();
+                }
+                Envelope => self.handle_envelope(),
+                Nothing => {}
+            }
         }
 
         self.div_prev = Some(div);
@@ -164,13 +167,14 @@ impl Apu {
 
         if self.ctrl.enabled {
             // Frame Sequencer reset to Step 0
-            // TODO: With the current implementation of the frame sequencer, what does this even mean?
+            self.sequencer.reset();
 
             // Square Duty units are reset to first step
             self.ch1.duty_pos = 0;
             self.ch2.duty_pos = 0;
 
             // Wave Channel's sample buffer reset to 0
+            self.ch3.offset = 0;
         }
 
         if !self.ctrl.enabled {
@@ -191,7 +195,7 @@ impl Apu {
         self.ch2.freq_lo = Default::default();
         self.ch2.freq_hi = Default::default();
 
-        self.ch3.enabled = Default::default();
+        self.ch3.dac_enabled = Default::default();
         self.ch3.len = Default::default();
         self.ch3.volume = Default::default();
         self.ch3.freq_lo = Default::default();
@@ -205,9 +209,10 @@ impl Apu {
         self.ctrl.channel = Default::default();
         self.ctrl.output = Default::default();
 
-        // Disable the rest of the channels
+        // Disable the Channels
         self.ch1.enabled = Default::default();
         self.ch2.enabled = Default::default();
+        self.ch3.enabled = Default::default();
         self.ch4.enabled = Default::default();
     }
 
@@ -303,7 +308,7 @@ impl Apu {
         }
     }
 
-    fn handle_volume(&mut self) {
+    fn handle_envelope(&mut self) {
         // Channels 1, 2 and 4 have Volume Envelopes
 
         Self::clock_envelope(
@@ -505,7 +510,9 @@ impl Channel1 {
                 self.length_timer = 64;
             }
 
-            self.enabled = true;
+            if self.is_dac_enabled() {
+                self.enabled = true;
+            }
         }
     }
 
@@ -636,7 +643,9 @@ impl Channel2 {
                 self.length_timer = 64;
             }
 
-            self.enabled = true;
+            if self.is_dac_enabled() {
+                self.enabled = true;
+            }
         }
     }
 
@@ -652,7 +661,7 @@ impl Channel2 {
 #[derive(Debug, Default)]
 pub(crate) struct Channel3 {
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
-    enabled: bool,
+    dac_enabled: bool,
     /// 0xFF1B | NR31 - Sound Length
     len: u8,
     /// 0xFF1C | NR32 - Channel 3 Volume
@@ -669,6 +678,8 @@ pub(crate) struct Channel3 {
 
     freq_timer: u16,
     offset: u8,
+
+    enabled: bool,
 }
 
 impl BusIo for Channel3 {
@@ -693,13 +704,17 @@ impl Channel3 {
     const WAVE_RAM_START_ADDR: u16 = 0xFF30;
 
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
-    pub(crate) fn enabled(&self) -> u8 {
-        ((self.enabled as u8) << 7) | 0x7F
+    pub(crate) fn dac_enabled(&self) -> u8 {
+        ((self.dac_enabled as u8) << 7) | 0x7F
     }
 
     /// 0xFF1A | NR30 - Channel 3 Sound on/off
-    pub(crate) fn set_enabled(&mut self, byte: u8) {
-        self.enabled = (byte >> 7) & 0x01 == 0x01;
+    pub(crate) fn set_dac_enabled(&mut self, byte: u8) {
+        self.dac_enabled = (byte >> 7) & 0x01 == 0x01;
+
+        if !self.dac_enabled {
+            self.enabled = false;
+        }
     }
 
     /// 0xFF1B | NR31 - Sound Length
@@ -746,12 +761,14 @@ impl Channel3 {
                 self.length_timer = 256;
             }
 
-            self.enabled = true;
+            if self.dac_enabled {
+                self.enabled = true;
+            }
         }
     }
 
     fn amplitude(&self) -> f32 {
-        if self.enabled {
+        if self.dac_enabled && self.enabled {
             let input = self.read_sample(self.offset) >> self.volume.shift_count();
             (input as f32 / 7.5) - 1.0
         } else {
@@ -866,7 +883,9 @@ impl Channel4 {
             // LFSR behaviour during trigger event
             self.lf_shift = 0x7FFF;
 
-            self.enabled = true;
+            if self.is_dac_enabled() {
+                self.enabled = true;
+            }
         }
     }
 
