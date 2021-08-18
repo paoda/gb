@@ -509,8 +509,10 @@ impl Channel1 {
     }
 
     fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+        if self.is_dac_enabled() {
+            let sample = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            let input = if self.enabled { sample } else { 0 };
+
             (input as f32 / 7.5) - 1.0
         } else {
             0.0
@@ -631,8 +633,10 @@ impl Channel2 {
     }
 
     fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+        if self.is_dac_enabled() {
+            let sample = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            let input = if self.enabled { sample } else { 0 };
+
             (input as f32 / 7.5) - 1.0
         } else {
             0.0
@@ -780,8 +784,10 @@ impl Channel3 {
     }
 
     fn amplitude(&self) -> f32 {
-        if self.dac_enabled && self.enabled {
-            let input = self.read_sample(self.offset) >> self.volume.shift_count();
+        if self.dac_enabled {
+            let sample = self.read_sample(self.offset) >> self.volume.shift_count();
+            let input = if self.enabled { sample } else { 0 };
+
             (input as f32 / 7.5) - 1.0
         } else {
             0.0
@@ -835,7 +841,7 @@ impl Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
         self.len = byte & 0x3F;
-        self.length_timer = 256 - self.len as u16;
+        self.length_timer = 64 - self.len as u16;
     }
 
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
@@ -909,8 +915,10 @@ impl Channel4 {
     }
 
     fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
+        if self.is_dac_enabled() {
+            let sample = (!self.lf_shift & 0x01) as u8 * self.current_volume;
+            let input = if self.enabled { sample } else { 0 };
+
             (input as f32 / 7.5) - 1.0
         } else {
             0.0
