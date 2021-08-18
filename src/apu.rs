@@ -456,7 +456,11 @@ impl Channel1 {
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        self.envelope = byte.into()
+        self.envelope = byte.into();
+
+        if !self.is_dac_enabled() {
+            self.enabled = false;
+        }
     }
 
     /// 0xFF13 | NR13 - Channel 1 Frequency low (lower 8 bits only)
@@ -529,6 +533,10 @@ impl Channel1 {
     fn frequency(&self) -> u16 {
         (self.freq_hi.freq_bits() as u16) << 8 | self.freq_lo as u16
     }
+
+    fn is_dac_enabled(&self) -> bool {
+        self.envelope.0 & 0xF8 != 0x00
+    }
 }
 
 #[derive(Debug, Default)]
@@ -591,7 +599,11 @@ impl Channel2 {
 
     /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        self.envelope = byte.into()
+        self.envelope = byte.into();
+
+        if !self.is_dac_enabled() {
+            self.enabled = false;
+        }
     }
 
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
@@ -624,6 +636,10 @@ impl Channel2 {
 
     fn frequency(&self) -> u16 {
         (self.freq_hi.freq_bits() as u16) << 8 | self.freq_lo as u16
+    }
+
+    fn is_dac_enabled(&self) -> bool {
+        self.envelope.0 & 0xF8 != 0x00
     }
 }
 
@@ -803,7 +819,11 @@ impl Channel4 {
 
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
-        self.envelope = byte.into()
+        self.envelope = byte.into();
+
+        if !self.is_dac_enabled() {
+            self.enabled = false;
+        }
     }
 
     /// 0xFF22 | NR43 - Chanel 4 Polynomial Counter
@@ -864,6 +884,10 @@ impl Channel4 {
                 self.lf_shift = (self.lf_shift & !(0x01 << 6)) | xor_result << 6;
             }
         }
+    }
+
+    fn is_dac_enabled(&self) -> bool {
+        self.envelope.0 & 0xF8 != 0x00
     }
 
     fn divisor(code: u8) -> u8 {
