@@ -412,9 +412,12 @@ pub(crate) struct Channel1 {
 
 impl Channel1 {
     fn amplitude(&self) -> f32 {
-        let dac_input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
-
-        (dac_input as f32 / 7.5) - 1.0
+        if self.is_dac_enabled() && self.enabled {
+            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
     }
 
     fn clock(&mut self) {
@@ -565,9 +568,12 @@ pub(crate) struct Channel2 {
 
 impl Channel2 {
     fn amplitude(&self) -> f32 {
-        let dac_input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
-
-        (dac_input as f32 / 7.5) - 1.0
+        if self.is_dac_enabled() && self.enabled {
+            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
     }
 
     fn clock(&mut self) {
@@ -745,10 +751,12 @@ impl Channel3 {
     }
 
     fn amplitude(&self) -> f32 {
-        let dac_input =
-            (self.read_sample(self.offset) >> self.volume.shift_count()) * self.enabled as u8;
-
-        (dac_input as f32 / 7.5) - 1.0
+        if self.enabled {
+            let input = self.read_sample(self.offset) >> self.volume.shift_count();
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
     }
 
     fn clock(&mut self) {
@@ -863,9 +871,12 @@ impl Channel4 {
     }
 
     fn amplitude(&self) -> f32 {
-        let dac_input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
-
-        (dac_input as f32 / 7.5) - 1.0
+        if self.is_dac_enabled() && self.enabled {
+            let input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
     }
 
     fn clock(&mut self) {
