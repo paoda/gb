@@ -127,30 +127,31 @@ impl Apu {
             if let Some(ref mut prod) = self.prod {
                 if prod.available_blocking() {
                     // Sample the APU
-                    let ch1_amplitude = self.ch1.amplitude();
-                    let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
-                    let ch1_right = self.ctrl.output.ch1_right() as u8 as f32 * ch1_amplitude;
 
-                    let ch2_amplitude = self.ch2.amplitude();
-                    let ch2_left = self.ctrl.output.ch2_left() as u8 as f32 * ch2_amplitude;
-                    let ch2_right = self.ctrl.output.ch2_right() as u8 as f32 * ch2_amplitude;
+                    let (left, right) = self.ctrl.out.ch1();
+                    let ch1_left = if left { self.ch1.amplitude() } else { 0.0 };
+                    let ch1_right = if right { self.ch1.amplitude() } else { 0.0 };
 
-                    let ch3_amplitude = self.ch3.amplitude();
-                    let ch3_left = self.ctrl.output.ch3_left() as u8 as f32 * ch3_amplitude;
-                    let ch3_right = self.ctrl.output.ch3_right() as u8 as f32 * ch3_amplitude;
+                    let (left, right) = self.ctrl.out.ch2();
+                    let ch2_left = if left { self.ch2.amplitude() } else { 0.0 };
+                    let ch2_right = if right { self.ch2.amplitude() } else { 0.0 };
 
-                    let ch4_amplitude = self.ch4.amplitude();
-                    let ch4_left = self.ctrl.output.ch4_left() as u8 as f32 * ch4_amplitude;
-                    let ch4_right = self.ctrl.output.ch4_right() as u8 as f32 * ch4_amplitude;
+                    let (left, right) = self.ctrl.out.ch3();
+                    let ch3_left = if left { self.ch3.amplitude() } else { 0.0 };
+                    let ch3_right = if right { self.ch3.amplitude() } else { 0.0 };
+
+                    let (left, right) = self.ctrl.out.ch4();
+                    let ch4_left = if left { self.ch4.amplitude() } else { 0.0 };
+                    let ch4_right = if right { self.ch4.amplitude() } else { 0.0 };
 
                     let left_mixed = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
                     let right_mixed = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
 
-                    let left = (self.ctrl.channel.left_volume() + 1.0) * left_mixed;
-                    let right = (self.ctrl.channel.right_volume() + 1.0) * right_mixed;
+                    let left_sample = (self.ctrl.channel.left_volume() + 1.0) * left_mixed;
+                    let right_sample = (self.ctrl.channel.right_volume() + 1.0) * right_mixed;
 
-                    prod.push(left)
-                        .and(prod.push(right))
+                    prod.push(left_sample)
+                        .and(prod.push(right_sample))
                         .expect("Add samples to ring buffer");
                 }
             }
@@ -207,7 +208,7 @@ impl Apu {
         self.ch4.freq = Default::default();
 
         self.ctrl.channel = Default::default();
-        self.ctrl.output = Default::default();
+        self.ctrl.out = Default::default();
 
         // Disable the Channels
         self.ch1.enabled = Default::default();
@@ -343,7 +344,7 @@ pub(crate) struct SoundControl {
     /// 0xFF24 | NR50 - Channel Control
     channel: ChannelControl,
     /// 0xFF25 | NR51 - Selection of Sound output terminal
-    output: SoundOutput,
+    out: SoundOutput,
 
     enabled: bool,
 }
@@ -363,13 +364,13 @@ impl SoundControl {
 
     /// 0xFF25 | NR51 - Selection of Sound output terminal
     pub(crate) fn output(&self) -> u8 {
-        u8::from(self.output)
+        u8::from(self.out)
     }
 
     /// 0xFF25 | NR51 - Selection of Sound output terminal
     pub(crate) fn set_output(&mut self, byte: u8) {
         if self.enabled {
-            self.output = byte.into();
+            self.out = byte.into();
         }
     }
 

@@ -440,6 +440,24 @@ bitfield! {
     pub ch1_right, _: 0;
 }
 
+impl SoundOutput {
+    pub(super) fn ch1(&self) -> (bool, bool) {
+        (self.ch1_left(), self.ch1_right())
+    }
+
+    pub(super) fn ch2(&self) -> (bool, bool) {
+        (self.ch2_left(), self.ch2_right())
+    }
+
+    pub(super) fn ch3(&self) -> (bool, bool) {
+        (self.ch3_left(), self.ch3_right())
+    }
+
+    pub(super) fn ch4(&self) -> (bool, bool) {
+        (self.ch4_left(), self.ch4_right())
+    }
+}
+
 impl Copy for SoundOutput {}
 impl Clone for SoundOutput {
     fn clone(&self) -> Self {
