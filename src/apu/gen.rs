@@ -48,7 +48,7 @@ impl<T> SampleProducer<T> {
         self.inner.slots() > 2
     }
 
-    pub(crate) fn available_block(&self) -> bool {
+    pub(crate) fn available_blocking(&self) -> bool {
         loop {
             if self.inner.slots() > 2 {
                 break true;

@@ -5,7 +5,7 @@ use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
 use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
-use types::fs::{FrameSequencer, FrameSequencerState};
+use types::fs::{FrameSequencer, State as FrameSequencerState};
 use types::{ChannelControl, SoundOutput};
 
 pub mod gen;
@@ -98,16 +98,16 @@ impl Apu {
         self.sample_counter += SAMPLE_INCREMENT;
 
         // Frame Sequencer (512Hz)
-        if self.falling_edge(12, div) {
+        if self.is_falling_edge(12, div) {
             use FrameSequencerState::*;
 
             match self.sequencer.state() {
-                Length => self.handle_length(),
+                Length => self.clock_length(),
                 LengthAndSweep => {
-                    self.handle_length();
-                    self.handle_sweep();
+                    self.clock_length();
+                    self.clock_sweep();
                 }
-                Envelope => self.handle_envelope(),
+                Envelope => self.clock_envelope(),
                 Nothing => {}
             }
 
@@ -116,16 +116,16 @@ impl Apu {
 
         self.div_prev = Some(div);
 
-        self.ch1.clock();
-        self.ch2.clock();
-        self.ch3.clock();
-        self.ch4.clock();
+        self.ch1.tick();
+        self.ch2.tick();
+        self.ch3.tick();
+        self.ch4.tick();
 
         if self.sample_counter >= SM83_CLOCK_SPEED {
             self.sample_counter %= SM83_CLOCK_SPEED;
 
             if let Some(ref mut prod) = self.prod {
-                if prod.available_block() {
+                if prod.available_blocking() {
                     // Sample the APU
                     let ch1_amplitude = self.ch1.amplitude();
                     let ch1_left = self.ctrl.output.ch1_left() as u8 as f32 * ch1_amplitude;
@@ -157,10 +157,6 @@ impl Apu {
         }
     }
 
-    pub fn set_producer(&mut self, prod: SampleProducer<f32>) {
-        self.prod = Some(prod);
-    }
-
     /// 0xFF26 | NR52 - Sound On/Off
     pub(crate) fn set_status(&mut self, byte: u8) {
         self.ctrl.enabled = (byte >> 7) & 0x01 == 0x01;
@@ -181,6 +177,10 @@ impl Apu {
             self.reset();
         } else {
         }
+    }
+
+    pub fn attach_producer(&mut self, prod: SampleProducer<f32>) {
+        self.prod = Some(prod);
     }
 
     fn reset(&mut self) {
@@ -216,7 +216,7 @@ impl Apu {
         self.ch4.enabled = Default::default();
     }
 
-    fn clock_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
+    fn process_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
         if freq_hi.length_disable() && *length_timer > 0 {
             *length_timer -= 1;
 
@@ -228,7 +228,7 @@ impl Apu {
         }
     }
 
-    fn clock_length_ch4(freq: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
+    fn ch4_process_length(freq: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
         if freq.length_disable() && *length_timer > 0 {
             *length_timer -= 1;
 
@@ -240,33 +240,33 @@ impl Apu {
         }
     }
 
-    fn handle_length(&mut self) {
-        Self::clock_length(
+    fn clock_length(&mut self) {
+        Self::process_length(
             &self.ch1.freq_hi,
             &mut self.ch1.length_timer,
             &mut self.ch1.enabled,
         );
 
-        Self::clock_length(
+        Self::process_length(
             &self.ch2.freq_hi,
             &mut self.ch2.length_timer,
             &mut self.ch2.enabled,
         );
 
-        Self::clock_length(
+        Self::process_length(
             &self.ch3.freq_hi,
             &mut self.ch3.length_timer,
             &mut self.ch3.enabled,
         );
 
-        Self::clock_length_ch4(
+        Self::ch4_process_length(
             &self.ch4.freq,
             &mut self.ch4.length_timer,
             &mut self.ch4.enabled,
         );
     }
 
-    fn handle_sweep(&mut self) {
+    fn clock_sweep(&mut self) {
         if self.ch1.sweep_timer != 0 {
             self.ch1.sweep_timer -= 1;
         }
@@ -288,7 +288,7 @@ impl Apu {
         }
     }
 
-    fn clock_envelope(envelope: &VolumeEnvelope, period_timer: &mut u8, current_volume: &mut u8) {
+    fn process_envelope(envelope: &VolumeEnvelope, period_timer: &mut u8, current_volume: &mut u8) {
         use EnvelopeDirection::*;
 
         if envelope.period() != 0 {
@@ -308,29 +308,29 @@ impl Apu {
         }
     }
 
-    fn handle_envelope(&mut self) {
+    fn clock_envelope(&mut self) {
         // Channels 1, 2 and 4 have Volume Envelopes
 
-        Self::clock_envelope(
+        Self::process_envelope(
             &self.ch1.envelope,
             &mut self.ch1.period_timer,
             &mut self.ch1.current_volume,
         );
 
-        Self::clock_envelope(
+        Self::process_envelope(
             &self.ch2.envelope,
             &mut self.ch2.period_timer,
             &mut self.ch2.current_volume,
         );
 
-        Self::clock_envelope(
+        Self::process_envelope(
             &self.ch4.envelope,
             &mut self.ch4.period_timer,
             &mut self.ch4.current_volume,
         );
     }
 
-    fn falling_edge(&self, bit: u8, div: u16) -> bool {
+    fn is_falling_edge(&self, bit: u8, div: u16) -> bool {
         match self.div_prev {
             Some(p) => (p >> bit & 0x01) == 0x01 && (div >> bit & 0x01) == 0x00,
             None => false,
@@ -416,26 +416,6 @@ pub(crate) struct Channel1 {
 }
 
 impl Channel1 {
-    fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
-            (input as f32 / 7.5) - 1.0
-        } else {
-            0.0
-        }
-    }
-
-    fn clock(&mut self) {
-        if self.freq_timer != 0 {
-            self.freq_timer -= 1;
-        }
-
-        if self.freq_timer == 0 {
-            self.freq_timer = (2048 - self.frequency()) * 4;
-            self.duty_pos = (self.duty_pos + 1) % 8;
-        }
-    }
-
     /// 0xFF10 | NR10 - Channel 1 Sweep Register
     pub(crate) fn sweep(&self) -> u8 {
         u8::from(self.sweep) | 0x80
@@ -516,6 +496,26 @@ impl Channel1 {
         }
     }
 
+    fn tick(&mut self) {
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
+
+        if self.freq_timer == 0 {
+            self.freq_timer = (2048 - self.frequency()) * 4;
+            self.duty_pos = (self.duty_pos + 1) % 8;
+        }
+    }
+
+    fn amplitude(&self) -> f32 {
+        if self.is_dac_enabled() && self.enabled {
+            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
+    }
+
     fn calc_sweep_freq(&mut self) -> u16 {
         use SweepDirection::*;
 
@@ -574,26 +574,6 @@ pub(crate) struct Channel2 {
 }
 
 impl Channel2 {
-    fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
-            (input as f32 / 7.5) - 1.0
-        } else {
-            0.0
-        }
-    }
-
-    fn clock(&mut self) {
-        if self.freq_timer != 0 {
-            self.freq_timer -= 1;
-        }
-
-        if self.freq_timer == 0 {
-            self.freq_timer = (2048 - self.frequency()) * 4;
-            self.duty_pos = (self.duty_pos + 1) % 8;
-        }
-    }
-
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     pub(crate) fn duty(&self) -> u8 {
         u8::from(self.duty) | 0x3F
@@ -646,6 +626,26 @@ impl Channel2 {
             if self.is_dac_enabled() {
                 self.enabled = true;
             }
+        }
+    }
+
+    fn amplitude(&self) -> f32 {
+        if self.is_dac_enabled() && self.enabled {
+            let input = self.duty.wave_pattern().amplitude(self.duty_pos) * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn tick(&mut self) {
+        if self.freq_timer != 0 {
+            self.freq_timer -= 1;
+        }
+
+        if self.freq_timer == 0 {
+            self.freq_timer = (2048 - self.frequency()) * 4;
+            self.duty_pos = (self.duty_pos + 1) % 8;
         }
     }
 
@@ -767,16 +767,7 @@ impl Channel3 {
         }
     }
 
-    fn amplitude(&self) -> f32 {
-        if self.dac_enabled && self.enabled {
-            let input = self.read_sample(self.offset) >> self.volume.shift_count();
-            (input as f32 / 7.5) - 1.0
-        } else {
-            0.0
-        }
-    }
-
-    fn clock(&mut self) {
+    fn tick(&mut self) {
         if self.freq_timer != 0 {
             self.freq_timer -= 1;
         }
@@ -784,6 +775,15 @@ impl Channel3 {
         if self.freq_timer == 0 {
             self.freq_timer = (2048 - self.frequency()) * 2;
             self.offset = (self.offset + 1) % (WAVE_PATTERN_RAM_LEN * 2) as u8;
+        }
+    }
+
+    fn amplitude(&self) -> f32 {
+        if self.dac_enabled && self.enabled {
+            let input = self.read_sample(self.offset) >> self.volume.shift_count();
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
         }
     }
 
@@ -889,16 +889,7 @@ impl Channel4 {
         }
     }
 
-    fn amplitude(&self) -> f32 {
-        if self.is_dac_enabled() && self.enabled {
-            let input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
-            (input as f32 / 7.5) - 1.0
-        } else {
-            0.0
-        }
-    }
-
-    fn clock(&mut self) {
+    fn tick(&mut self) {
         if self.freq_timer != 0 {
             self.freq_timer -= 1;
         }
@@ -913,6 +904,15 @@ impl Channel4 {
             if let CounterWidth::Long = self.poly.counter_width() {
                 self.lf_shift = (self.lf_shift & !(0x01 << 6)) | xor_result << 6;
             }
+        }
+    }
+
+    fn amplitude(&self) -> f32 {
+        if self.is_dac_enabled() && self.enabled {
+            let input = (!self.lf_shift & 0x01) as u8 * self.current_volume;
+            (input as f32 / 7.5) - 1.0
+        } else {
+            0.0
         }
     }
 

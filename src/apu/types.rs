@@ -513,21 +513,21 @@ pub(super) mod fs {
     #[derive(Debug)]
     pub(crate) struct FrameSequencer {
         step: u8,
-        state: FrameSequencerState,
+        state: State,
     }
 
     impl Default for FrameSequencer {
         fn default() -> Self {
             Self {
                 step: Default::default(),
-                state: FrameSequencerState::Length,
+                state: State::Length,
             }
         }
     }
 
     impl FrameSequencer {
         pub(crate) fn next(&mut self) {
-            use FrameSequencerState::*;
+            use State::*;
 
             self.step = (self.step + 1) % 8;
             self.state = match self.step {
@@ -539,18 +539,18 @@ pub(super) mod fs {
             };
         }
 
-        pub(crate) fn state(&self) -> FrameSequencerState {
+        pub(crate) fn state(&self) -> State {
             self.state
         }
 
         pub(crate) fn reset(&mut self) {
             self.step = Default::default();
-            self.state = FrameSequencerState::Length;
+            self.state = State::Length;
         }
     }
 
     #[derive(Debug, Clone, Copy)]
-    pub(crate) enum FrameSequencerState {
+    pub(crate) enum State {
         Length,
         Nothing,
         LengthAndSweep,

@@ -68,7 +68,7 @@ fn main() -> Result<()> {
     let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
     let sink = Sink::try_new(&stream_handle)?;
     sink.append(cons);
-    game_boy.apu_mut().set_producer(prod);
+    game_boy.apu_mut().attach_producer(prod);
 
     std::thread::spawn(move || {
         sink.sleep_until_end();
