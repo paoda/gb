@@ -33,58 +33,22 @@ impl Cartridge {
     }
 
     fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
-        let ram_size = Self::find_ram_size(memory);
-        let bank_count = Self::find_bank_count(memory);
+        let ram_size = Self::detect_ram_size(memory);
+        let rom_size = Self::detect_rom_size(memory);
         let mbc_kind = Self::find_mbc(memory);
-        let ram_byte_count = ram_size.len();
 
         eprintln!("Cartridge Ram Size: {} bytes", ram_size.len());
-        eprintln!("Cartridge ROM Size: {} bytes", bank_count.size());
+        eprintln!("Cartridge ROM Size: {} bytes", rom_size.size());
         eprintln!("MBC Type: {:?}", mbc_kind);
 
         match mbc_kind {
-            MBCKind::None => Box::new(NoMBC {}),
-            MBCKind::MBC1 => {
-                let mbc = MBC1 {
-                    ram_size,
-                    ram: vec![0; ram_byte_count as usize],
-                    bank_count,
-                    ..Default::default()
-                };
-
-                Box::new(mbc)
-            }
-            MBCKind::MBC1WithBattery => {
-                // TODO: Implement Saving
-                let mbc = MBC1 {
-                    ram_size,
-                    ram: vec![0; ram_byte_count as usize],
-                    bank_count,
-                    ..Default::default()
-                };
-
-                Box::new(mbc)
-            }
-            MBCKind::MBC3WithBattery => {
-                // TODO: Implement Saving
-                let mbc = MBC3 {
-                    ram_size,
-                    ram: vec![0; ram_byte_count as usize],
-                    ..Default::default()
-                };
-
-                Box::new(mbc)
-            }
-            MBCKind::MBC3 => {
-                let mbc = MBC3 {
-                    ram_size,
-                    ram: vec![0; ram_byte_count as usize],
-                    ..Default::default()
-                };
-
-                Box::new(mbc)
-            }
-            MBCKind::MBC5 => todo!("Implement MBC5"),
+            MBCKind::None => Box::new(NoMBC),
+            MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
+            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC3 => Box::new(MBC3::new(ram_size)),
+            MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_size)), // TODO: Implement Saving
+            MBCKind::MBC5 => Box::new(MBC5::new(ram_size)),
+            MBCKind::MBC5WithBattery => Box::new(MBC5::new(ram_size)), // TDO: Implement Saving
         }
     }
 
@@ -103,12 +67,12 @@ impl Cartridge {
         self.title.as_deref()
     }
 
-    fn find_ram_size(memory: &[u8]) -> RamSize {
+    fn detect_ram_size(memory: &[u8]) -> RamSize {
         let id = memory[RAM_SIZE_ADDRESS];
         id.into()
     }
 
-    fn find_bank_count(memory: &[u8]) -> BankCount {
+    fn detect_rom_size(memory: &[u8]) -> RomSize {
         let id = memory[ROM_SIZE_ADDRESS];
         id.into()
     }
@@ -116,12 +80,12 @@ impl Cartridge {
     fn find_mbc(memory: &[u8]) -> MBCKind {
         match memory[MBC_TYPE_ADDRESS] {
             0x00 => MBCKind::None,
-            0x01 => MBCKind::MBC1,
-            0x02 => MBCKind::MBC1,
+            0x01 | 0x02 => MBCKind::MBC1,
             0x03 => MBCKind::MBC1WithBattery,
-            0x19 => MBCKind::MBC5,
+            0x19 | 0x1A => MBCKind::MBC5,
+            0x1B => MBCKind::MBC5WithBattery,
             0x13 => MBCKind::MBC3WithBattery,
-            0x11 => MBCKind::MBC3,
+            0x11 | 0x12 => MBCKind::MBC3,
             id => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
@@ -150,71 +114,69 @@ struct MBC1 {
     ram_bank: u8,
     mode: bool,
     ram_size: RamSize,
-    ram: Vec<u8>,
-    bank_count: BankCount,
-    ram_enabled: bool,
-}
-
-impl Default for MBC1 {
-    fn default() -> Self {
-        Self {
-            rom_bank: 0x01,
-            ram_bank: Default::default(),
-            mode: Default::default(),
-            ram_size: Default::default(),
-            ram: Default::default(),
-            bank_count: Default::default(),
-            ram_enabled: Default::default(),
-        }
-    }
+    memory: Vec<u8>,
+    rom_size: RomSize,
+    mem_enabled: bool,
 }
 
 impl MBC1 {
-    fn zero_bank(&self) -> u8 {
-        use BankCount::*;
+    fn new(ram_size: RamSize, rom_size: RomSize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: vec![0; ram_size.len() as usize],
+            ram_size,
+            rom_size,
+            ram_bank: Default::default(),
+            mode: Default::default(),
+            mem_enabled: Default::default(),
+        }
+    }
 
-        match self.bank_count {
+    fn zero_bank(&self) -> u8 {
+        use RomSize::*;
+
+        match self.rom_size {
             None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
             SixtyFour => (self.ram_bank & 0x01) << 5,
-            OneHundredTwentyEight => (self.ram_bank & 0x03) << 5,
-            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
+            OneTwentyEight => (self.ram_bank & 0x03) << 5,
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.rom_size),
         }
     }
 
     fn _mbcm_zero_bank(&self) -> u8 {
-        use BankCount::*;
+        use RomSize::*;
 
-        match self.bank_count {
+        match self.rom_size {
             None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
             SixtyFour => (self.ram_bank & 0x03) << 4,
-            OneHundredTwentyEight => (self.ram_bank & 0x03) << 5,
-            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
+            OneTwentyEight => (self.ram_bank & 0x03) << 5,
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.rom_size),
         }
     }
 
     fn high_bank(&self) -> u8 {
-        use BankCount::*;
+        use RomSize::*;
 
         let base = self.rom_bank & self.rom_size_mask();
 
-        match self.bank_count {
+        match self.rom_size {
             None | Four | Eight | Sixteen | ThirtyTwo => base,
             SixtyFour => base & !(0x01 << 5) | ((self.ram_bank & 0x01) << 5),
-            OneHundredTwentyEight => base & !(0x03 << 5) | ((self.ram_bank & 0x03) << 5),
-            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
+            OneTwentyEight => base & !(0x03 << 5) | ((self.ram_bank & 0x03) << 5),
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.rom_size),
         }
     }
 
     fn rom_size_mask(&self) -> u8 {
-        use BankCount::*;
+        use RomSize::*;
 
-        match self.bank_count {
+        match self.rom_size {
             None => 0b00000001,
             Four => 0b00000011,
             Eight => 0b00000111,
             Sixteen => 0b00001111,
-            ThirtyTwo | SixtyFour | OneHundredTwentyEight => 0b00011111,
-            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.bank_count),
+            ThirtyTwo | SixtyFour | OneTwentyEight => 0b00011111,
+            _ => unreachable!("{:?} is not a valid MBC1 BankCount", self.rom_size),
         }
     }
 
@@ -222,8 +184,8 @@ impl MBC1 {
         use RamSize::*;
 
         match self.ram_size {
-            _2KB | _8KB => (addr - 0xA000) % self.ram_size.len() as u16,
-            _32KB => {
+            Two | Eight => (addr - 0xA000) % self.ram_size.len() as u16,
+            ThirtyTwo => {
                 if self.mode {
                     0x2000 * self.ram_bank as u16 + (addr - 0xA000)
                 } else {
@@ -251,8 +213,8 @@ impl MBCIo for MBC1 {
                 Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
             }
             0xA000..=0xBFFF => {
-                if self.ram_enabled {
-                    Value(self.ram[self.ram_addr(addr) as usize])
+                if self.mem_enabled {
+                    Value(self.memory[self.ram_addr(addr) as usize])
                 } else {
                     Value(0xFF)
                 }
@@ -263,7 +225,7 @@ impl MBCIo for MBC1 {
 
     fn handle_write(&mut self, addr: u16, byte: u8) {
         match addr {
-            0x0000..=0x1FFF => self.ram_enabled = (byte & 0x0F) == 0x0A,
+            0x0000..=0x1FFF => self.mem_enabled = (byte & 0x0F) == 0x0A,
             0x2000..=0x3FFF => {
                 self.rom_bank = if byte == 0x00 {
                     0x01
@@ -275,9 +237,9 @@ impl MBCIo for MBC1 {
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0x03,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
-            0xA000..=0xBFFF if self.ram_enabled => {
+            0xA000..=0xBFFF if self.mem_enabled => {
                 let ram_addr = self.ram_addr(addr) as usize;
-                self.ram[ram_addr] = byte;
+                self.memory[ram_addr] = byte;
             }
             0xA000..=0xBFFF => {} // Ram isn't enabled, ignored write
             _ => unreachable!("A write to {:#06X} should not be handled by MBC1", addr),
@@ -291,20 +253,32 @@ enum MBC3Device {
     RealTimeClock,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct MBC3 {
     /// 7-bit Number
     rom_bank: u8,
     /// 2-bit Number
     ram_bank: u8,
 
-    devices_enabled: bool,
-    currently_mapped: Option<MBC3Device>,
-    ram_size: RamSize,
-    ram: Vec<u8>,
+    devs_enabled: bool,
+    mapped: Option<MBC3Device>,
+    memory: Vec<u8>,
 
     // RTC Data Latch Previous Write
     prev_latch_write: Option<u8>,
+}
+
+impl MBC3 {
+    fn new(ram_size: RamSize) -> Self {
+        Self {
+            memory: vec![0; ram_size.len() as usize],
+            rom_bank: Default::default(),
+            ram_bank: Default::default(),
+            devs_enabled: Default::default(),
+            mapped: Default::default(),
+            prev_latch_write: Default::default(),
+        }
+    }
 }
 
 impl MBCIo for MBC3 {
@@ -314,11 +288,11 @@ impl MBCIo for MBC3 {
         let res = match addr {
             0x0000..=0x3FFF => Address(addr as usize),
             0x4000..=0x7FFF => Address(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
-            0xA000..=0xBFFF => match self.currently_mapped {
-                Some(MBC3Device::ExternalRam) if self.devices_enabled => {
-                    Value(self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
+            0xA000..=0xBFFF => match self.mapped {
+                Some(MBC3Device::ExternalRam) if self.devs_enabled => {
+                    Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
                 }
-                Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
+                Some(MBC3Device::RealTimeClock) if self.devs_enabled => {
                     todo!("Return Latched value of register")
                 }
                 _ => Value(0xFF),
@@ -331,7 +305,7 @@ impl MBCIo for MBC3 {
 
     fn handle_write(&mut self, addr: u16, byte: u8) {
         match addr {
-            0x000..=0x1FFF => self.devices_enabled = (byte & 0x0F) == 0x0A, // Enable External RAM and Access to RTC if there is one
+            0x000..=0x1FFF => self.devs_enabled = (byte & 0x0F) == 0x0A, // Enable External RAM and Access to RTC if there is one
             0x2000..=0x3FFF => {
                 self.rom_bank = match byte {
                     0x00 => 0x01,
@@ -341,10 +315,10 @@ impl MBCIo for MBC3 {
             0x4000..=0x5FFF => match byte {
                 0x00 | 0x01 | 0x02 | 0x03 => {
                     self.ram_bank = byte & 0x03;
-                    self.currently_mapped = Some(MBC3Device::ExternalRam);
+                    self.mapped = Some(MBC3Device::ExternalRam);
                 }
                 0x08 | 0x09 | 0x0A | 0x0B | 0x0C => {
-                    self.currently_mapped = Some(MBC3Device::RealTimeClock);
+                    self.mapped = Some(MBC3Device::RealTimeClock);
                 }
                 _ => {}
             },
@@ -356,11 +330,11 @@ impl MBCIo for MBC3 {
                 }
                 self.prev_latch_write = Some(byte);
             }
-            0xA000..=0xBFFF => match self.currently_mapped {
-                Some(MBC3Device::ExternalRam) if self.devices_enabled => {
-                    self.ram[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
+            0xA000..=0xBFFF => match self.mapped {
+                Some(MBC3Device::ExternalRam) if self.devs_enabled => {
+                    self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
                 }
-                Some(MBC3Device::RealTimeClock) if self.devices_enabled => {
+                Some(MBC3Device::RealTimeClock) if self.devs_enabled => {
                     todo!("Write to RTC")
                 }
                 _ => {}
@@ -371,7 +345,59 @@ impl MBCIo for MBC3 {
 }
 
 #[derive(Debug)]
-struct NoMBC {}
+struct MBC5 {
+    /// 9-bit number
+    rom_bank: u16,
+    /// 4-bit number
+    ram_bank: u8,
+
+    memory: Vec<u8>,
+    mem_enabled: bool,
+}
+
+impl MBC5 {
+    fn new(ram_size: RamSize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: vec![0; ram_size.len() as usize],
+            ram_bank: Default::default(),
+            mem_enabled: Default::default(),
+        }
+    }
+}
+
+impl MBCIo for MBC5 {
+    fn handle_read(&self, addr: u16) -> MBCResult {
+        use MBCResult::*;
+
+        match addr {
+            0x0000..=0x3FFF => Address(addr as usize),
+            0x4000..=0x7FFF => Address(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
+            0xA000..=0xBFFF if self.mem_enabled => {
+                Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
+            }
+            0xA000..=0xBFFF => Value(0xFF),
+            _ => unreachable!("A read from {:#06X} should not be handled by MBC5", addr),
+        }
+    }
+
+    fn handle_write(&mut self, addr: u16, byte: u8) {
+        match addr {
+            0x0000..=0x1FFF => self.mem_enabled = (byte & 0x0F) == 0x0A,
+            0x2000..=0x2FFF => self.rom_bank = (self.rom_bank & 0x0100) | byte as u16,
+            0x3000..=0x3FFF => self.rom_bank = (self.rom_bank & 0x00FF) | (byte as u16 & 0x01) << 8,
+            0x4000..=0x5FFF => self.ram_bank = byte & 0x0F,
+            0xA000..=0xBFFF if self.mem_enabled => {
+                self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte;
+            }
+            0xA000..=0xBFFF => {}
+            _ => unreachable!("A write to {:#06X} should not be handled by MBC5", addr),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct NoMBC;
 
 impl MBCIo for NoMBC {
     fn handle_read(&self, addr: u16) -> MBCResult {
@@ -399,9 +425,10 @@ enum MBCKind {
     None,
     MBC1,
     MBC1WithBattery,
-    MBC5,
-    MBC3WithBattery,
     MBC3,
+    MBC3WithBattery,
+    MBC5,
+    MBC5WithBattery,
 }
 
 impl Default for MBCKind {
@@ -413,11 +440,11 @@ impl Default for MBCKind {
 #[derive(Debug, Clone, Copy)]
 enum RamSize {
     None = 0x00,
-    _2KB = 0x01,
-    _8KB = 0x02,
-    _32KB = 0x03,  // Split into 4 RAM banks
-    _128KB = 0x04, // Split into 16 RAM banks
-    _64KB = 0x05,  // Split into 8 RAm Banks
+    Two = 0x01,
+    Eight = 0x02,
+    ThirtyTwo = 0x03,             // Split into 4 RAM banks
+    OneHundredTwentyEight = 0x04, // Split into 16 RAM banks
+    SixtyFour = 0x05,             // Split into 8 RAm Banks
 }
 
 impl RamSize {
@@ -426,11 +453,11 @@ impl RamSize {
 
         match *self {
             None => 0,
-            _2KB => 2_048,
-            _8KB => 8_192,
-            _32KB => 32_768,
-            _128KB => 131_072,
-            _64KB => 65_536,
+            Two => 2_048,
+            Eight => 8_192,
+            ThirtyTwo => 32_768,
+            OneHundredTwentyEight => 131_072,
+            SixtyFour => 65_536,
         }
     }
 }
@@ -447,53 +474,40 @@ impl From<u8> for RamSize {
 
         match byte {
             0x00 => None,
-            0x01 => _2KB,
-            0x02 => _8KB,
-            0x03 => _32KB,
-            0x04 => _128KB,
-            0x05 => _64KB,
+            0x01 => Two,
+            0x02 => Eight,
+            0x03 => ThirtyTwo,
+            0x04 => OneHundredTwentyEight,
+            0x05 => SixtyFour,
             _ => unreachable!("{:#04X} is not a valid value for RAMSize", byte),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum BankCount {
-    None = 0x00,                  // 32KB (also called Two)
-    Four = 0x01,                  // 64KB
-    Eight = 0x02,                 // 128KB
-    Sixteen = 0x03,               // 256KB
-    ThirtyTwo = 0x04,             // 512KB
-    SixtyFour = 0x05,             // 1MB
-    OneHundredTwentyEight = 0x06, // 2MB
-    TwoHundredFiftySix = 0x07,    // 4MB
-    FiveHundredTwelve = 0x08,     // 8MB
-    SeventyTwo = 0x52,            // 1.1MB
-    Eighty = 0x53,                // 1.2MB
-    NinetySix = 0x54,             // 1.5MB
+enum RomSize {
+    None = 0x00,              // 32KB (also called Two)
+    Four = 0x01,              // 64KB
+    Eight = 0x02,             // 128KB
+    Sixteen = 0x03,           // 256KB
+    ThirtyTwo = 0x04,         // 512KB
+    SixtyFour = 0x05,         // 1MB
+    OneTwentyEight = 0x06,    // 2MB
+    TwoFiftySix = 0x07,       // 4MB
+    FiveHundredTwelve = 0x08, // 8MB
+    SeventyTwo = 0x52,        // 1.1MB
+    Eighty = 0x53,            // 1.2MB
+    NinetySix = 0x54,         // 1.5MB
 }
 
-impl Default for BankCount {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl BankCount {
+impl RomSize {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
     fn size(&self) -> u32 {
-        use BankCount::*;
+        use RomSize::*;
 
         match self {
-            None => 32_768,
-            Four => 65_536,
-            Eight => 131_072,
-            Sixteen => 262_144,
-            ThirtyTwo => 524_288,
-            SixtyFour => 1_048_576,
-            OneHundredTwentyEight => 2_097_152,
-            TwoHundredFiftySix => 4_194_304,
-            FiveHundredTwelve => 8_388_608,
+            None | Four | Eight | Sixteen | ThirtyTwo | SixtyFour | OneTwentyEight
+            | TwoFiftySix | FiveHundredTwelve => 2 << (14 + *self as u8),
             SeventyTwo => 1_179_648,
             Eighty => 1_310_720,
             NinetySix => 1_572_864,
@@ -501,9 +515,9 @@ impl BankCount {
     }
 }
 
-impl From<u8> for BankCount {
+impl From<u8> for RomSize {
     fn from(byte: u8) -> Self {
-        use BankCount::*;
+        use RomSize::*;
 
         match byte {
             0x00 => None,
@@ -512,8 +526,8 @@ impl From<u8> for BankCount {
             0x03 => Sixteen,
             0x04 => ThirtyTwo,
             0x05 => SixtyFour,
-            0x06 => OneHundredTwentyEight,
-            0x07 => TwoHundredFiftySix,
+            0x06 => OneTwentyEight,
+            0x07 => TwoFiftySix,
             0x08 => FiveHundredTwelve,
             0x52 => SeventyTwo,
             0x53 => Eighty,
@@ -531,6 +545,6 @@ impl std::fmt::Debug for Box<dyn MBCIo> {
 
 impl Default for Box<dyn MBCIo> {
     fn default() -> Self {
-        Box::new(MBC1::default())
+        Box::new(NoMBC)
     }
 }
