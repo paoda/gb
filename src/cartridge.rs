@@ -33,18 +33,19 @@ impl Cartridge {
     }
 
     fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
-        let ram_size = Self::detect_ram_size(memory);
-        let rom_size = Self::detect_rom_size(memory);
+        let ram_info = Self::detect_ram_info(memory);
+        let rom_info = Self::detect_rom_info(memory);
         let mbc_kind = Self::find_mbc(memory);
+        let ram_size = ram_info.size();
 
-        eprintln!("Cartridge Ram Size: {} bytes", ram_size.len());
-        eprintln!("Cartridge ROM Size: {} bytes", rom_size.size());
+        eprintln!("Cartridge Ram Size: {} bytes", ram_size);
+        eprintln!("Cartridge ROM Size: {} bytes", rom_info.size());
         eprintln!("MBC Type: {:?}", mbc_kind);
 
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
-            MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
-            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC1 => Box::new(MBC1::new(ram_info, rom_info)),
+            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_info, rom_info)), // TODO: Implement Saving
             MBCKind::MBC3 => Box::new(MBC3::new(ram_size)),
             MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_size)), // TODO: Implement Saving
             MBCKind::MBC5 => Box::new(MBC5::new(ram_size)),
@@ -67,13 +68,13 @@ impl Cartridge {
         self.title.as_deref()
     }
 
-    fn detect_ram_size(memory: &[u8]) -> RamSize {
+    fn detect_ram_info(memory: &[u8]) -> RamInfo {
         let id = memory[RAM_SIZE_ADDRESS];
         id.into()
     }
 
-    fn detect_rom_size(memory: &[u8]) -> RomSize {
-        let id = memory[ROM_SIZE_ADDRESS];
+    fn detect_rom_info(memory: &[u8]) -> RomInfo {
+        let id = dbg!(memory[ROM_SIZE_ADDRESS]);
         id.into()
     }
 
@@ -113,17 +114,17 @@ struct MBC1 {
     /// 2-bit number
     ram_bank: u8,
     mode: bool,
-    ram_size: RamSize,
+    ram_size: RamInfo,
     memory: Vec<u8>,
-    rom_size: RomSize,
+    rom_size: RomInfo,
     mem_enabled: bool,
 }
 
 impl MBC1 {
-    fn new(ram_size: RamSize, rom_size: RomSize) -> Self {
+    fn new(ram_size: RamInfo, rom_size: RomInfo) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size.len() as usize],
+            memory: vec![0; ram_size.size() as usize],
             ram_size,
             rom_size,
             ram_bank: Default::default(),
@@ -133,7 +134,7 @@ impl MBC1 {
     }
 
     fn zero_bank(&self) -> u8 {
-        use RomSize::*;
+        use RomInfo::*;
 
         match self.rom_size {
             None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
@@ -144,7 +145,7 @@ impl MBC1 {
     }
 
     fn _mbcm_zero_bank(&self) -> u8 {
-        use RomSize::*;
+        use RomInfo::*;
 
         match self.rom_size {
             None | Four | Eight | Sixteen | ThirtyTwo => 0x00,
@@ -155,7 +156,7 @@ impl MBC1 {
     }
 
     fn high_bank(&self) -> u8 {
-        use RomSize::*;
+        use RomInfo::*;
 
         let base = self.rom_bank & self.rom_size_mask();
 
@@ -168,7 +169,7 @@ impl MBC1 {
     }
 
     fn rom_size_mask(&self) -> u8 {
-        use RomSize::*;
+        use RomInfo::*;
 
         match self.rom_size {
             None => 0b00000001,
@@ -181,11 +182,11 @@ impl MBC1 {
     }
 
     fn ram_addr(&self, addr: u16) -> u16 {
-        use RamSize::*;
+        use RamInfo::*;
 
         match self.ram_size {
-            Two | Eight => (addr - 0xA000) % self.ram_size.len() as u16,
-            ThirtyTwo => {
+            Unused | One => (addr - 0xA000) % self.ram_size.size() as u16,
+            Four => {
                 if self.mode {
                     0x2000 * self.ram_bank as u16 + (addr - 0xA000)
                 } else {
@@ -269,9 +270,9 @@ struct MBC3 {
 }
 
 impl MBC3 {
-    fn new(ram_size: RamSize) -> Self {
+    fn new(ram_size: usize) -> Self {
         Self {
-            memory: vec![0; ram_size.len() as usize],
+            memory: vec![0; ram_size],
             rom_bank: Default::default(),
             ram_bank: Default::default(),
             devs_enabled: Default::default(),
@@ -356,10 +357,10 @@ struct MBC5 {
 }
 
 impl MBC5 {
-    fn new(ram_size: RamSize) -> Self {
+    fn new(ram_size: usize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size.len() as usize],
+            memory: vec![0; ram_size],
             ram_bank: Default::default(),
             mem_enabled: Default::default(),
         }
@@ -440,54 +441,54 @@ impl Default for MBCKind {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum RamSize {
+enum RamInfo {
     None = 0x00,
-    Two = 0x01,
-    Eight = 0x02,
-    ThirtyTwo = 0x03,             // Split into 4 RAM banks
-    OneHundredTwentyEight = 0x04, // Split into 16 RAM banks
-    SixtyFour = 0x05,             // Split into 8 RAm Banks
+    Unused = 0x01,
+    One = 0x02,
+    Four = 0x03,
+    Sixteen = 0x04,
+    Eight = 0x05,
 }
 
-impl RamSize {
-    fn len(&self) -> u32 {
-        use RamSize::*;
+impl RamInfo {
+    fn size(&self) -> usize {
+        use RamInfo::*;
 
         match *self {
             None => 0,
-            Two => 2_048,
-            Eight => 8_192,
-            ThirtyTwo => 32_768,
-            OneHundredTwentyEight => 131_072,
-            SixtyFour => 65_536,
+            Unused => 0x800,
+            One => 0x2000,
+            Four => 0x8000,
+            Sixteen => 0x20000,
+            Eight => 0x10000,
         }
     }
 }
 
-impl Default for RamSize {
+impl Default for RamInfo {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl From<u8> for RamSize {
+impl From<u8> for RamInfo {
     fn from(byte: u8) -> Self {
-        use RamSize::*;
+        use RamInfo::*;
 
         match byte {
             0x00 => None,
-            0x01 => Two,
-            0x02 => Eight,
-            0x03 => ThirtyTwo,
-            0x04 => OneHundredTwentyEight,
-            0x05 => SixtyFour,
+            0x01 => Unused,
+            0x02 => One,
+            0x03 => Four,
+            0x04 => Sixteen,
+            0x05 => Eight,
             _ => unreachable!("{:#04X} is not a valid value for RAMSize", byte),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum RomSize {
+enum RomInfo {
     None = 0x00,              // 32KB (also called Two)
     Four = 0x01,              // 64KB
     Eight = 0x02,             // 128KB
@@ -502,24 +503,23 @@ enum RomSize {
     NinetySix = 0x54,         // 1.5MB
 }
 
-impl RomSize {
+impl RomInfo {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
     fn size(&self) -> u32 {
-        use RomSize::*;
+        use RomInfo::*;
 
         match self {
-            None | Four | Eight | Sixteen | ThirtyTwo | SixtyFour | OneTwentyEight
-            | TwoFiftySix | FiveHundredTwelve => 2 << (14 + *self as u8),
-            SeventyTwo => 1_179_648,
-            Eighty => 1_310_720,
-            NinetySix => 1_572_864,
+            SeventyTwo => 0x120000,
+            Eighty => 0x140000,
+            NinetySix => 0x180000,
+            _ => 0x8000 << *self as u8,
         }
     }
 }
 
-impl From<u8> for RomSize {
+impl From<u8> for RomInfo {
     fn from(byte: u8) -> Self {
-        use RomSize::*;
+        use RomInfo::*;
 
         match byte {
             0x00 => None,
