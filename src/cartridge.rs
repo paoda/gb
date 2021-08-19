@@ -372,7 +372,9 @@ impl MBCIo for MBC5 {
 
         match addr {
             0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => Address(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
+            0x4000..=0x7FFF => {
+                Address(0x4000u16.wrapping_mul(self.rom_bank) as usize + (addr as usize - 0x4000))
+            }
             0xA000..=0xBFFF if self.mem_enabled => {
                 Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
             }
