@@ -64,10 +64,11 @@ fn main() -> Result<()> {
     };
 
     // Initialize Audio
+    let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
+
     if AUDIO_ENABLED {
         let spsc: AudioSPSC<f32> = Default::default();
         let (prod, cons) = spsc.init();
-        let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
         let sink = Sink::try_new(&stream_handle)?;
         sink.append(cons);
         game_boy.apu_mut().attach_producer(prod);
