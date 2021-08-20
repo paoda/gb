@@ -57,7 +57,7 @@ impl Cartridge {
     fn find_title(memory: &[u8]) -> Option<String> {
         let slice = &memory[ROM_TITLE_RANGE];
         let with_nulls = std::str::from_utf8(slice).ok();
-        let trimmed = with_nulls.map(|s| s.trim_matches('\0'));
+        let trimmed = with_nulls.map(|s| s.trim_matches('\0').trim());
 
         match trimmed {
             Some("") | None => None,
