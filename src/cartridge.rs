@@ -75,7 +75,7 @@ impl Cartridge {
     }
 
     fn detect_rom_info(memory: &[u8]) -> RomSize {
-        let id = dbg!(memory[ROM_SIZE_ADDRESS]);
+        let id = memory[ROM_SIZE_ADDRESS];
         id.into()
     }
 
