@@ -21,17 +21,28 @@ impl Timer {
         use State::*;
         use TimerSpeed::*;
 
-        if let TIMAOverflow(step) | AbortedTIMAOverflow(step) = self.state {
-            if step < 4 {
-                self.state = TIMAOverflow(step + 1);
-                return;
-            }
-
-            if self.state == TIMAOverflow(step) {
+        match self.state {
+            TIMAOverflow(_) | AbortedTIMAOverflow(_) => self.state = self.state.next(),
+            LoadTMA => {
                 self.counter = self.modulo;
                 self.interrupt = true;
+
+                self.state.next();
             }
-            self.state = Normal;
+            Normal => {}
+        }
+
+        if let TIMAOverflow(step) | AbortedTIMAOverflow(step) = self.state {
+            if step < 3 {
+                self.state = self.state.next();
+            } else {
+                if self.state == TIMAOverflow(step) {
+                    self.counter = self.modulo;
+                    self.interrupt = true;
+                }
+
+                self.state = Normal;
+            }
         }
 
         self.divider = self.divider.wrapping_add(1);
@@ -67,14 +78,12 @@ impl Timer {
         use State::*;
 
         match self.state {
-            Normal => self.counter = byte,
+            Normal | AbortedTIMAOverflow(_) => self.counter = byte,
             TIMAOverflow(step) => {
-                if step < 4 {
-                    self.counter = byte;
-                    self.state = AbortedTIMAOverflow(step);
-                }
+                self.counter = byte;
+                self.state = AbortedTIMAOverflow(step);
             }
-            AbortedTIMAOverflow(_) => self.counter = byte,
+            LoadTMA => {}
         }
     }
 
@@ -173,4 +182,19 @@ enum State {
     TIMAOverflow(u8),
     AbortedTIMAOverflow(u8),
     Normal,
+    LoadTMA,
+}
+
+impl State {
+    fn next(&self) -> Self {
+        use State::*;
+
+        match self {
+            Normal | LoadTMA => Normal,
+            TIMAOverflow(3) => LoadTMA,
+            AbortedTIMAOverflow(3) => Normal,
+            TIMAOverflow(step) => TIMAOverflow(step + 1),
+            AbortedTIMAOverflow(step) => AbortedTIMAOverflow(step + 1),
+        }
+    }
 }
