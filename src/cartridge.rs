@@ -33,23 +33,24 @@ impl Cartridge {
     }
 
     fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
-        let ram_info = Self::detect_ram_info(memory);
-        let rom_info = Self::detect_rom_info(memory);
+        let ram_size = Self::detect_ram_info(memory);
+        let rom_size = Self::detect_rom_info(memory);
         let mbc_kind = Self::find_mbc(memory);
-        let ram_size = ram_info.size();
+        let ram_cap = ram_size.capacity();
+        let rom_cap = rom_size.capacity();
 
-        eprintln!("Cartridge Ram Size: {} bytes", ram_size);
-        eprintln!("Cartridge ROM Size: {} bytes", rom_info.size());
+        eprintln!("Cartridge Ram Size: {} bytes", ram_cap);
+        eprintln!("Cartridge ROM Size: {} bytes", rom_size.capacity());
         eprintln!("MBC Type: {:?}", mbc_kind);
 
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
-            MBCKind::MBC1 => Box::new(MBC1::new(ram_info, rom_info)),
-            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_info, rom_info)), // TODO: Implement Saving
-            MBCKind::MBC3 => Box::new(MBC3::new(ram_size)),
-            MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_size)), // TODO: Implement Saving
-            MBCKind::MBC5 => Box::new(MBC5::new(ram_size)),
-            MBCKind::MBC5WithBattery => Box::new(MBC5::new(ram_size)), // TDO: Implement Saving
+            MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
+            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC3 => Box::new(MBC3::new(ram_cap)),
+            MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_cap)), // TODO: Implement Saving
+            MBCKind::MBC5 => Box::new(MBC5::new(ram_cap, rom_cap)),
+            MBCKind::MBC5WithBattery => Box::new(MBC5::new(ram_cap, rom_cap)), // TDO: Implement Saving
         }
     }
 
@@ -124,7 +125,7 @@ impl MBC1 {
     fn new(ram_size: RamSize, rom_size: RomSize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size.size() as usize],
+            memory: vec![0; ram_size.capacity() as usize],
             ram_size,
             rom_size,
             ram_bank: Default::default(),
@@ -185,7 +186,7 @@ impl MBC1 {
         use RamSize::*;
 
         match self.ram_size {
-            Unused | One => (addr - 0xA000) % self.ram_size.size() as u16,
+            Unused | One => (addr - 0xA000) % self.ram_size.capacity() as u16,
             Four => {
                 if self.mode {
                     0x2000 * self.ram_bank as u16 + (addr - 0xA000)
@@ -270,9 +271,9 @@ struct MBC3 {
 }
 
 impl MBC3 {
-    fn new(ram_size: usize) -> Self {
+    fn new(ram_cap: usize) -> Self {
         Self {
-            memory: vec![0; ram_size],
+            memory: vec![0; ram_cap],
             rom_bank: Default::default(),
             ram_bank: Default::default(),
             devs_enabled: Default::default(),
@@ -352,18 +353,25 @@ struct MBC5 {
     /// 4-bit number
     ram_bank: u8,
 
+    rom_cap: usize,
+
     memory: Vec<u8>,
     mem_enabled: bool,
 }
 
 impl MBC5 {
-    fn new(ram_size: usize) -> Self {
+    fn new(ram_cap: usize, rom_cap: usize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size],
+            memory: vec![0; ram_cap],
+            rom_cap,
             ram_bank: Default::default(),
             mem_enabled: Default::default(),
         }
+    }
+
+    fn bank_addr(&self, addr: u16) -> usize {
+        (0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)) % self.rom_cap
     }
 }
 
@@ -373,9 +381,7 @@ impl MBCIo for MBC5 {
 
         match addr {
             0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => {
-                Address(0x4000u16.wrapping_mul(self.rom_bank) as usize + (addr as usize - 0x4000))
-            }
+            0x4000..=0x7FFF => Address(self.bank_addr(addr)),
             0xA000..=0xBFFF if self.mem_enabled => {
                 Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
             }
@@ -451,7 +457,7 @@ enum RamSize {
 }
 
 impl RamSize {
-    fn size(&self) -> usize {
+    fn capacity(&self) -> usize {
         use RamSize::*;
 
         match *self {
@@ -505,7 +511,7 @@ enum RomSize {
 
 impl RomSize {
     // https://hacktix.github.io/GBEDG/mbcs/#rom-size
-    fn size(&self) -> u32 {
+    fn capacity(&self) -> usize {
         use RomSize::*;
 
         match self {
