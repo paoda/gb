@@ -146,11 +146,11 @@ impl Cpu {
         self.handle_ei();
 
         // For use in Blargg's Test ROMs
-        if self.read_byte(0xFF02) == 0x81 {
-            let c = self.read_byte(0xFF01) as char;
-            self.write_byte(0xFF02, 0x00);
-            eprint!("{}", c);
-        }
+        // if self.read_byte(0xFF02) == 0x81 {
+        //     let c = self.read_byte(0xFF01) as char;
+        //     self.write_byte(0xFF02, 0x00);
+        //     eprint!("{}", c);
+        // }
 
         elapsed
     }
