@@ -22,27 +22,14 @@ impl Timer {
         use TimerSpeed::*;
 
         match self.state {
-            TIMAOverflow(_) | AbortedTIMAOverflow(_) => self.state = self.state.next(),
+            TIMAOverflow(_) | AbortedTIMAOverflow(_) => self.next(),
             LoadTMA => {
                 self.counter = self.modulo;
                 self.interrupt = true;
 
-                self.state.next();
+                self.next();
             }
             Normal => {}
-        }
-
-        if let TIMAOverflow(step) | AbortedTIMAOverflow(step) = self.state {
-            if step < 3 {
-                self.state = self.state.next();
-            } else {
-                if self.state == TIMAOverflow(step) {
-                    self.counter = self.modulo;
-                    self.interrupt = true;
-                }
-
-                self.state = Normal;
-            }
         }
 
         self.divider = self.divider.wrapping_add(1);
@@ -101,6 +88,18 @@ impl Timer {
 
         if did_overflow {
             self.state = State::TIMAOverflow(0);
+        }
+    }
+
+    fn next(&mut self) {
+        use State::*;
+
+        self.state = match self.state {
+            Normal | LoadTMA => Normal,
+            AbortedTIMAOverflow(4) => Normal,
+            TIMAOverflow(4) => LoadTMA,
+            AbortedTIMAOverflow(step) => AbortedTIMAOverflow(step + 1),
+            TIMAOverflow(step) => TIMAOverflow(step + 1),
         }
     }
 }
@@ -183,18 +182,4 @@ enum State {
     AbortedTIMAOverflow(u8),
     Normal,
     LoadTMA,
-}
-
-impl State {
-    fn next(&self) -> Self {
-        use State::*;
-
-        match self {
-            Normal | LoadTMA => Normal,
-            TIMAOverflow(3) => LoadTMA,
-            AbortedTIMAOverflow(3) => Normal,
-            TIMAOverflow(step) => TIMAOverflow(step + 1),
-            AbortedTIMAOverflow(step) => AbortedTIMAOverflow(step + 1),
-        }
-    }
 }
