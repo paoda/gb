@@ -47,6 +47,8 @@ impl Cartridge {
             MBCKind::None => Box::new(NoMBC),
             MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
             MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC2 => Box::new(MBC2::new(rom_cap)),
+            MBCKind::MBC2WithBattery => Box::new(MBC2::new(rom_cap)), // TODO: Implement Saving
             MBCKind::MBC3 => Box::new(MBC3::new(ram_cap)),
             MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_cap)), // TODO: Implement Saving
             MBCKind::MBC5 => Box::new(MBC5::new(ram_cap, rom_cap)),
@@ -80,14 +82,18 @@ impl Cartridge {
     }
 
     fn find_mbc(memory: &[u8]) -> MBCKind {
+        use MBCKind::*;
+
         match memory[MBC_TYPE_ADDRESS] {
-            0x00 => MBCKind::None,
-            0x01 | 0x02 => MBCKind::MBC1,
-            0x03 => MBCKind::MBC1WithBattery,
-            0x19 | 0x1A => MBCKind::MBC5,
-            0x1B => MBCKind::MBC5WithBattery,
-            0x13 => MBCKind::MBC3WithBattery,
-            0x11 | 0x12 => MBCKind::MBC3,
+            0x00 => None,
+            0x01 | 0x02 => MBC1,
+            0x03 => MBC1WithBattery,
+            0x05 => MBC2,
+            0x06 => MBC2WithBattery,
+            0x19 | 0x1A => MBC5,
+            0x1B => MBC5WithBattery,
+            0x13 => MBC3WithBattery,
+            0x11 | 0x12 => MBC3,
             id => unimplemented!("id {:#04X} is an unsupported MBC", id),
         }
     }
@@ -406,6 +412,67 @@ impl MBCIo for MBC5 {
 }
 
 #[derive(Debug)]
+struct MBC2 {
+    /// 4-bit number
+    rom_bank: u8,
+    memory: Box<[u8; Self::RAM_SIZE]>,
+    mem_enabled: bool,
+
+    rom_cap: usize,
+}
+
+impl MBC2 {
+    const RAM_SIZE: usize = 0x0200;
+
+    fn new(rom_cap: usize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: Box::new([0; Self::RAM_SIZE]),
+            mem_enabled: Default::default(),
+            rom_cap,
+        }
+    }
+
+    fn rom_addr(&self, addr: u16) -> usize {
+        (0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)) % self.rom_cap
+    }
+}
+
+impl MBCIo for MBC2 {
+    fn handle_read(&self, addr: u16) -> MBCResult {
+        use MBCResult::*;
+
+        match addr {
+            0x0000..=0x3FFF => Address(addr as usize),
+            0x4000..=0x7FFF => Address(self.rom_addr(addr)),
+            0xA000..=0xBFFF if self.mem_enabled => {
+                let mbc2_addr = addr as usize & (Self::RAM_SIZE - 1);
+                Value(self.memory[mbc2_addr] | 0xF0)
+            }
+            0xA000..=0xBFFF => Value(0xFF),
+            _ => unreachable!("A read from {:#06X} should not be handled by MBC2", addr),
+        }
+    }
+
+    fn handle_write(&mut self, addr: u16, byte: u8) {
+        let nybble = byte & 0x0F;
+
+        match addr {
+            0x0000..=0x3FFF if addr >> 8 & 0x01 == 0x01 => {
+                self.rom_bank = if nybble == 0x00 { 0x01 } else { nybble };
+            }
+            0x0000..=0x3FFF => self.mem_enabled = nybble == 0x0A,
+            0xA000..=0xBFFF if self.mem_enabled => {
+                let mbc2_addr = addr as usize & (Self::RAM_SIZE - 1);
+                self.memory[mbc2_addr] = nybble;
+            }
+            0x4000..=0x7FFF | 0xA000..=0xBFFF => {}
+            _ => unreachable!("A write to {:#06X} should not be handled by MBC2", addr),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct NoMBC;
 
 impl MBCIo for NoMBC {
@@ -434,6 +501,8 @@ enum MBCKind {
     None,
     MBC1,
     MBC1WithBattery,
+    MBC2,
+    MBC2WithBattery,
     MBC3,
     MBC3WithBattery,
     MBC5,
