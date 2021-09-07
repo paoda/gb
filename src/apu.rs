@@ -468,22 +468,8 @@ impl Channel1 {
 
         // If this bit is set, a trigger event occurs
         if self.freq_hi.initial() {
-            // Envelope Behaviour during trigger event
-            self.period_timer = self.envelope.period();
-            self.current_volume = self.envelope.init_vol();
-
-            // Sweep behaviour during trigger event
-            let sweep_period = self.sweep.period();
-            let sweep_shift = self.sweep.shift_count();
-            self.shadow_freq = self.frequency();
-            self.sweep_timer = if sweep_period == 0 { 8 } else { sweep_period };
-
-            if sweep_period != 0 || sweep_shift != 0 {
-                self.sweep_enabled = true;
-            }
-
-            if sweep_shift != 0 {
-                let _ = self.calc_sweep_freq();
+            if self.is_dac_enabled() {
+                self.enabled = true;
             }
 
             // Length behaviour during trigger event
@@ -491,8 +477,21 @@ impl Channel1 {
                 self.length_timer = 64;
             }
 
-            if self.is_dac_enabled() {
-                self.enabled = true;
+            // Envelope Behaviour during trigger event
+            self.period_timer = self.envelope.period();
+            self.current_volume = self.envelope.init_vol();
+
+            // Sweep behaviour during trigger event
+            let sweep_period = self.sweep.period();
+            let sweep_shift = self.sweep.shift_count();
+
+            self.shadow_freq = self.frequency();
+            self.sweep_timer = if sweep_period == 0 { 8 } else { sweep_period };
+
+            self.sweep_enabled = sweep_period != 0 || sweep_shift != 0;
+
+            if sweep_shift != 0 {
+                let _ = self.calc_sweep_freq();
             }
         }
     }
