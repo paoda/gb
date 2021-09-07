@@ -4,7 +4,6 @@ use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
-use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -79,8 +78,6 @@ fn main() -> Result<()> {
         });
     }
 
-    let mut start = Instant::now();
-    let frame_time = Duration::from_secs_f64(1.0 / 59.73); // 59.73 Hz on Host
     let mut cycle_count: Cycle = Default::default();
 
     event_loop.run(move |event, _, control_flow| {
@@ -105,15 +102,7 @@ fn main() -> Result<()> {
                 pixels.resize_surface(size.width, size.height);
             }
 
-            let mut diff = Instant::now() - start;
-            while diff.subsec_nanos() < frame_time.subsec_nanos() {
-                if cycle_count < gb::emu::CYCLES_IN_FRAME {
-                    cycle_count += gb::emu::run_frame(&mut game_boy, &mut gamepad, &input);
-                }
-
-                diff = Instant::now() - start;
-            }
-            start = Instant::now();
+            cycle_count += gb::emu::run_frame(&mut game_boy, &mut gamepad, &input);
 
             if cycle_count >= gb::emu::CYCLES_IN_FRAME {
                 cycle_count %= gb::emu::CYCLES_IN_FRAME;
