@@ -188,16 +188,16 @@ impl MBC1 {
         }
     }
 
-    fn ram_addr(&self, addr: u16) -> u16 {
+    fn ram_addr(&self, addr: u16) -> usize {
         use RamSize::*;
 
         match self.ram_size {
-            Unused | One => (addr - 0xA000) % self.ram_size.capacity() as u16,
+            Unused | One => (addr as usize - 0xA000) % self.ram_size.capacity(),
             Four => {
                 if self.mode {
-                    0x2000 * self.ram_bank as u16 + (addr - 0xA000)
+                    0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)
                 } else {
-                    addr - 0xA000
+                    addr as usize - 0xA000
                 }
             }
             _ => unreachable!("RAM size can not be greater than 32KB on MBC1"),
@@ -210,23 +210,15 @@ impl MBCIo for MBC1 {
         use MBCResult::*;
 
         match addr {
-            0x0000..=0x3FFF => {
-                if self.mode {
-                    Address(0x4000 * self.zero_bank() as usize + addr as usize)
-                } else {
-                    Address(addr as usize)
-                }
+            0x0000..=0x3FFF if self.mode => {
+                Address(0x4000 * self.zero_bank() as usize + addr as usize)
             }
+            0x0000..=0x3FFF => Address(addr as usize),
             0x4000..=0x7FFF => {
                 Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
             }
-            0xA000..=0xBFFF => {
-                if self.mem_enabled {
-                    Value(self.memory[self.ram_addr(addr) as usize])
-                } else {
-                    Value(0xFF)
-                }
-            }
+            0xA000..=0xBFFF if self.mem_enabled => Value(self.memory[self.ram_addr(addr)]),
+            0xA000..=0xBFFF => Value(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC1", addr),
         }
     }
@@ -235,18 +227,14 @@ impl MBCIo for MBC1 {
         match addr {
             0x0000..=0x1FFF => self.mem_enabled = (byte & 0x0F) == 0x0A,
             0x2000..=0x3FFF => {
-                self.rom_bank = if byte == 0x00 {
-                    0x01
-                } else {
-                    byte & self.rom_size_mask()
-                };
-
-                self.rom_bank &= 0x1F;
+                let value = byte & 0x1F;
+                let masked_value = byte & self.rom_size_mask();
+                self.rom_bank = if value == 0 { 0x01 } else { masked_value };
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0x03,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
             0xA000..=0xBFFF if self.mem_enabled => {
-                let ram_addr = self.ram_addr(addr) as usize;
+                let ram_addr = self.ram_addr(addr);
                 self.memory[ram_addr] = byte;
             }
             0xA000..=0xBFFF => {} // Ram isn't enabled, ignored write
