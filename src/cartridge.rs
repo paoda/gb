@@ -217,7 +217,9 @@ impl MBCIo for MBC1 {
             0x4000..=0x7FFF => {
                 Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
             }
-            0xA000..=0xBFFF if self.mem_enabled => Value(self.memory[self.ram_addr(addr)]),
+            0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
+                Value(self.memory[self.ram_addr(addr)])
+            }
             0xA000..=0xBFFF => Value(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC1", addr),
         }
@@ -233,7 +235,7 @@ impl MBCIo for MBC1 {
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0x03,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
-            0xA000..=0xBFFF if self.mem_enabled => {
+            0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
                 let ram_addr = self.ram_addr(addr);
                 self.memory[ram_addr] = byte;
             }
@@ -503,7 +505,7 @@ impl Default for MBCKind {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum RamSize {
     None = 0x00,
     Unused = 0x01,
