@@ -71,6 +71,7 @@ fn main() -> Result<()> {
         let (prod, cons) = spsc.init();
         let sink = Sink::try_new(&stream_handle)?;
         sink.append(cons);
+        sink.set_volume(0.1); // TODO: Is this the right way to go about this?
         game_boy.apu_mut().attach_producer(prod);
 
         std::thread::spawn(move || {
