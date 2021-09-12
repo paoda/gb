@@ -123,7 +123,7 @@ impl Instruction {
                     let addr = Self::imm_word(cpu);
                     let sp = cpu.register_pair(RegisterPair::SP);
                     Self::write_word(&mut cpu.bus, addr, sp);
-                    (20)
+                    20
                 }
                 (LDTarget::Group1(pair), LDSource::ImmediateWord) => {
                     // LD r16, u16 | Store u16 in 16-bit register
@@ -133,7 +133,7 @@ impl Instruction {
                     match pair {
                         BC | DE | HL | SP => cpu.set_register_pair(pair.as_register_pair(), word),
                     }
-                    (12)
+                    12
                 }
                 (LDTarget::IndirectGroup2(pair), LDSource::A) => {
                     // LD (r16), A | Store accumulator in byte at 16-bit register
@@ -155,7 +155,7 @@ impl Instruction {
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
                     }
-                    (8)
+                    8
                 }
                 (LDTarget::A, LDSource::IndirectGroup2(pair)) => {
                     // LD A, (r16) | Store byte at 16-bit register in accumulator
@@ -178,7 +178,7 @@ impl Instruction {
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
                     }
-                    (8)
+                    8
                 }
                 (LDTarget::Register(reg), LDSource::ImmediateByte) => {
                     // LD r8, u8 | Store u8 in 8-bit register
@@ -188,12 +188,12 @@ impl Instruction {
                     match reg {
                         A | B | C | D | E | H | L => {
                             cpu.set_register(reg.cpu_register(), right);
-                            (8)
+                            8
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             Self::write_byte(&mut cpu.bus, addr, right);
-                            (12)
+                            12
                         }
                     }
                 }
@@ -202,14 +202,14 @@ impl Instruction {
                     let addr = 0xFF00 + cpu.register(CpuRegister::C) as u16;
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    (8)
+                    8
                 }
                 (LDTarget::A, LDSource::IoWithC) => {
                     // LD A, (0xFF00 + C) | Store byte at 0xFF00 + C in register A
                     let addr = 0xFF00 + cpu.register(CpuRegister::C) as u16;
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    (8)
+                    8
                 }
                 (LDTarget::Register(target), LDSource::Register(source)) => {
                     // LD r8, r8 | Store 8-bit register in 8-bit register
@@ -222,12 +222,12 @@ impl Instruction {
                             match target {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(target.cpu_register(), right);
-                                    (4)
+                                    4
                                 }
                                 IndirectHL => {
                                     let addr = cpu.register_pair(RegisterPair::HL);
                                     Self::write_byte(&mut cpu.bus, addr, right);
-                                    (8)
+                                    8
                                 }
                             }
                         }
@@ -238,7 +238,7 @@ impl Instruction {
                             match target {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(target.cpu_register(), right);
-                                    (8)
+                                    8
                                 }
                                 IndirectHL => {
                                     unreachable!("LD (HL), (HL) is an illegal instruction")
@@ -252,33 +252,33 @@ impl Instruction {
                     let addr = 0xFF00 + Self::imm_byte(cpu) as u16;
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    (12)
+                    12
                 }
                 (LDTarget::A, LDSource::IoWithImmediateOffset) => {
                     // LD A, (0xFF00 + u8) | Store byte at address 0xFF00 + u8 in accumulator
                     let addr = 0xFF00 + Self::imm_byte(cpu) as u16;
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    (12)
+                    12
                 }
                 (LDTarget::SP, LDSource::HL) => {
                     // LD SP, HL | Store HL in stack pointer
                     cpu.set_register_pair(RegisterPair::SP, cpu.register_pair(RegisterPair::HL));
-                    (8) // performs an internal operation that takes 4 cycles
+                    8 // performs an internal operation that takes 4 cycles
                 }
                 (LDTarget::IndirectImmediateWord, LDSource::A) => {
                     // LD (u16), A | Store accumulator in byte at 16-bit register
                     let addr = Self::imm_word(cpu);
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    (16)
+                    16
                 }
                 (LDTarget::A, LDSource::IndirectImmediateWord) => {
                     // LD A, (u16) | Store byte at 16-bit register in accumulator
                     let addr = Self::imm_word(cpu);
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    (16)
+                    16
                 }
                 _ => unreachable!("LD {:?}, {:?} is an illegal instruction", target, src),
             },
@@ -296,38 +296,38 @@ impl Instruction {
                     JumpCondition::NotZero => {
                         if !flags.z() {
                             Self::jump(cpu, addr);
-                            (12)
+                            12
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             Self::jump(cpu, addr);
-                            (12)
+                            12
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             Self::jump(cpu, addr);
-                            (12)
+                            12
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             Self::jump(cpu, addr);
-                            (12)
+                            12
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Always => {
                         Self::jump(cpu, addr);
-                        (12)
+                        12
                     }
                 }
             }
@@ -349,7 +349,7 @@ impl Instruction {
                         }
                     }
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
                 (AddTarget::A, AddSource::Register(reg)) => {
                     // ADD A, r8 | Add 8-bit register to accumulator
@@ -383,7 +383,7 @@ impl Instruction {
                     let sum = Self::add_u16_i8(left, Self::imm_byte(cpu) as i8, &mut flags);
                     cpu.set_register_pair(RegisterPair::SP, sum);
                     cpu.set_flags(flags);
-                    (16)
+                    16
                 }
                 (AddTarget::A, AddSource::ImmediateByte) => {
                     // ADD A, u8 | Add u8 to accumulator
@@ -393,7 +393,7 @@ impl Instruction {
                     let sum = Self::add(left, Self::imm_byte(cpu), &mut flags);
                     cpu.set_register(CpuRegister::A, sum);
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
                 _ => unreachable!("ADD {:?}, {:?} is an illegal instruction", target, src),
             },
@@ -408,13 +408,13 @@ impl Instruction {
                             B | C | D | E | H | L | A => {
                                 let reg = reg.cpu_register();
                                 cpu.set_register(reg, Self::inc(cpu.register(reg), &mut flags));
-                                (4)
+                                4
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let left = Self::read_byte(&mut cpu.bus, addr);
                                 Self::write_byte(&mut cpu.bus, addr, Self::inc(left, &mut flags));
-                                (12)
+                                12
                             }
                         };
                         cpu.set_flags(flags);
@@ -433,7 +433,7 @@ impl Instruction {
                                 cpu.set_register_pair(pair, left.wrapping_add(1));
                             }
                         }
-                        (8)
+                        8
                     }
                 }
             }
@@ -448,13 +448,13 @@ impl Instruction {
                             B | C | D | E | H | L | A => {
                                 let reg = reg.cpu_register();
                                 cpu.set_register(reg, Self::dec(cpu.register(reg), &mut flags));
-                                (4)
+                                4
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let left = Self::read_byte(&mut cpu.bus, addr);
                                 Self::write_byte(&mut cpu.bus, addr, Self::dec(left, &mut flags));
-                                (12)
+                                12
                             }
                         };
                         cpu.set_flags(flags);
@@ -472,7 +472,7 @@ impl Instruction {
                                 cpu.set_register_pair(pair, left.wrapping_sub(1));
                             }
                         };
-                        (8)
+                        8
                     }
                 }
             }
@@ -483,7 +483,7 @@ impl Instruction {
                 let acc_rotated = acc.rotate_left(1);
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, most_sgfnt == 0x01);
-                (4)
+                4
             }
             Instruction::RRCA => {
                 // RRCA | Rotate accumulator right
@@ -492,7 +492,7 @@ impl Instruction {
                 let acc_rotated = acc.rotate_right(1);
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, least_sgfnt == 0x01);
-                (4)
+                4
             }
             Instruction::RLA => {
                 // RLA | Rotate accumulator left through carry
@@ -502,7 +502,7 @@ impl Instruction {
                 let (acc_rotated, carry) = Self::rl_thru_carry(acc, flags.c());
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, carry);
-                (4)
+                4
             }
             Instruction::RRA => {
                 // RRA | Rotate accumulator right through carry
@@ -512,7 +512,7 @@ impl Instruction {
                 let (acc_rotated, carry) = Self::rr_thru_carry(acc, flags.c());
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, carry);
-                (4)
+                4
             }
             Instruction::DAA => {
                 // DAA | Change accumulator into its BCD representation
@@ -553,7 +553,7 @@ impl Instruction {
                 flags.set_z(tmp as u8 == 0);
                 flags.set_h(false);
                 cpu.set_flags(flags);
-                (4)
+                4
             }
             Instruction::CPL => {
                 // CPL | Compliment accumulator
@@ -564,7 +564,7 @@ impl Instruction {
                 flags.set_n(true);
                 flags.set_h(true);
                 cpu.set_flags(flags);
-                (4)
+                4
             }
             Instruction::SCF => {
                 // SCF | Set Carry Flag
@@ -574,7 +574,7 @@ impl Instruction {
                 flags.set_h(false);
                 flags.set_c(true);
                 cpu.set_flags(flags);
-                (4)
+                4
             }
             Instruction::CCF => {
                 // CCF | Compliment Carry Flag
@@ -584,7 +584,7 @@ impl Instruction {
                 flags.set_h(false);
                 flags.set_c(!flags.c());
                 cpu.set_flags(flags);
-                (4)
+                4
             }
             Instruction::HALT => {
                 // HALT | Enter CPU low power consumption mode until interrupt occurs
@@ -596,7 +596,7 @@ impl Instruction {
                     _ => NonePending,
                 };
                 cpu.halt_cpu(kind);
-                (4)
+                4
             }
             Instruction::ADC(source) => match source {
                 AluSource::Register(reg) => {
@@ -632,7 +632,7 @@ impl Instruction {
                     let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
                     cpu.set_register(CpuRegister::A, sum);
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
             },
             Instruction::SUB(source) => match source {
@@ -666,7 +666,7 @@ impl Instruction {
                     let right = Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, Self::sub(left, right, &mut flags));
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
             },
             Instruction::SBC(target) => match target {
@@ -703,7 +703,7 @@ impl Instruction {
                     let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
                     cpu.set_register(CpuRegister::A, diff);
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
             },
             Instruction::AND(target) => match target {
@@ -729,7 +729,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) & Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, true, false);
-                    (8)
+                    8
                 }
             },
             Instruction::XOR(source) => match source {
@@ -755,7 +755,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) ^ Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, false, false);
-                    (8)
+                    8
                 }
             },
             Instruction::OR(target) => match target {
@@ -781,7 +781,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) | Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, false, false);
-                    (8)
+                    8
                 }
             },
             Instruction::CP(target) => match target {
@@ -795,13 +795,13 @@ impl Instruction {
                     let cycles = match reg {
                         B | C | D | E | H | L | A => {
                             let _ = Self::sub(left, cpu.register(reg.cpu_register()), &mut flags);
-                            (4)
+                            4
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let _ = Self::sub(left, right, &mut flags);
-                            (8)
+                            8
                         }
                     };
                     cpu.set_flags(flags);
@@ -814,7 +814,7 @@ impl Instruction {
                     let left = cpu.register(CpuRegister::A);
                     let _ = Self::sub(left, Self::imm_byte(cpu), &mut flags);
                     cpu.set_flags(flags);
-                    (8)
+                    8
                 }
             },
             Instruction::LDHL => {
@@ -826,7 +826,7 @@ impl Instruction {
                 cpu.set_register_pair(RegisterPair::HL, sum);
                 cpu.set_flags(flags);
                 cpu.bus.clock(); // FIXME: Is this in the right place?
-                (12)
+                12
             }
             Instruction::RET(cond) => {
                 // RET cond | Return from subroutine if condition is true
@@ -840,9 +840,9 @@ impl Instruction {
                         if !flags.z() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            (20)
+                            20
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Zero => {
@@ -851,9 +851,9 @@ impl Instruction {
                         if flags.z() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            (20)
+                            20
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::NotCarry => {
@@ -862,9 +862,9 @@ impl Instruction {
                         if !flags.c() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            (20)
+                            20
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Carry => {
@@ -873,15 +873,15 @@ impl Instruction {
                         if flags.c() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            (20)
+                            20
                         } else {
-                            (8)
+                            8
                         }
                     }
                     JumpCondition::Always => {
                         let addr = Self::pop(cpu);
                         Self::jump(cpu, addr);
-                        (16)
+                        16
                     }
                 }
             }
@@ -895,21 +895,21 @@ impl Instruction {
                         cpu.set_register_pair(pair.as_register_pair(), right);
                     }
                 }
-                (12)
+                12
             }
             Instruction::RETI => {
                 // RETI | Return from subroutine, then enable interrupts
                 let addr = Self::pop(cpu);
                 Self::jump(cpu, addr);
                 cpu.set_ime(ImeState::Enabled);
-                (16)
+                16
             }
             Instruction::JP(cond, location) => match location {
                 JumpLocation::HL => {
                     // JP HL | Store HL in program counter
                     let right = cpu.register_pair(RegisterPair::HL);
                     cpu.set_register_pair(RegisterPair::PC, right);
-                    (4)
+                    4
                 }
                 JumpLocation::ImmediateWord => {
                     // JP cond u16 | Store u16 in program counter if condition is true
@@ -922,38 +922,38 @@ impl Instruction {
                         JumpCondition::NotZero => {
                             if !flags.z() {
                                 Self::jump(cpu, addr);
-                                (16)
+                                16
                             } else {
-                                (12)
+                                12
                             }
                         }
                         JumpCondition::Zero => {
                             if flags.z() {
                                 Self::jump(cpu, addr);
-                                (16)
+                                16
                             } else {
-                                (12)
+                                12
                             }
                         }
                         JumpCondition::NotCarry => {
                             if !flags.c() {
                                 Self::jump(cpu, addr);
-                                (16)
+                                16
                             } else {
-                                (12)
+                                12
                             }
                         }
                         JumpCondition::Carry => {
                             if flags.c() {
                                 Self::jump(cpu, addr);
-                                (16)
+                                16
                             } else {
-                                (12)
+                                12
                             }
                         }
                         JumpCondition::Always => {
                             Self::jump(cpu, addr);
-                            (16)
+                            16
                         }
                     }
                 }
@@ -961,12 +961,12 @@ impl Instruction {
             Instruction::DI => {
                 // DI | Disable IME
                 cpu.set_ime(ImeState::Disabled);
-                (4)
+                4
             }
             Instruction::EI => {
                 // EI | Enable IME after the next instruction
                 cpu.set_ime(ImeState::EiExecuted);
-                (4)
+                4
             }
             Instruction::CALL(cond) => {
                 // CALL cond u16 | Push PC on the stack and store u16 in program counter if condition is true
@@ -982,9 +982,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            (24)
+                            24
                         } else {
-                            (12)
+                            12
                         }
                     }
                     JumpCondition::Zero => {
@@ -992,9 +992,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            (24)
+                            24
                         } else {
-                            (12)
+                            12
                         }
                     }
                     JumpCondition::NotCarry => {
@@ -1002,9 +1002,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            (24)
+                            24
                         } else {
-                            (12)
+                            12
                         }
                     }
                     JumpCondition::Carry => {
@@ -1012,16 +1012,16 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            (24)
+                            24
                         } else {
-                            (12)
+                            12
                         }
                     }
                     JumpCondition::Always => {
                         cpu.bus.clock(); // internal branch decision
                         Self::push(cpu, return_addr);
                         cpu.set_register_pair(RegisterPair::PC, addr);
-                        (24)
+                        24
                     }
                 }
             }
@@ -1037,7 +1037,7 @@ impl Instruction {
                         Self::push(cpu, word);
                     }
                 }
-                (16)
+                16
             }
             Instruction::RST(vector) => {
                 // RST vector | Push current address onto the stack, jump to 0x0000 + n
@@ -1262,13 +1262,13 @@ impl Instruction {
                         let register = reg.cpu_register();
                         let byte = cpu.register(register);
                         cpu.set_register(register, byte & !(1 << bit));
-                        (8)
+                        8
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         Self::write_byte(&mut cpu.bus, addr, byte & !(1 << bit));
-                        (16)
+                        16
                     }
                 }
             }
@@ -1281,13 +1281,13 @@ impl Instruction {
                         let reg = reg.cpu_register();
                         let byte = cpu.register(reg);
                         cpu.set_register(reg, byte | (1u8 << bit));
-                        (8)
+                        8
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         Self::write_byte(&mut cpu.bus, addr, byte | (1u8 << bit));
-                        (16)
+                        16
                     }
                 }
             }
@@ -1473,7 +1473,7 @@ impl Instruction {
         let addr = cpu.register_pair(RegisterPair::PC);
         Self::push(cpu, addr);
         cpu.set_register_pair(RegisterPair::PC, vector as u16);
-        (16)
+        16
     }
 
     /// Read u8 from memory (4 cycles)
