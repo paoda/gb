@@ -1,4 +1,4 @@
-use crate::instruction::cycle::Cycle;
+use crate::Cycle;
 
 #[derive(Debug, Default)]
 pub(crate) struct DirectMemoryAccess {
@@ -56,7 +56,7 @@ impl DirectMemoryAccess {
     }
 
     fn reset(&mut self) {
-        self.cycle = Cycle::new(0);
+        self.cycle = 0;
         self.state = DmaState::Disabled;
         self.start.0 = None;
     }

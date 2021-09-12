@@ -1,6 +1,5 @@
 use self::add::{Source as AddSource, Target as AddTarget};
 use self::alu::Source as AluSource;
-use self::cycle::Cycle;
 use self::jump::{JumpCondition, JumpLocation};
 use self::load::{Source as LDSource, Target as LDTarget};
 use self::table::{
@@ -10,6 +9,7 @@ use self::table::{
 use self::table::{Group1RegisterPair, Group2RegisterPair, Group3RegisterPair, Register};
 use crate::bus::{Bus, BusIo};
 use crate::cpu::{Cpu, Flags, HaltKind, ImeState, Register as CpuRegister, RegisterPair};
+use crate::Cycle;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy)]
@@ -116,14 +116,14 @@ impl std::fmt::Debug for Instruction {
 impl Instruction {
     pub(crate) fn execute(cpu: &mut Cpu, instruction: Self) -> Cycle {
         match instruction {
-            Instruction::NOP => Cycle::new(4),
+            Instruction::NOP => (4),
             Instruction::LD(target, src) => match (target, src) {
                 (LDTarget::IndirectImmediateWord, LDSource::SP) => {
                     // LD (u16), SP | Store stack pointer in byte at 16-bit register
                     let addr = Self::imm_word(cpu);
                     let sp = cpu.register_pair(RegisterPair::SP);
                     Self::write_word(&mut cpu.bus, addr, sp);
-                    Cycle::new(20)
+                    (20)
                 }
                 (LDTarget::Group1(pair), LDSource::ImmediateWord) => {
                     // LD r16, u16 | Store u16 in 16-bit register
@@ -133,7 +133,7 @@ impl Instruction {
                     match pair {
                         BC | DE | HL | SP => cpu.set_register_pair(pair.as_register_pair(), word),
                     }
-                    Cycle::new(12)
+                    (12)
                 }
                 (LDTarget::IndirectGroup2(pair), LDSource::A) => {
                     // LD (r16), A | Store accumulator in byte at 16-bit register
@@ -155,7 +155,7 @@ impl Instruction {
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
                     }
-                    Cycle::new(8)
+                    (8)
                 }
                 (LDTarget::A, LDSource::IndirectGroup2(pair)) => {
                     // LD A, (r16) | Store byte at 16-bit register in accumulator
@@ -178,7 +178,7 @@ impl Instruction {
                             cpu.set_register_pair(RegisterPair::HL, addr - 1);
                         }
                     }
-                    Cycle::new(8)
+                    (8)
                 }
                 (LDTarget::Register(reg), LDSource::ImmediateByte) => {
                     // LD r8, u8 | Store u8 in 8-bit register
@@ -188,12 +188,12 @@ impl Instruction {
                     match reg {
                         A | B | C | D | E | H | L => {
                             cpu.set_register(reg.cpu_register(), right);
-                            Cycle::new(8)
+                            (8)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             Self::write_byte(&mut cpu.bus, addr, right);
-                            Cycle::new(12)
+                            (12)
                         }
                     }
                 }
@@ -202,14 +202,14 @@ impl Instruction {
                     let addr = 0xFF00 + cpu.register(CpuRegister::C) as u16;
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    Cycle::new(8)
+                    (8)
                 }
                 (LDTarget::A, LDSource::IoWithC) => {
                     // LD A, (0xFF00 + C) | Store byte at 0xFF00 + C in register A
                     let addr = 0xFF00 + cpu.register(CpuRegister::C) as u16;
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    Cycle::new(8)
+                    (8)
                 }
                 (LDTarget::Register(target), LDSource::Register(source)) => {
                     // LD r8, r8 | Store 8-bit register in 8-bit register
@@ -222,12 +222,12 @@ impl Instruction {
                             match target {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(target.cpu_register(), right);
-                                    Cycle::new(4)
+                                    (4)
                                 }
                                 IndirectHL => {
                                     let addr = cpu.register_pair(RegisterPair::HL);
                                     Self::write_byte(&mut cpu.bus, addr, right);
-                                    Cycle::new(8)
+                                    (8)
                                 }
                             }
                         }
@@ -238,7 +238,7 @@ impl Instruction {
                             match target {
                                 B | C | D | E | H | L | A => {
                                     cpu.set_register(target.cpu_register(), right);
-                                    Cycle::new(8)
+                                    (8)
                                 }
                                 IndirectHL => {
                                     unreachable!("LD (HL), (HL) is an illegal instruction")
@@ -252,33 +252,33 @@ impl Instruction {
                     let addr = 0xFF00 + Self::imm_byte(cpu) as u16;
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    Cycle::new(12)
+                    (12)
                 }
                 (LDTarget::A, LDSource::IoWithImmediateOffset) => {
                     // LD A, (0xFF00 + u8) | Store byte at address 0xFF00 + u8 in accumulator
                     let addr = 0xFF00 + Self::imm_byte(cpu) as u16;
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    Cycle::new(12)
+                    (12)
                 }
                 (LDTarget::SP, LDSource::HL) => {
                     // LD SP, HL | Store HL in stack pointer
                     cpu.set_register_pair(RegisterPair::SP, cpu.register_pair(RegisterPair::HL));
-                    Cycle::new(8) // performs an internal operation that takes 4 cycles
+                    (8) // performs an internal operation that takes 4 cycles
                 }
                 (LDTarget::IndirectImmediateWord, LDSource::A) => {
                     // LD (u16), A | Store accumulator in byte at 16-bit register
                     let addr = Self::imm_word(cpu);
                     let acc = cpu.register(CpuRegister::A);
                     Self::write_byte(&mut cpu.bus, addr, acc);
-                    Cycle::new(16)
+                    (16)
                 }
                 (LDTarget::A, LDSource::IndirectImmediateWord) => {
                     // LD A, (u16) | Store byte at 16-bit register in accumulator
                     let addr = Self::imm_word(cpu);
                     let byte = Self::read_byte(&mut cpu.bus, addr);
                     cpu.set_register(CpuRegister::A, byte);
-                    Cycle::new(16)
+                    (16)
                 }
                 _ => unreachable!("LD {:?}, {:?} is an illegal instruction", target, src),
             },
@@ -296,38 +296,38 @@ impl Instruction {
                     JumpCondition::NotZero => {
                         if !flags.z() {
                             Self::jump(cpu, addr);
-                            Cycle::new(12)
+                            (12)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Zero => {
                         if flags.z() {
                             Self::jump(cpu, addr);
-                            Cycle::new(12)
+                            (12)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::NotCarry => {
                         if !flags.c() {
                             Self::jump(cpu, addr);
-                            Cycle::new(12)
+                            (12)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Carry => {
                         if flags.c() {
                             Self::jump(cpu, addr);
-                            Cycle::new(12)
+                            (12)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Always => {
                         Self::jump(cpu, addr);
-                        Cycle::new(12)
+                        (12)
                     }
                 }
             }
@@ -349,7 +349,7 @@ impl Instruction {
                         }
                     }
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
                 (AddTarget::A, AddSource::Register(reg)) => {
                     // ADD A, r8 | Add 8-bit register to accumulator
@@ -361,12 +361,12 @@ impl Instruction {
                     let (cycles, sum) = match reg {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
-                            (Cycle::new(4), Self::add(left, right, &mut flags))
+                            ((4), Self::add(left, right, &mut flags))
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            (Cycle::new(8), Self::add(left, right, &mut flags))
+                            ((8), Self::add(left, right, &mut flags))
                         }
                     };
 
@@ -383,7 +383,7 @@ impl Instruction {
                     let sum = Self::add_u16_i8(left, Self::imm_byte(cpu) as i8, &mut flags);
                     cpu.set_register_pair(RegisterPair::SP, sum);
                     cpu.set_flags(flags);
-                    Cycle::new(16)
+                    (16)
                 }
                 (AddTarget::A, AddSource::ImmediateByte) => {
                     // ADD A, u8 | Add u8 to accumulator
@@ -393,7 +393,7 @@ impl Instruction {
                     let sum = Self::add(left, Self::imm_byte(cpu), &mut flags);
                     cpu.set_register(CpuRegister::A, sum);
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
                 _ => unreachable!("ADD {:?}, {:?} is an illegal instruction", target, src),
             },
@@ -408,13 +408,13 @@ impl Instruction {
                             B | C | D | E | H | L | A => {
                                 let reg = reg.cpu_register();
                                 cpu.set_register(reg, Self::inc(cpu.register(reg), &mut flags));
-                                Cycle::new(4)
+                                (4)
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let left = Self::read_byte(&mut cpu.bus, addr);
                                 Self::write_byte(&mut cpu.bus, addr, Self::inc(left, &mut flags));
-                                Cycle::new(12)
+                                (12)
                             }
                         };
                         cpu.set_flags(flags);
@@ -433,7 +433,7 @@ impl Instruction {
                                 cpu.set_register_pair(pair, left.wrapping_add(1));
                             }
                         }
-                        Cycle::new(8)
+                        (8)
                     }
                 }
             }
@@ -448,13 +448,13 @@ impl Instruction {
                             B | C | D | E | H | L | A => {
                                 let reg = reg.cpu_register();
                                 cpu.set_register(reg, Self::dec(cpu.register(reg), &mut flags));
-                                Cycle::new(4)
+                                (4)
                             }
                             IndirectHL => {
                                 let addr = cpu.register_pair(RegisterPair::HL);
                                 let left = Self::read_byte(&mut cpu.bus, addr);
                                 Self::write_byte(&mut cpu.bus, addr, Self::dec(left, &mut flags));
-                                Cycle::new(12)
+                                (12)
                             }
                         };
                         cpu.set_flags(flags);
@@ -472,7 +472,7 @@ impl Instruction {
                                 cpu.set_register_pair(pair, left.wrapping_sub(1));
                             }
                         };
-                        Cycle::new(8)
+                        (8)
                     }
                 }
             }
@@ -483,7 +483,7 @@ impl Instruction {
                 let acc_rotated = acc.rotate_left(1);
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, most_sgfnt == 0x01);
-                Cycle::new(4)
+                (4)
             }
             Instruction::RRCA => {
                 // RRCA | Rotate accumulator right
@@ -492,7 +492,7 @@ impl Instruction {
                 let acc_rotated = acc.rotate_right(1);
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, least_sgfnt == 0x01);
-                Cycle::new(4)
+                (4)
             }
             Instruction::RLA => {
                 // RLA | Rotate accumulator left through carry
@@ -502,7 +502,7 @@ impl Instruction {
                 let (acc_rotated, carry) = Self::rl_thru_carry(acc, flags.c());
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, carry);
-                Cycle::new(4)
+                (4)
             }
             Instruction::RRA => {
                 // RRA | Rotate accumulator right through carry
@@ -512,7 +512,7 @@ impl Instruction {
                 let (acc_rotated, carry) = Self::rr_thru_carry(acc, flags.c());
                 cpu.set_register(CpuRegister::A, acc_rotated);
                 cpu.update_flags(false, false, false, carry);
-                Cycle::new(4)
+                (4)
             }
             Instruction::DAA => {
                 // DAA | Change accumulator into its BCD representation
@@ -553,7 +553,7 @@ impl Instruction {
                 flags.set_z(tmp as u8 == 0);
                 flags.set_h(false);
                 cpu.set_flags(flags);
-                Cycle::new(4)
+                (4)
             }
             Instruction::CPL => {
                 // CPL | Compliment accumulator
@@ -564,7 +564,7 @@ impl Instruction {
                 flags.set_n(true);
                 flags.set_h(true);
                 cpu.set_flags(flags);
-                Cycle::new(4)
+                (4)
             }
             Instruction::SCF => {
                 // SCF | Set Carry Flag
@@ -574,7 +574,7 @@ impl Instruction {
                 flags.set_h(false);
                 flags.set_c(true);
                 cpu.set_flags(flags);
-                Cycle::new(4)
+                (4)
             }
             Instruction::CCF => {
                 // CCF | Compliment Carry Flag
@@ -584,7 +584,7 @@ impl Instruction {
                 flags.set_h(false);
                 flags.set_c(!flags.c());
                 cpu.set_flags(flags);
-                Cycle::new(4)
+                (4)
             }
             Instruction::HALT => {
                 // HALT | Enter CPU low power consumption mode until interrupt occurs
@@ -596,7 +596,7 @@ impl Instruction {
                     _ => NonePending,
                 };
                 cpu.halt_cpu(kind);
-                Cycle::new(4)
+                (4)
             }
             Instruction::ADC(source) => match source {
                 AluSource::Register(reg) => {
@@ -610,13 +610,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
                             let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
-                            (Cycle::new(4), sum)
+                            ((4), sum)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
-                            (Cycle::new(8), sum)
+                            ((8), sum)
                         }
                     };
                     cpu.set_register(CpuRegister::A, sum);
@@ -632,7 +632,7 @@ impl Instruction {
                     let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
                     cpu.set_register(CpuRegister::A, sum);
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::SUB(source) => match source {
@@ -646,12 +646,12 @@ impl Instruction {
                     let (cycles, diff) = match reg {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
-                            (Cycle::new(4), Self::sub(left, right, &mut flags))
+                            ((4), Self::sub(left, right, &mut flags))
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            (Cycle::new(8), Self::sub(left, right, &mut flags))
+                            ((8), Self::sub(left, right, &mut flags))
                         }
                     };
                     cpu.set_register(CpuRegister::A, diff);
@@ -666,7 +666,7 @@ impl Instruction {
                     let right = Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, Self::sub(left, right, &mut flags));
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::SBC(target) => match target {
@@ -681,13 +681,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
                             let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
-                            (Cycle::new(4), diff)
+                            ((4), diff)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
-                            (Cycle::new(8), diff)
+                            ((8), diff)
                         }
                     };
                     cpu.set_register(CpuRegister::A, diff);
@@ -703,7 +703,7 @@ impl Instruction {
                     let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
                     cpu.set_register(CpuRegister::A, diff);
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::AND(target) => match target {
@@ -713,13 +713,11 @@ impl Instruction {
                     let left = cpu.register(CpuRegister::A);
 
                     let (cycles, acc) = match reg {
-                        B | C | D | E | H | L | A => {
-                            (Cycle::new(4), left & cpu.register(reg.cpu_register()))
-                        }
+                        B | C | D | E | H | L | A => ((4), left & cpu.register(reg.cpu_register())),
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            (Cycle::new(8), left & right)
+                            ((8), left & right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -731,7 +729,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) & Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, true, false);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::XOR(source) => match source {
@@ -741,13 +739,11 @@ impl Instruction {
                     let left = cpu.register(CpuRegister::A);
 
                     let (cycles, acc) = match reg {
-                        B | C | D | E | H | L | A => {
-                            (Cycle::new(4), left ^ cpu.register(reg.cpu_register()))
-                        }
+                        B | C | D | E | H | L | A => ((4), left ^ cpu.register(reg.cpu_register())),
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            (Cycle::new(8), left ^ right)
+                            ((8), left ^ right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -759,7 +755,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) ^ Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, false, false);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::OR(target) => match target {
@@ -769,13 +765,11 @@ impl Instruction {
                     let left = cpu.register(CpuRegister::A);
 
                     let (cycles, acc) = match reg {
-                        B | C | D | E | H | L | A => {
-                            (Cycle::new(4), left | cpu.register(reg.cpu_register()))
-                        }
+                        B | C | D | E | H | L | A => ((4), left | cpu.register(reg.cpu_register())),
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            (Cycle::new(8), left | right)
+                            ((8), left | right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -787,7 +781,7 @@ impl Instruction {
                     let acc = cpu.register(CpuRegister::A) | Self::imm_byte(cpu);
                     cpu.set_register(CpuRegister::A, acc);
                     cpu.update_flags(acc == 0, false, false, false);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::CP(target) => match target {
@@ -801,13 +795,13 @@ impl Instruction {
                     let cycles = match reg {
                         B | C | D | E | H | L | A => {
                             let _ = Self::sub(left, cpu.register(reg.cpu_register()), &mut flags);
-                            Cycle::new(4)
+                            (4)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let _ = Self::sub(left, right, &mut flags);
-                            Cycle::new(8)
+                            (8)
                         }
                     };
                     cpu.set_flags(flags);
@@ -820,7 +814,7 @@ impl Instruction {
                     let left = cpu.register(CpuRegister::A);
                     let _ = Self::sub(left, Self::imm_byte(cpu), &mut flags);
                     cpu.set_flags(flags);
-                    Cycle::new(8)
+                    (8)
                 }
             },
             Instruction::LDHL => {
@@ -832,7 +826,7 @@ impl Instruction {
                 cpu.set_register_pair(RegisterPair::HL, sum);
                 cpu.set_flags(flags);
                 cpu.bus.clock(); // FIXME: Is this in the right place?
-                Cycle::new(12)
+                (12)
             }
             Instruction::RET(cond) => {
                 // RET cond | Return from subroutine if condition is true
@@ -846,9 +840,9 @@ impl Instruction {
                         if !flags.z() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            Cycle::new(20)
+                            (20)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Zero => {
@@ -857,9 +851,9 @@ impl Instruction {
                         if flags.z() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            Cycle::new(20)
+                            (20)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::NotCarry => {
@@ -868,9 +862,9 @@ impl Instruction {
                         if !flags.c() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            Cycle::new(20)
+                            (20)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Carry => {
@@ -879,15 +873,15 @@ impl Instruction {
                         if flags.c() {
                             let addr = Self::pop(cpu);
                             Self::jump(cpu, addr);
-                            Cycle::new(20)
+                            (20)
                         } else {
-                            Cycle::new(8)
+                            (8)
                         }
                     }
                     JumpCondition::Always => {
                         let addr = Self::pop(cpu);
                         Self::jump(cpu, addr);
-                        Cycle::new(16)
+                        (16)
                     }
                 }
             }
@@ -901,21 +895,21 @@ impl Instruction {
                         cpu.set_register_pair(pair.as_register_pair(), right);
                     }
                 }
-                Cycle::new(12)
+                (12)
             }
             Instruction::RETI => {
                 // RETI | Return from subroutine, then enable interrupts
                 let addr = Self::pop(cpu);
                 Self::jump(cpu, addr);
                 cpu.set_ime(ImeState::Enabled);
-                Cycle::new(16)
+                (16)
             }
             Instruction::JP(cond, location) => match location {
                 JumpLocation::HL => {
                     // JP HL | Store HL in program counter
                     let right = cpu.register_pair(RegisterPair::HL);
                     cpu.set_register_pair(RegisterPair::PC, right);
-                    Cycle::new(4)
+                    (4)
                 }
                 JumpLocation::ImmediateWord => {
                     // JP cond u16 | Store u16 in program counter if condition is true
@@ -928,38 +922,38 @@ impl Instruction {
                         JumpCondition::NotZero => {
                             if !flags.z() {
                                 Self::jump(cpu, addr);
-                                Cycle::new(16)
+                                (16)
                             } else {
-                                Cycle::new(12)
+                                (12)
                             }
                         }
                         JumpCondition::Zero => {
                             if flags.z() {
                                 Self::jump(cpu, addr);
-                                Cycle::new(16)
+                                (16)
                             } else {
-                                Cycle::new(12)
+                                (12)
                             }
                         }
                         JumpCondition::NotCarry => {
                             if !flags.c() {
                                 Self::jump(cpu, addr);
-                                Cycle::new(16)
+                                (16)
                             } else {
-                                Cycle::new(12)
+                                (12)
                             }
                         }
                         JumpCondition::Carry => {
                             if flags.c() {
                                 Self::jump(cpu, addr);
-                                Cycle::new(16)
+                                (16)
                             } else {
-                                Cycle::new(12)
+                                (12)
                             }
                         }
                         JumpCondition::Always => {
                             Self::jump(cpu, addr);
-                            Cycle::new(16)
+                            (16)
                         }
                     }
                 }
@@ -967,12 +961,12 @@ impl Instruction {
             Instruction::DI => {
                 // DI | Disable IME
                 cpu.set_ime(ImeState::Disabled);
-                Cycle::new(4)
+                (4)
             }
             Instruction::EI => {
                 // EI | Enable IME after the next instruction
                 cpu.set_ime(ImeState::EiExecuted);
-                Cycle::new(4)
+                (4)
             }
             Instruction::CALL(cond) => {
                 // CALL cond u16 | Push PC on the stack and store u16 in program counter if condition is true
@@ -988,9 +982,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycle::new(24)
+                            (24)
                         } else {
-                            Cycle::new(12)
+                            (12)
                         }
                     }
                     JumpCondition::Zero => {
@@ -998,9 +992,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycle::new(24)
+                            (24)
                         } else {
-                            Cycle::new(12)
+                            (12)
                         }
                     }
                     JumpCondition::NotCarry => {
@@ -1008,9 +1002,9 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycle::new(24)
+                            (24)
                         } else {
-                            Cycle::new(12)
+                            (12)
                         }
                     }
                     JumpCondition::Carry => {
@@ -1018,16 +1012,16 @@ impl Instruction {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
                             cpu.set_register_pair(RegisterPair::PC, addr);
-                            Cycle::new(24)
+                            (24)
                         } else {
-                            Cycle::new(12)
+                            (12)
                         }
                     }
                     JumpCondition::Always => {
                         cpu.bus.clock(); // internal branch decision
                         Self::push(cpu, return_addr);
                         cpu.set_register_pair(RegisterPair::PC, addr);
-                        Cycle::new(24)
+                        (24)
                     }
                 }
             }
@@ -1043,7 +1037,7 @@ impl Instruction {
                         Self::push(cpu, word);
                     }
                 }
-                Cycle::new(16)
+                (16)
             }
             Instruction::RST(vector) => {
                 // RST vector | Push current address onto the stack, jump to 0x0000 + n
@@ -1059,14 +1053,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let rotated = byte.rotate_left(1);
                         cpu.set_register(reg, rotated);
-                        (Cycle::new(8), byte >> 7, rotated)
+                        ((8), byte >> 7, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let rotated = byte.rotate_left(1);
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        (Cycle::new(16), byte >> 7, rotated)
+                        ((16), byte >> 7, rotated)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, most_sgfnt == 0x01);
@@ -1082,14 +1076,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let rotated = byte.rotate_right(1);
                         cpu.set_register(reg, rotated);
-                        (Cycle::new(8), byte & 0x01, rotated)
+                        ((8), byte & 0x01, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let rotated = byte.rotate_right(1);
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        (Cycle::new(16), byte & 0x01, rotated)
+                        ((16), byte & 0x01, rotated)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, least_sgfnt == 0x01);
@@ -1107,14 +1101,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let (rotated, carry) = Self::rl_thru_carry(byte, flags.c());
                         cpu.set_register(reg, rotated);
-                        (Cycle::new(8), rotated, carry)
+                        ((8), rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let (rotated, carry) = Self::rl_thru_carry(byte, flags.c());
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        (Cycle::new(16), rotated, carry)
+                        ((16), rotated, carry)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, carry);
@@ -1132,14 +1126,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let (rotated, carry) = Self::rr_thru_carry(byte, flags.c());
                         cpu.set_register(reg, rotated);
-                        (Cycle::new(8), rotated, carry)
+                        ((8), rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let (rotated, carry) = Self::rr_thru_carry(byte, flags.c());
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        (Cycle::new(16), rotated, carry)
+                        ((16), rotated, carry)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, carry);
@@ -1155,14 +1149,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = byte << 1;
                         cpu.set_register(reg, shifted);
-                        (Cycle::new(8), (byte >> 7) & 0x01, shifted)
+                        ((8), (byte >> 7) & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = byte << 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        (Cycle::new(16), (byte >> 7) & 0x01, shifted)
+                        ((16), (byte >> 7) & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shifted == 0, false, false, most_sgfnt == 0x01);
@@ -1178,14 +1172,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = ((byte >> 7) & 0x01) << 7 | byte >> 1;
                         cpu.set_register(reg, shifted);
-                        (Cycle::new(8), byte & 0x01, shifted)
+                        ((8), byte & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = ((byte >> 7) & 0x01) << 7 | byte >> 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        (Cycle::new(16), byte & 0x01, shifted)
+                        ((16), byte & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shifted == 0, false, false, least_sgfnt == 0x01);
@@ -1200,14 +1194,14 @@ impl Instruction {
                         let reg = reg.cpu_register();
                         let swapped = Self::swap_bits(cpu.register(reg));
                         cpu.set_register(reg, swapped);
-                        (Cycle::new(8), swapped)
+                        ((8), swapped)
                     }
 
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let swapped = Self::swap_bits(Self::read_byte(&mut cpu.bus, addr));
                         Self::write_byte(&mut cpu.bus, addr, swapped);
-                        (Cycle::new(16), swapped)
+                        ((16), swapped)
                     }
                 };
                 cpu.update_flags(swapped == 0, false, false, false);
@@ -1223,14 +1217,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = byte >> 1;
                         cpu.set_register(reg, shifted);
-                        (Cycle::new(8), byte & 0x01, shifted)
+                        ((8), byte & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = byte >> 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        (Cycle::new(16), byte & 0x01, shifted)
+                        ((16), byte & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shift_reg == 0, false, false, least_sgfnt == 0x01);
@@ -1245,12 +1239,12 @@ impl Instruction {
                     B | C | D | E | H | L | A => {
                         let reg = reg.cpu_register();
                         let byte = cpu.register(reg);
-                        (Cycle::new(8), ((byte >> bit) & 0x01) == 0x01)
+                        ((8), ((byte >> bit) & 0x01) == 0x01)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
-                        (Cycle::new(12), ((byte >> bit) & 0x01) == 0x01)
+                        ((12), ((byte >> bit) & 0x01) == 0x01)
                     }
                 };
                 flags.set_z(!is_set);
@@ -1268,13 +1262,13 @@ impl Instruction {
                         let register = reg.cpu_register();
                         let byte = cpu.register(register);
                         cpu.set_register(register, byte & !(1 << bit));
-                        Cycle::new(8)
+                        (8)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         Self::write_byte(&mut cpu.bus, addr, byte & !(1 << bit));
-                        Cycle::new(16)
+                        (16)
                     }
                 }
             }
@@ -1287,13 +1281,13 @@ impl Instruction {
                         let reg = reg.cpu_register();
                         let byte = cpu.register(reg);
                         cpu.set_register(reg, byte | (1u8 << bit));
-                        Cycle::new(8)
+                        (8)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         Self::write_byte(&mut cpu.bus, addr, byte | (1u8 << bit));
-                        Cycle::new(16)
+                        (16)
                     }
                 }
             }
@@ -1479,7 +1473,7 @@ impl Instruction {
         let addr = cpu.register_pair(RegisterPair::PC);
         Self::push(cpu, addr);
         cpu.set_register_pair(RegisterPair::PC, vector as u16);
-        Cycle::new(16)
+        (16)
     }
 
     /// Read u8 from memory (4 cycles)
@@ -2151,157 +2145,5 @@ mod table {
             0b111 => SRL(register(reg_code)),
             _ => unreachable!("{:#04X} is not a valid pfx alu instruction code", alu_code),
         }
-    }
-}
-
-pub(crate) mod cycle {
-
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
-    #[repr(transparent)]
-    pub struct Cycle(u32);
-
-    impl Cycle {
-        pub const fn new(num: u32) -> Self {
-            Self(num)
-        }
-    }
-
-    impl std::ops::Add for Cycle {
-        type Output = Self;
-
-        fn add(self, rhs: Self) -> Self::Output {
-            Self(self.0 + rhs.0)
-        }
-    }
-
-    impl std::ops::Add<u32> for Cycle {
-        type Output = Self;
-
-        fn add(self, rhs: u32) -> Self::Output {
-            Self(self.0 + rhs)
-        }
-    }
-
-    impl std::ops::AddAssign for Cycle {
-        fn add_assign(&mut self, rhs: Self) {
-            *self = Self(self.0 + rhs.0);
-        }
-    }
-
-    impl std::ops::AddAssign<u32> for Cycle {
-        fn add_assign(&mut self, rhs: u32) {
-            *self = Self(self.0 + rhs);
-        }
-    }
-
-    impl std::ops::Rem for Cycle {
-        type Output = Self;
-
-        fn rem(self, rhs: Self) -> Self::Output {
-            Self(self.0 % rhs.0)
-        }
-    }
-
-    impl std::ops::Rem<u32> for Cycle {
-        type Output = Self;
-
-        fn rem(self, rhs: u32) -> Self::Output {
-            Self(self.0 % rhs)
-        }
-    }
-
-    impl std::ops::RemAssign for Cycle {
-        fn rem_assign(&mut self, rhs: Self) {
-            *self = Self(self.0 % rhs.0);
-        }
-    }
-
-    impl std::ops::RemAssign<u32> for Cycle {
-        fn rem_assign(&mut self, rhs: u32) {
-            *self = Self(self.0 % rhs);
-        }
-    }
-
-    impl std::ops::Sub for Cycle {
-        type Output = Cycle;
-
-        fn sub(self, rhs: Self) -> Self::Output {
-            Self(self.0 - rhs.0)
-        }
-    }
-
-    impl std::ops::Sub<u32> for Cycle {
-        type Output = Cycle;
-
-        fn sub(self, rhs: u32) -> Self::Output {
-            Self(self.0 - rhs)
-        }
-    }
-
-    impl std::ops::SubAssign for Cycle {
-        fn sub_assign(&mut self, rhs: Self) {
-            *self = Self(self.0 - rhs.0);
-        }
-    }
-
-    impl std::ops::SubAssign<u32> for Cycle {
-        fn sub_assign(&mut self, rhs: u32) {
-            *self = Self(self.0 - rhs);
-        }
-    }
-
-    impl PartialEq<u32> for Cycle {
-        fn eq(&self, other: &u32) -> bool {
-            self.0 == *other
-        }
-    }
-
-    impl std::ops::Div for Cycle {
-        type Output = Self;
-
-        fn div(self, rhs: Self) -> Self::Output {
-            Self::new(self.0 / rhs.0)
-        }
-    }
-
-    impl std::ops::Div<u32> for Cycle {
-        type Output = Self;
-
-        fn div(self, rhs: u32) -> Self::Output {
-            Self::new(self.0 / rhs)
-        }
-    }
-
-    impl From<u32> for Cycle {
-        fn from(num: u32) -> Self {
-            Self(num)
-        }
-    }
-
-    impl From<Cycle> for u32 {
-        fn from(cycles: Cycle) -> Self {
-            cycles.0
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Cycle;
-
-    #[test]
-    fn cycle_add_works() {
-        let lhs: Cycle = Cycle::new(5);
-        let rhs: Cycle = Cycle::new(4);
-
-        assert_eq!(Cycle::new(9), rhs + lhs);
-    }
-
-    #[test]
-    fn cycle_add_assign_works() {
-        let mut cycles: Cycle = Cycle::new(5);
-        cycles += 5;
-
-        assert_eq!(Cycle::new(10), cycles);
     }
 }

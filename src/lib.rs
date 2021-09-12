@@ -1,5 +1,5 @@
 pub use apu::gen::AudioSPSC;
-pub use instruction::cycle::Cycle;
+pub type Cycle = u64;
 
 pub const GB_WIDTH: usize = 160;
 pub const GB_HEIGHT: usize = 144;

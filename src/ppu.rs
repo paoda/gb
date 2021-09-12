@@ -1,5 +1,5 @@
 use crate::bus::BusIo;
-use crate::instruction::cycle::Cycle;
+use crate::Cycle;
 use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use dma::DirectMemoryAccess;
@@ -79,7 +79,7 @@ impl Ppu {
 
         match self.stat.mode() {
             PpuMode::OamScan => {
-                if self.cycle >= 80.into() {
+                if self.cycle >= 80 {
                     self.stat.set_mode(PpuMode::Drawing);
                 }
 
@@ -88,7 +88,7 @@ impl Ppu {
             PpuMode::Drawing => {
                 if self.ctrl.lcd_enabled() {
                     // Only Draw when the LCD Is Enabled
-                    self.draw(self.cycle.into());
+                    self.draw(self.cycle);
                 } else {
                     self.reset();
                 }
@@ -125,7 +125,7 @@ impl Ppu {
             PpuMode::HBlank => {
                 // This mode will always end at 456 cycles
 
-                if self.cycle >= 456.into() {
+                if self.cycle >= 456 {
                     self.cycle %= 456;
                     self.pos.line_y += 1;
 
@@ -167,7 +167,7 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
-                if self.cycle > 456.into() {
+                if self.cycle > 456 {
                     self.cycle %= 456;
                     self.pos.line_y += 1;
 
@@ -228,7 +228,7 @@ impl Ppu {
         self.scan_state.next();
     }
 
-    fn draw(&mut self, _cycle: u32) {
+    fn draw(&mut self, _cycle: Cycle) {
         use FetcherState::*;
 
         let mut iter = self.obj_buffer.iter_mut();
@@ -470,7 +470,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
-            cycle: Cycle::new(0),
+            cycle: Default::default(),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
             ctrl: Default::default(),
