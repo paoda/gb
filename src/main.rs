@@ -4,13 +4,13 @@ use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
-const WINDOW_SCALE: f64 = 2.0;
+const WINDOW_SCALE: usize = 3;
 const AUDIO_ENABLED: bool = true;
 
 fn main() -> Result<()> {
@@ -114,37 +114,17 @@ fn main() -> Result<()> {
     });
 }
 
-#[cfg(not(windows))]
 fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
-    let size = LogicalSize::new(
-        (GB_WIDTH as f64) * WINDOW_SCALE,
-        (GB_HEIGHT as f64) * WINDOW_SCALE,
+    let logical = LogicalSize::new(GB_WIDTH as f64, GB_HEIGHT as f64);
+    let physical = PhysicalSize::new(
+        (GB_WIDTH * WINDOW_SCALE) as f32,
+        (GB_HEIGHT * WINDOW_SCALE) as f32,
     );
+
     Ok(WindowBuilder::new()
         .with_title(title)
-        .with_inner_size(size)
-        .with_min_inner_size(size)
+        .with_min_inner_size(logical)
+        .with_inner_size(physical)
         .with_resizable(true)
-        .with_decorations(true)
-        .with_transparent(false)
-        .build(event_loop)?)
-}
-
-#[cfg(windows)]
-fn create_window(event_loop: &EventLoop<()>, title: &str) -> Result<Window> {
-    use winit::platform::windows::WindowBuilderExtWindows;
-
-    let size = LogicalSize::new(
-        (GB_WIDTH as f64) * WINDOW_SCALE,
-        (GB_HEIGHT as f64) * WINDOW_SCALE,
-    );
-    Ok(WindowBuilder::new()
-        .with_title(title)
-        .with_inner_size(size)
-        .with_min_inner_size(size)
-        .with_resizable(true)
-        .with_decorations(true)
-        .with_transparent(false)
-        .with_drag_and_drop(false)
         .build(event_loop)?)
 }
