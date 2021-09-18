@@ -7,14 +7,13 @@ use crate::ppu::{Ppu, PpuMode};
 use crate::serial::Serial;
 use crate::timer::Timer;
 use crate::work_ram::{VariableWorkRam, WorkRam};
-use std::{fs::File, io::Read};
 
-const BOOT_ROM_SIZE: usize = 0x100;
+pub(crate) const BOOT_SIZE: usize = 0x100;
 
 #[derive(Debug)]
 pub struct Bus {
-    boot: Option<[u8; BOOT_ROM_SIZE]>, // Boot ROM is 256b long
-    cartridge: Option<Cartridge>,
+    boot: Option<[u8; BOOT_SIZE]>, // Boot ROM is 256b long
+    cart: Option<Cartridge>,
     pub(crate) ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
@@ -30,7 +29,7 @@ impl Default for Bus {
     fn default() -> Self {
         Self {
             boot: None,
-            cartridge: None,
+            cart: None,
             ppu: Default::default(),
             work_ram: Default::default(),
             var_ram: Default::default(),
@@ -45,25 +44,19 @@ impl Default for Bus {
 }
 
 impl Bus {
-    pub(crate) fn with_boot(path: &str) -> anyhow::Result<Self> {
-        let mut file = File::open(path)?;
-        let mut boot_rom = [0u8; 256];
-
-        file.read_exact(&mut boot_rom)?;
-
-        Ok(Self {
-            boot: Some(boot_rom),
+    pub(crate) fn with_boot(rom: [u8; 256]) -> Self {
+        Self {
+            boot: Some(rom),
             ..Default::default()
-        })
+        }
     }
 
-    pub(crate) fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
-        self.cartridge = Some(Cartridge::new(path)?);
-        Ok(())
+    pub(crate) fn load_cart(&mut self, rom: Vec<u8>) {
+        self.cart = Some(Cartridge::new(rom));
     }
 
-    pub(crate) fn rom_title(&self) -> Option<&str> {
-        self.cartridge.as_ref()?.title()
+    pub(crate) fn cart_title(&self) -> Option<&str> {
+        self.cart.as_ref()?.title()
     }
 
     #[allow(dead_code)]
@@ -104,13 +97,13 @@ impl Bus {
                     }
                 }
 
-                match self.cartridge.as_ref() {
+                match self.cart.as_ref() {
                     Some(cart) => cart.read_byte(addr),
                     None => panic!("Tried to read from a non-existent cartridge"),
                 }
             }
             0x8000..=0x9FFF => self.ppu.read_byte(addr), // 8KB Video RAM
-            0xA000..=0xBFFF => match self.cartridge.as_ref() {
+            0xA000..=0xBFFF => match self.cart.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from a non-existent cartridge"),
@@ -157,7 +150,7 @@ impl BusIo for Bus {
                     }
                 }
 
-                match self.cartridge.as_ref() {
+                match self.cart.as_ref() {
                     Some(cart) => cart.read_byte(addr),
                     None => panic!("Tried to read from a non-existent cartridge"),
                 }
@@ -169,7 +162,7 @@ impl BusIo for Bus {
                     _ => self.ppu.read_byte(addr),
                 }
             }
-            0xA000..=0xBFFF => match self.cartridge.as_ref() {
+            0xA000..=0xBFFF => match self.cart.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
                 None => panic!("Tried to read from a non-existent cartridge"),
@@ -262,7 +255,7 @@ impl BusIo for Bus {
             0x0000..=0x7FFF => {
                 // 16KB ROM bank 00 (ends at 0x3FFF)
                 // and 16KB ROM Bank 01 -> NN (switchable via MB)
-                match self.cartridge.as_mut() {
+                match self.cart.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
                     None => panic!("Tried to write into non-existent cartridge"),
                 }
@@ -276,7 +269,7 @@ impl BusIo for Bus {
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
-                match self.cartridge.as_mut() {
+                match self.cart.as_mut() {
                     Some(cart) => cart.write_byte(addr, byte),
                     None => panic!("Tried to write into non-existent cartridge"),
                 }

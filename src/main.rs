@@ -1,5 +1,8 @@
+use std::convert::TryInto;
+
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
+use gb::emu::build::EmulatorBuilder;
 use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
@@ -38,13 +41,15 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
-    let rom_path = m
-        .value_of("rom")
-        .expect("Required value 'rom' was provided");
+    let mut emu_build =
+        EmulatorBuilder::new().with_cart(m.value_of("rom").expect("ROM path provided"))?;
 
-    let mut game_boy =
-        gb::emu::init(m.value_of("boot"), rom_path).expect("Initialize DMG-01 Emulator");
-    let rom_title = gb::emu::rom_title(&game_boy);
+    if let Some(path) = m.value_of("boot") {
+        emu_build = emu_build.with_boot(path)?;
+    }
+
+    let mut emu = emu_build.finish();
+    let rom_title = emu.title();
 
     let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
 
@@ -68,10 +73,14 @@ fn main() -> Result<()> {
     if AUDIO_ENABLED {
         let spsc: AudioSPSC<f32> = Default::default();
         let (prod, cons) = spsc.init();
-        let sink = Sink::try_new(&stream_handle)?;
-        sink.append(cons);
-        sink.set_volume(0.1); // TODO: Is this the right way to go about this?
-        game_boy.apu_mut().attach_producer(prod);
+        let sink = {
+            let s = Sink::try_new(&stream_handle)?;
+            s.append(cons);
+            s.set_volume(0.1);
+            s
+        };
+
+        emu.set_prod(prod);
 
         std::thread::spawn(move || {
             sink.sleep_until_end();
@@ -102,12 +111,17 @@ fn main() -> Result<()> {
                 pixels.resize_surface(size.width, size.height);
             }
 
-            cycle_count += gb::emu::run_frame(&mut game_boy, &mut gamepad, &input);
+            cycle_count += gb::emu::run_frame(&mut emu, &mut gamepad, &input);
 
             if cycle_count >= gb::emu::CYCLES_IN_FRAME {
                 cycle_count %= gb::emu::CYCLES_IN_FRAME;
 
-                gb::emu::draw(game_boy.ppu(), pixels.get_frame());
+                let buf: &mut [u8; GB_WIDTH * GB_HEIGHT * 4] = pixels
+                    .get_frame()
+                    .try_into()
+                    .expect("Size of Pixel Buffer is GB_WIDTH * GB_HEIGHT * 4");
+
+                gb::emu::draw_frame(&emu, buf);
                 window.request_redraw();
             }
         }

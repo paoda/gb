@@ -1,7 +1,3 @@
-use std::fs::File;
-use std::io::{self, Read};
-use std::path::Path;
-
 use crate::bus::BusIo;
 
 const RAM_SIZE_ADDRESS: usize = 0x0149;
@@ -17,19 +13,15 @@ pub(crate) struct Cartridge {
 }
 
 impl Cartridge {
-    pub(crate) fn new<P: AsRef<Path> + ?Sized>(path: &P) -> io::Result<Self> {
-        let mut memory = vec![];
-        let mut rom = File::open(path)?;
-        rom.read_to_end(&mut memory)?;
-
+    pub(crate) fn new(memory: Vec<u8>) -> Self {
         let title = Self::find_title(&memory);
         eprintln!("Cartridge Title: {:?}", title);
 
-        Ok(Self {
+        Self {
             mbc: Self::detect_mbc(&memory),
             title,
             memory,
-        })
+        }
     }
 
     fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
