@@ -1,9 +1,6 @@
-use crate::apu::Apu;
-use crate::bus::{Bus, BusIo};
+use crate::bus::{Bus, BusIo, BOOT_SIZE};
 use crate::instruction::Instruction;
 use crate::interrupt::{InterruptEnable, InterruptFlag};
-use crate::joypad::Joypad;
-use crate::ppu::Ppu;
 use crate::Cycle;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -18,7 +15,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub(crate) fn without_boot() -> Self {
         Self {
             reg: Registers {
                 a: 0x01,
@@ -36,11 +33,11 @@ impl Cpu {
         }
     }
 
-    pub fn boot_new(path: &str) -> anyhow::Result<Self> {
-        Ok(Self {
-            bus: Bus::with_boot(path)?,
+    pub(crate) fn with_boot(rom: [u8; BOOT_SIZE]) -> Self {
+        Self {
+            bus: Bus::with_boot(rom),
             ..Default::default()
-        })
+        }
     }
 
     pub(crate) fn ime(&self) -> ImeState {
@@ -71,14 +68,6 @@ impl Cpu {
             State::Halt(kind) => Some(kind),
             _ => None,
         }
-    }
-
-    pub fn load_cartridge(&mut self, path: &str) -> std::io::Result<()> {
-        self.bus.load_cartridge(path)
-    }
-
-    pub fn rom_title(&self) -> Option<&str> {
-        self.bus.rom_title()
     }
 }
 
@@ -167,16 +156,12 @@ impl BusIo for Cpu {
 }
 
 impl Cpu {
-    pub fn ppu(&mut self) -> &Ppu {
-        &self.bus.ppu
+    pub(crate) fn bus(&self) -> &Bus {
+        &self.bus
     }
 
-    pub fn apu_mut(&mut self) -> &mut Apu {
-        &mut self.bus.apu
-    }
-
-    pub(crate) fn joypad_mut(&mut self) -> &mut Joypad {
-        &mut self.bus.joypad
+    pub(crate) fn bus_mut(&mut self) -> &mut Bus {
+        &mut self.bus
     }
 
     fn handle_ei(&mut self) {

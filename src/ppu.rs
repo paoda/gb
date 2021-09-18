@@ -418,8 +418,8 @@ impl Ppu {
         self.frame_buf.swap_with_slice(&mut blank);
     }
 
-    pub fn copy_to_gui(&self, frame: &mut [u8]) {
-        frame.copy_from_slice(self.frame_buf.as_ref());
+    pub(crate) fn frame_buf(&self) -> &[u8; GB_HEIGHT * GB_WIDTH * 4] {
+        &self.frame_buf
     }
 
     fn clock_fifo(&mut self) -> Option<GrayShade> {
