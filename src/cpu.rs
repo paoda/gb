@@ -57,10 +57,7 @@ impl Cpu {
     }
 
     pub(crate) fn is_halted(&self) -> bool {
-        match self.state {
-            State::Halt(_) => true,
-            _ => false,
-        }
+        matches!(self.state, State::Halt(_))
     }
 
     pub(crate) fn halt_kind(&self) -> Option<HaltKind> {

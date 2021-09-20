@@ -261,7 +261,7 @@ impl Ppu {
                 TileLow => {
                     let obj_size = self.ctrl.obj_size();
 
-                    let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr);
                     self.fetch.obj.tile.with_low_byte(byte);
@@ -272,7 +272,7 @@ impl Ppu {
                 TileHigh => {
                     let obj_size = self.ctrl.obj_size();
 
-                    let addr = PixelFetcher::get_obj_addr(&attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr + 1);
                     self.fetch.obj.tile.with_high_byte(byte);
