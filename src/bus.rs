@@ -64,10 +64,12 @@ impl Bus {
         self.boot.is_some()
     }
 
+    #[inline]
     pub(crate) fn clock(&mut self) {
         self.tick(4);
     }
 
+    #[inline]
     fn tick(&mut self, limit: u8) {
         for _ in 0..limit {
             self.timer.tick();
@@ -82,6 +84,11 @@ impl Bus {
             let byte = self.oam_read_byte(src_addr);
             self.oam_write_byte(dest_addr, byte);
         }
+    }
+
+    #[inline]
+    pub(crate) fn joyp_mut(&mut self) -> &mut Joypad {
+        &mut self.joypad
     }
 }
 

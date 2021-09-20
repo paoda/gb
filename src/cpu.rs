@@ -156,10 +156,12 @@ impl BusIo for Cpu {
 }
 
 impl Cpu {
+    #[inline]
     pub(crate) fn bus(&self) -> &Bus {
         &self.bus
     }
 
+    #[inline]
     pub(crate) fn bus_mut(&mut self) -> &mut Bus {
         &mut self.bus
     }

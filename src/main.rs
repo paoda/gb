@@ -14,7 +14,7 @@ use winit::window::{Window, WindowBuilder};
 use winit_input_helper::WinitInputHelper;
 
 const WINDOW_SCALE: usize = 3;
-const AUDIO_ENABLED: bool = false;
+const AUDIO_ENABLED: bool = true;
 
 fn main() -> Result<()> {
     let app = App::new(crate_name!())

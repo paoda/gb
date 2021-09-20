@@ -17,8 +17,8 @@ pub fn run_frame(emu: &mut Emulator, gamepad: &mut Gilrs, key: &WinitInputHelper
     if let Some(event) = gamepad.next_event() {
         joypad::handle_gamepad_input(emu.joyp_mut(), event);
     }
-
     joypad::handle_keyboard_input(emu.joyp_mut(), key);
+
     while elapsed < CYCLES_IN_FRAME {
         elapsed += emu.step();
     }
@@ -44,15 +44,18 @@ impl Emulator {
     }
 
     fn step(&mut self) -> Cycle {
-        self.cpu.step()
+        let cycles = self.cpu.step();
+        self.timestamp += cycles;
+        cycles
     }
 
     fn load_cart(&mut self, rom: Vec<u8>) {
         self.cpu.bus_mut().load_cart(rom)
     }
 
+    #[inline]
     fn joyp_mut(&mut self) -> &mut Joypad {
-        &mut self.cpu.bus_mut().joypad
+        self.cpu.bus_mut().joyp_mut()
     }
 
     pub fn set_prod(&mut self, prod: SampleProducer<f32>) {

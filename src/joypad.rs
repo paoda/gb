@@ -110,6 +110,7 @@ impl ButtonEvent {
     }
 }
 
+#[inline]
 pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
     use winit::event::VirtualKeyCode;
 
@@ -175,6 +176,7 @@ pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
     }
 }
 
+#[inline]
 pub fn handle_gamepad_input(pad: &mut Joypad, event: GamepadEvent) {
     use Button::*;
     use GamepadEventType::*;
