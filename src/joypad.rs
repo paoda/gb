@@ -147,17 +147,17 @@ pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
         state.dpad_right.update(false, irq);
     }
 
-    if input.key_pressed(VirtualKeyCode::T) {
+    if input.key_pressed(VirtualKeyCode::Return) {
         state.start.update(true, irq);
     }
-    if input.key_released(VirtualKeyCode::T) {
+    if input.key_released(VirtualKeyCode::Return) {
         state.start.update(false, irq);
     }
 
-    if input.key_pressed(VirtualKeyCode::Y) {
+    if input.key_pressed(VirtualKeyCode::RShift) {
         state.select.update(true, irq);
     }
-    if input.key_released(VirtualKeyCode::Y) {
+    if input.key_released(VirtualKeyCode::RShift) {
         state.select.update(false, irq);
     }
 
