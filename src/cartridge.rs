@@ -24,6 +24,14 @@ impl Cartridge {
         }
     }
 
+    pub(crate) fn ext_ram(&self) -> Option<&[u8]> {
+        self.mbc.ext_ram()
+    }
+
+    pub(crate) fn write_ext_ram(&mut self, memory: Vec<u8>) {
+        self.mbc.write_ext_ram(memory)
+    }
+
     fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
         let ram_size = Self::detect_ram_info(memory);
         let rom_size = Self::detect_rom_info(memory);
@@ -38,13 +46,13 @@ impl Cartridge {
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
             MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
-            MBCKind::MBC1WithBattery => Box::new(MBC1::new(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC1WithBattery => Box::new(MBC1::with_battery(ram_size, rom_size)), // TODO: Implement Saving
             MBCKind::MBC2 => Box::new(MBC2::new(rom_cap)),
-            MBCKind::MBC2WithBattery => Box::new(MBC2::new(rom_cap)), // TODO: Implement Saving
+            MBCKind::MBC2WithBattery => Box::new(MBC2::with_battery(rom_cap)), // TODO: Implement Saving
             MBCKind::MBC3 => Box::new(MBC3::new(ram_cap)),
-            MBCKind::MBC3WithBattery => Box::new(MBC3::new(ram_cap)), // TODO: Implement Saving
+            MBCKind::MBC3WithBattery => Box::new(MBC3::with_battery(ram_cap)), // TODO: Implement Saving
             MBCKind::MBC5 => Box::new(MBC5::new(ram_cap, rom_cap)),
-            MBCKind::MBC5WithBattery => Box::new(MBC5::new(ram_cap, rom_cap)), // TDO: Implement Saving
+            MBCKind::MBC5WithBattery => Box::new(MBC5::with_battery(ram_cap, rom_cap)), // TDO: Implement Saving
         }
     }
 
@@ -117,6 +125,8 @@ struct MBC1 {
     memory: Vec<u8>,
     rom_size: RomSize,
     mem_enabled: bool,
+
+    has_battery: bool,
 }
 
 impl MBC1 {
@@ -129,6 +139,20 @@ impl MBC1 {
             ram_bank: Default::default(),
             mode: Default::default(),
             mem_enabled: Default::default(),
+            has_battery: Default::default(),
+        }
+    }
+
+    fn with_battery(ram_size: RamSize, rom_size: RomSize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: vec![0; ram_size.capacity() as usize],
+            ram_size,
+            rom_size,
+            ram_bank: Default::default(),
+            mode: Default::default(),
+            mem_enabled: Default::default(),
+            has_battery: true,
         }
     }
 
@@ -197,6 +221,21 @@ impl MBC1 {
     }
 }
 
+impl Savable for MBC1 {
+    fn ext_ram(&self) -> Option<&[u8]> {
+        match self.has_battery {
+            true => Some(&self.memory),
+            false => None,
+        }
+    }
+
+    fn write_ext_ram(&mut self, memory: Vec<u8>) {
+        if self.has_battery {
+            self.memory.copy_from_slice(&memory);
+        }
+    }
+}
+
 impl MBCIo for MBC1 {
     fn handle_read(&self, addr: u16) -> MBCResult {
         use MBCResult::*;
@@ -256,6 +295,8 @@ struct MBC3 {
 
     // RTC Data Latch Previous Write
     prev_latch_write: Option<u8>,
+
+    has_battery: bool,
 }
 
 impl MBC3 {
@@ -267,6 +308,34 @@ impl MBC3 {
             devs_enabled: Default::default(),
             mapped: Default::default(),
             prev_latch_write: Default::default(),
+            has_battery: Default::default(),
+        }
+    }
+
+    fn with_battery(ram_cap: usize) -> Self {
+        Self {
+            memory: vec![0; ram_cap],
+            rom_bank: Default::default(),
+            ram_bank: Default::default(),
+            devs_enabled: Default::default(),
+            mapped: Default::default(),
+            prev_latch_write: Default::default(),
+            has_battery: true,
+        }
+    }
+}
+
+impl Savable for MBC3 {
+    fn ext_ram(&self) -> Option<&[u8]> {
+        match self.has_battery {
+            true => Some(&self.memory),
+            false => None,
+        }
+    }
+
+    fn write_ext_ram(&mut self, memory: Vec<u8>) {
+        if self.has_battery {
+            self.memory.copy_from_slice(&memory);
         }
     }
 }
@@ -342,9 +411,10 @@ struct MBC5 {
     ram_bank: u8,
 
     rom_cap: usize,
-
     memory: Vec<u8>,
     mem_enabled: bool,
+
+    has_battery: bool,
 }
 
 impl MBC5 {
@@ -355,11 +425,38 @@ impl MBC5 {
             rom_cap,
             ram_bank: Default::default(),
             mem_enabled: Default::default(),
+            has_battery: Default::default(),
+        }
+    }
+
+    fn with_battery(ram_cap: usize, rom_cap: usize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: vec![0; ram_cap],
+            rom_cap,
+            ram_bank: Default::default(),
+            mem_enabled: Default::default(),
+            has_battery: true,
         }
     }
 
     fn bank_addr(&self, addr: u16) -> usize {
         (0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)) % self.rom_cap
+    }
+}
+
+impl Savable for MBC5 {
+    fn ext_ram(&self) -> Option<&[u8]> {
+        match self.has_battery {
+            true => Some(&self.memory),
+            false => None,
+        }
+    }
+
+    fn write_ext_ram(&mut self, memory: Vec<u8>) {
+        if self.has_battery {
+            self.memory.copy_from_slice(&memory);
+        }
     }
 }
 
@@ -401,6 +498,7 @@ struct MBC2 {
     mem_enabled: bool,
 
     rom_cap: usize,
+    has_battery: bool,
 }
 
 impl MBC2 {
@@ -410,13 +508,39 @@ impl MBC2 {
         Self {
             rom_bank: 0x01,
             memory: Box::new([0; Self::RAM_SIZE]),
-            mem_enabled: Default::default(),
             rom_cap,
+            mem_enabled: Default::default(),
+            has_battery: Default::default(),
+        }
+    }
+
+    fn with_battery(rom_cap: usize) -> Self {
+        Self {
+            rom_bank: 0x01,
+            memory: Box::new([0; Self::RAM_SIZE]),
+            rom_cap,
+            mem_enabled: Default::default(),
+            has_battery: true,
         }
     }
 
     fn rom_addr(&self, addr: u16) -> usize {
         (0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)) % self.rom_cap
+    }
+}
+
+impl Savable for MBC2 {
+    fn ext_ram(&self) -> Option<&[u8]> {
+        match self.has_battery {
+            true => Some(self.memory.as_ref()),
+            false => None,
+        }
+    }
+
+    fn write_ext_ram(&mut self, memory: Vec<u8>) {
+        if self.has_battery {
+            self.memory.copy_from_slice(&memory);
+        }
     }
 }
 
@@ -457,6 +581,16 @@ impl MBCIo for MBC2 {
 #[derive(Debug)]
 struct NoMBC;
 
+impl Savable for NoMBC {
+    fn ext_ram(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn write_ext_ram(&mut self, _memory: Vec<u8>) {
+        // Nothing Happens Here
+    }
+}
+
 impl MBCIo for NoMBC {
     fn handle_read(&self, addr: u16) -> MBCResult {
         MBCResult::Address(addr as usize)
@@ -467,7 +601,7 @@ impl MBCIo for NoMBC {
     }
 }
 
-trait MBCIo {
+trait MBCIo: Savable {
     fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
@@ -606,4 +740,9 @@ impl Default for Box<dyn MBCIo> {
     fn default() -> Self {
         Box::new(NoMBC)
     }
+}
+
+trait Savable {
+    fn ext_ram(&self) -> Option<&[u8]>;
+    fn write_ext_ram(&mut self, memory: Vec<u8>);
 }

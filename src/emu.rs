@@ -2,7 +2,11 @@ use crate::apu::gen::SampleProducer;
 use crate::cpu::Cpu;
 use crate::joypad::{self, Joypad};
 use crate::{Cycle, GB_HEIGHT, GB_WIDTH};
+use clap::crate_name;
 use gilrs::Gilrs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::time::Duration;
 use winit_input_helper::WinitInputHelper;
 
@@ -50,7 +54,7 @@ impl Emulator {
     }
 
     fn load_cart(&mut self, rom: Vec<u8>) {
-        self.cpu.bus_mut().load_cart(rom)
+        self.cpu.bus_mut().load_cart(rom);
     }
 
     #[inline]
@@ -64,6 +68,51 @@ impl Emulator {
 
     pub fn title(&self) -> &str {
         self.cpu.bus().cart_title().unwrap_or(DEFAULT_TITLE)
+    }
+
+    pub fn try_write_sav(&self) -> std::io::Result<()> {
+        if let Some(ext_ram) = self.cpu.bus().cart().map(|c| c.ext_ram()).flatten() {
+            if let Some(title) = self.cpu.bus().cart_title() {
+                let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
+                save_path.push(title);
+                save_path.set_extension("sav");
+
+                let mut file = File::create(save_path)?;
+                file.write_all(ext_ram)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn try_load_sav(&mut self) -> std::io::Result<()> {
+        if let Some(cart) = self.cpu.bus_mut().cart_mut() {
+            if let Some(title) = cart.title() {
+                let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
+                save_path.push(title);
+                save_path.set_extension("sav");
+
+                if let Ok(mut file) = File::open(save_path) {
+                    let mut memory = Vec::new();
+                    file.read_to_end(&mut memory)?;
+
+                    cart.write_ext_ram(memory);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn data_path() -> Option<PathBuf> {
+        match directories_next::ProjectDirs::from("dev", "musuka", crate_name!()) {
+            Some(dirs) => {
+                let data_local = dirs.data_local_dir();
+                std::fs::create_dir_all(data_local).ok()?;
+                Some(data_local.to_path_buf())
+            }
+            None => None,
+        }
     }
 }
 

@@ -90,6 +90,16 @@ impl Bus {
     pub(crate) fn joyp_mut(&mut self) -> &mut Joypad {
         &mut self.joypad
     }
+
+    #[inline]
+    pub(crate) fn cart(&self) -> Option<&Cartridge> {
+        self.cart.as_ref()
+    }
+
+    #[inline]
+    pub(crate) fn cart_mut(&mut self) -> Option<&mut Cartridge> {
+        self.cart.as_mut()
+    }
 }
 
 impl Bus {

@@ -49,6 +49,9 @@ fn main() -> Result<()> {
     }
 
     let mut emu = emu_build.finish();
+
+    // Load Save file if it exists
+    emu.try_load_sav().expect("Load save if exists");
     let rom_title = emu.title();
 
     let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
@@ -96,6 +99,8 @@ fn main() -> Result<()> {
                 .map_err(|e| anyhow!("pixels.render() failed: {}", e))
                 .is_err()
             {
+                emu.try_write_sav().expect("Write game save if need be");
+
                 *control_flow = ControlFlow::Exit;
                 return;
             }
@@ -103,6 +108,8 @@ fn main() -> Result<()> {
 
         if input.update(&event) {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
+                emu.try_write_sav().expect("Write game save if need be");
+
                 *control_flow = ControlFlow::Exit;
                 return;
             }
