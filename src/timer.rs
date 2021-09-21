@@ -21,17 +21,6 @@ impl Timer {
         use State::*;
         use TimerSpeed::*;
 
-        match self.state {
-            TIMAOverflow(_) | AbortedTIMAOverflow(_) => self.next(),
-            LoadTMA => {
-                self.counter = self.modulo;
-                self.interrupt = true;
-
-                self.next();
-            }
-            Normal => {}
-        }
-
         self.divider = self.divider.wrapping_add(1);
 
         // Get Bit Position
@@ -53,6 +42,17 @@ impl Timer {
         }
 
         self.and_result = Some(new_result);
+
+        match self.state {
+            TIMAOverflow(_) | AbortedTIMAOverflow(_) => self.next(),
+            LoadTIMA => {
+                self.counter = self.modulo;
+                self.interrupt = true;
+
+                self.next();
+            }
+            Normal => {}
+        }
     }
 
     /// 0xFF05 | TIMA - Timer Counter
@@ -70,7 +70,7 @@ impl Timer {
                 self.counter = byte;
                 self.state = AbortedTIMAOverflow(step);
             }
-            LoadTMA => {}
+            LoadTIMA => { /* Ignored */ }
         }
     }
 
@@ -95,9 +95,8 @@ impl Timer {
         use State::*;
 
         self.state = match self.state {
-            Normal | LoadTMA => Normal,
-            AbortedTIMAOverflow(4) => Normal,
-            TIMAOverflow(4) => LoadTMA,
+            Normal | LoadTIMA | AbortedTIMAOverflow(3) => Normal,
+            TIMAOverflow(3) => LoadTIMA,
             AbortedTIMAOverflow(step) => AbortedTIMAOverflow(step + 1),
             TIMAOverflow(step) => TIMAOverflow(step + 1),
         }
@@ -181,5 +180,5 @@ enum State {
     TIMAOverflow(u8),
     AbortedTIMAOverflow(u8),
     Normal,
-    LoadTMA,
+    LoadTIMA,
 }
