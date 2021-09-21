@@ -325,7 +325,7 @@ impl Ppu {
         if self.ctrl.window_enabled()
             && !self.window_stat.should_draw()
             && self.window_stat.coincidence()
-            && self.x_pos as i8 as i16 >= self.pos.window_x as i8 as i16 - 7
+            && self.x_pos as i16 >= self.pos.window_x as i16 - 7
         {
             self.window_stat.set_should_draw(true);
             self.fetch.back.reset();
@@ -700,7 +700,7 @@ impl PixelFetcher {
         let id = self.back.tile.id.expect("Tile Number is present");
 
         let tile_data_addr = match control.tile_data_addr() {
-            TileDataAddress::X8800 => 0x9000u16.wrapping_add(((id as i8 as i16) * 16) as u16),
+            TileDataAddress::X8800 => 0x9000u16.wrapping_add(((id as i8) as i16 * 16) as u16),
             TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
         };
 
