@@ -2,13 +2,34 @@
 [![Build Status](https://ci.paoda.moe/api/badges/paoda/gb/status.svg)](https://ci.paoda.moe/paoda/gb)
 
 ### Status
-* Passes Blargg's cpu_instrs Test
-* Renders Background & Window Tiles 
-* Implements a PPU FIFO
+* From [Blargg Test ROMs](https://github.com/L-P/blargg-test-roms/)
+    * [x] cpu_instrs
+    * [x] instr_timing
+    * [x] mem_timing
+    * [x] mem_timing-2
+    * [ ] Partially dmg_sound 
+* [x] [dmg-acid2](https://github.com/mattcurrie/dmg-acid2)
+* From [mooneye-gb](https://github.com/Gekkio/mooneye-gb):
+    * Cartridges:
+        * [x] MBC1
+        * [ ] MBC1M
+        * [x] MBC2
+        * [x] MBC5
+
+Supports: ROM-only, MBC1, MBC2, MBC3 and MBC5 games.
+
+* Implements a cycle-accurate PPU FIFO
+    * Doesn't \*exactly\* work right just yet
 
 
-### Notes
-* [gameboy-logs](https://github.com/wheremyfoodat/Gameboy-logs) suggests that there are still some underlying problems with the cpu implementation
-* The Sprite FIFO does not work as expected yet
-* Sound is neither emulated nor stubbed. Upon writing / reading to a APU related register the emulator will panic. 
-* Code cleanup is pending completion of some minimum viable product of the emulator
+### Controls
+Controls are defined [here](https://git.musuka.dev/paoda/gb/src/branch/main/src/joypad.rs#L114)
+
+Key | Button
+--- | ---
+<kbd>X</kbd> | B
+<kbd>Z</kbd> | A
+<kbd>Enter</kbd> | START
+<kbd>Shift</kbd> | SELECT
+
+Then use the Arrow keys for the D-Pad
