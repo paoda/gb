@@ -15,6 +15,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    #[allow(dead_code)]
     pub(crate) fn without_boot() -> Self {
         Self {
             reg: Registers {

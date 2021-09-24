@@ -15,11 +15,11 @@
         * [ ] MBC1M
         * [x] MBC2
         * [x] MBC5
+* Implements a cycle-accurate PPU FIFO
+    * Doesn't \*exactly\* work right just yet
 
 Supports: ROM-only, MBC1, MBC2, MBC3 and MBC5 games.
 
-* Implements a cycle-accurate PPU FIFO
-    * Doesn't \*exactly\* work right just yet
 
 
 ### Controls
@@ -33,3 +33,6 @@ Key | Button
 <kbd>Shift</kbd> | SELECT
 
 Then use the Arrow keys for the D-Pad
+
+### Credits
+The Boot ROM found in the `bin/` directory was made by [Optix](https://github.com/Hacktix) over [here](https://github.com/Hacktix/Bootix)

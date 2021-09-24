@@ -160,7 +160,7 @@ pub mod build {
         pub fn finish(mut self) -> Emulator {
             let mut emu = Emulator::new(match self.boot {
                 Some(rom) => Cpu::with_boot(rom),
-                None => Cpu::without_boot(),
+                None => Cpu::with_boot(*include_bytes!("../bin/bootix_dmg.bin")),
             });
 
             if let Some(rom) = self.cart.take() {
