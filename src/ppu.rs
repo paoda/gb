@@ -418,6 +418,7 @@ impl Ppu {
         self.frame_buf.swap_with_slice(&mut blank);
     }
 
+    #[inline]
     pub(crate) fn frame_buf(&self) -> &[u8; GB_HEIGHT * GB_WIDTH * 4] {
         &self.frame_buf
     }
