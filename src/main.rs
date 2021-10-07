@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::emu::build::EmulatorBuilder;
-use gb::{AudioSPSC, Cycle, GB_HEIGHT, GB_WIDTH};
+use gb::{Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
@@ -74,8 +74,7 @@ fn main() -> Result<()> {
     let (_stream, stream_handle) = OutputStream::try_default().expect("Initialized Audio");
 
     if AUDIO_ENABLED {
-        let spsc: AudioSPSC<f32> = Default::default();
-        let (prod, cons) = spsc.init();
+        let (prod, cons) = gb::spsc_init();
         let sink = {
             let s = Sink::try_new(&stream_handle)?;
             s.append(cons);

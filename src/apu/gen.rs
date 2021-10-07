@@ -5,33 +5,12 @@ pub(crate) const SAMPLE_RATE: u32 = 48000; // Hz
 const CHANNEL_COUNT: usize = 2;
 const BUFFER_CAPACITY: usize = 2048 * CHANNEL_COUNT; // # of samples * the # of channels
 
-pub struct AudioSPSC<T> {
-    inner: RingBuffer<T>,
-}
-
-impl<T> Default for AudioSPSC<T> {
-    fn default() -> Self {
-        Self {
-            inner: RingBuffer::new(BUFFER_CAPACITY),
-        }
-    }
-}
-
-impl<T> AudioSPSC<T> {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            inner: RingBuffer::new(capacity),
-        }
-    }
-
-    pub fn init(self) -> (SampleProducer<T>, SampleConsumer<T>) {
-        let (prod, cons) = self.inner.split();
-
-        (
-            SampleProducer { inner: prod },
-            SampleConsumer { inner: cons },
-        )
-    }
+pub fn init<T>() -> (SampleProducer<T>, SampleConsumer<T>) {
+    let (prod, cons) = RingBuffer::new(BUFFER_CAPACITY);
+    (
+        SampleProducer { inner: prod },
+        SampleConsumer { inner: cons },
+    )
 }
 
 pub struct SampleProducer<T> {

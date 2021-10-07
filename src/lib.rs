@@ -1,4 +1,4 @@
-pub use apu::gen::AudioSPSC;
+pub use apu::gen::init as spsc_init;
 pub type Cycle = u64;
 
 pub const GB_WIDTH: usize = 160;

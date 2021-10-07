@@ -8,16 +8,16 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1.0"
-bitfield = "^0.13"
-clap = "^2.33"
-gilrs = "^0.8"
-pixels = "^0.6"
-winit = "^0.25"
-winit_input_helper = "^0.10"
-rodio = "^0.14"
-rtrb = "^0.1.4"
-directories-next = "2.0.0"
+anyhow = "1.0"
+bitfield = "0.13"
+clap = "2.33"
+gilrs = "0.8"
+pixels = "0.6"
+winit = "0.25"
+winit_input_helper = "0.10"
+rodio = "0.14"
+rtrb = "0.2"
+directories-next = "2.0"
 
 [profile.release]
 debug = true
