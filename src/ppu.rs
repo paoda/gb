@@ -81,6 +81,12 @@ impl Ppu {
             PpuMode::OamScan => {
                 // Cycles 1 -> 80
                 if self.dot >= 80 {
+                    self.x_pos = 0;
+                    self.scanline_start = true;
+                    self.to_discard = 0;
+                    self.fifo.back.clear();
+                    self.fifo.obj.clear();
+
                     self.stat.set_mode(PpuMode::Drawing);
                 }
 
@@ -105,21 +111,14 @@ impl Ppu {
 
                     // Increment Window line counter if scanline had any window pixels on it
                     // only increment once per scanline though
-                    if self.win_stat.should_draw() {
-                        self.fetch.back.window_line.increment();
+                    if self.win_stat.enabled {
+                        self.fetch.back.wl_count += 1;
                     }
 
-                    self.x_pos = 0;
-                    self.scanline_start = true;
-                    self.to_discard = 0;
-
                     self.fetch.hblank_reset();
-                    self.win_stat.hblank_reset();
+                    self.win_stat.enabled = false;
+
                     self.obj_buffer.clear();
-
-                    self.fifo.back.clear();
-                    self.fifo.obj.clear();
-
                     self.stat.set_mode(PpuMode::HBlank);
                 }
             }
@@ -144,9 +143,10 @@ impl Ppu {
                         self.int.set_vblank(true);
 
                         // Reset Window Line Counter in Fetcher
-                        self.fetch.vblank_reset();
+                        self.fetch.back.wl_count = 0;
+
                         // Reset WY=LY coincidence flag
-                        self.win_stat.vblank_reset();
+                        self.win_stat.coincidence = false;
 
                         if self.stat.vblank_int() {
                             // Enable Vblank LCDStat Interrupt
@@ -203,9 +203,8 @@ impl Ppu {
                 return;
             }
 
-            if !self.win_stat.coincidence() && self.scan_dot == 0 {
-                self.win_stat
-                    .set_coincidence(self.pos.line_y == self.pos.window_y);
+            if !self.win_stat.coincidence && self.scan_dot == 0 {
+                self.win_stat.coincidence = self.pos.line_y == self.pos.window_y;
             }
 
             let obj_height = self.ctrl.obj_size().size();
@@ -317,25 +316,12 @@ impl Ppu {
             }
         }
 
-        if self.ctrl.window_enabled()
-            && !self.win_stat.should_draw()
-            && self.win_stat.coincidence()
-            && self.x_pos as i16 >= self.pos.window_x as i16 - 7
-        {
-            self.win_stat.set_should_draw(true);
-            self.fetch.back.reset();
-            self.fetch.x_pos = 0;
-            self.fifo.back.clear();
-        }
-
         if self.fetch.back.is_enabled() {
             match self.fetch.back.state {
                 TileNumber => {
                     let x_pos = self.fetch.x_pos;
 
-                    self.fetch
-                        .back
-                        .should_render_window(self.win_stat.should_draw());
+                    self.fetch.back.should_render_window(self.win_stat.enabled);
 
                     let addr = self.fetch.bg_tile_num_addr(&self.ctrl, &self.pos, x_pos);
 
@@ -383,7 +369,7 @@ impl Ppu {
                 self.scanline_start = false;
             }
 
-            if self.to_discard > 0 && !self.fifo.back.is_empty() {
+            if !self.win_stat.enabled && self.to_discard > 0 && !self.fifo.back.is_empty() {
                 let _ = self.fifo.back.pop_front();
                 self.to_discard -= 1;
 
@@ -400,6 +386,17 @@ impl Ppu {
                 self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
 
                 self.x_pos += 1;
+            }
+
+            if self.ctrl.window_enabled()
+                && !self.win_stat.enabled
+                && self.win_stat.coincidence
+                && self.x_pos as i16 >= self.pos.window_x as i16 - 7
+            {
+                self.win_stat.enabled = true;
+                self.fetch.back.reset();
+                self.fetch.x_pos = 0;
+                self.fifo.back.clear();
             }
         }
     }
@@ -653,10 +650,6 @@ impl PixelFetcher {
         self.x_pos = 0;
     }
 
-    fn vblank_reset(&mut self) {
-        self.back.vblank_reset();
-    }
-
     fn bg_tile_num_addr(&self, control: &LCDControl, pos: &ScreenPosition, x_pos: u8) -> u16 {
         let line_y = pos.line_y;
         let scroll_y = pos.scroll_y;
@@ -676,7 +669,7 @@ impl PixelFetcher {
 
         let scx_offset = if is_window { 0 } else { scroll_x / 8 };
         let y_offset = if is_window {
-            self.back.window_line.count() as u16 / 8
+            self.back.wl_count as u16 / 8
         } else {
             ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
         };
@@ -700,7 +693,7 @@ impl PixelFetcher {
         };
 
         let offset = if is_window {
-            self.back.window_line.count() as u16 % 8
+            self.back.wl_count as u16 % 8
         } else {
             (line_y as u16 + scroll_y as u16) % 8
         };
@@ -762,7 +755,7 @@ trait Fetcher {
 struct BackgroundFetcher {
     state: FetcherState,
     tile: TileBuilder,
-    window_line: WindowLineCounter,
+    wl_count: u8,
     is_window_tile: bool,
     enabled: bool,
 }
@@ -786,10 +779,6 @@ impl BackgroundFetcher {
 
     fn is_enabled(&self) -> bool {
         self.enabled
-    }
-
-    fn vblank_reset(&mut self) {
-        self.window_line.vblank_reset();
     }
 }
 
@@ -818,7 +807,7 @@ impl Default for BackgroundFetcher {
             state: Default::default(),
             tile: Default::default(),
             is_window_tile: Default::default(),
-            window_line: Default::default(),
+            wl_count: Default::default(),
             enabled: true,
         }
     }
@@ -843,25 +832,6 @@ impl Fetcher for ObjectFetcher {
     fn hblank_reset(&mut self) {
         self.state = Default::default();
         self.tile = Default::default();
-    }
-}
-
-#[derive(Debug, Default)]
-struct WindowLineCounter {
-    count: u8,
-}
-
-impl WindowLineCounter {
-    fn increment(&mut self) {
-        self.count += 1;
-    }
-
-    fn vblank_reset(&mut self) {
-        self.count = 0;
-    }
-
-    fn count(&self) -> u8 {
-        self.count
     }
 }
 
@@ -959,31 +929,5 @@ struct WindowStatus {
     coincidence: bool,
     /// This will be true if the conditions which tell the PPU to start
     /// drawing from the window tile map is true
-    should_draw: bool,
-}
-
-impl WindowStatus {
-    fn should_draw(&self) -> bool {
-        self.should_draw
-    }
-
-    fn coincidence(&self) -> bool {
-        self.coincidence
-    }
-
-    fn set_should_draw(&mut self, value: bool) {
-        self.should_draw = value;
-    }
-
-    fn set_coincidence(&mut self, value: bool) {
-        self.coincidence = value;
-    }
-
-    fn hblank_reset(&mut self) {
-        self.should_draw = false;
-    }
-
-    fn vblank_reset(&mut self) {
-        self.coincidence = false;
-    }
+    enabled: bool,
 }
