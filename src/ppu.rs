@@ -45,7 +45,7 @@ pub struct Ppu {
     vram: Box<[u8; VRAM_SIZE]>,
     pub(crate) oam: ObjectAttributeTable,
     pub(crate) dma: DirectMemoryAccess,
-    scan_cycle: Cycle,
+    scan_dot: Cycle,
     fetch: PixelFetcher,
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
@@ -56,7 +56,7 @@ pub struct Ppu {
     to_discard: u8,
 
     x_pos: u8,
-    cycle: Cycle,
+    dot: Cycle,
 }
 
 impl BusIo for Ppu {
@@ -71,7 +71,7 @@ impl BusIo for Ppu {
 
 impl Ppu {
     pub(crate) fn tick(&mut self) {
-        self.cycle += 1;
+        self.dot += 1;
 
         if !self.ctrl.lcd_enabled() {
             return;
@@ -79,7 +79,8 @@ impl Ppu {
 
         match self.stat.mode() {
             PpuMode::OamScan => {
-                if self.cycle >= 80 {
+                // Cycles 1 -> 80
+                if self.dot >= 80 {
                     self.stat.set_mode(PpuMode::Drawing);
                 }
 
@@ -88,7 +89,7 @@ impl Ppu {
             PpuMode::Drawing => {
                 if self.ctrl.lcd_enabled() {
                     // Only Draw when the LCD Is Enabled
-                    self.draw(self.cycle);
+                    self.draw();
                 } else {
                     self.reset();
                 }
@@ -125,8 +126,8 @@ impl Ppu {
             PpuMode::HBlank => {
                 // This mode will always end at 456 cycles
 
-                if self.cycle >= 456 {
-                    self.cycle %= 456;
+                if self.dot >= 456 {
+                    self.dot %= 456;
                     self.pos.line_y += 1;
 
                     // Update LY==LYC bit
@@ -159,7 +160,7 @@ impl Ppu {
                             self.int.set_lcd_stat(true);
                         }
 
-                        self.scan_cycle = Default::default();
+                        self.scan_dot = Default::default();
                         PpuMode::OamScan
                     };
 
@@ -167,8 +168,8 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
-                if self.cycle > 456 {
-                    self.cycle %= 456;
+                if self.dot >= 456 {
+                    self.dot %= 456;
                     self.pos.line_y += 1;
 
                     // Update LY==LYC bit
@@ -188,7 +189,7 @@ impl Ppu {
                             self.int.set_lcd_stat(true);
                         }
 
-                        self.scan_cycle = Default::default();
+                        self.scan_dot = Default::default();
                         self.stat.set_mode(PpuMode::OamScan);
                     }
                 }
@@ -197,18 +198,18 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self) {
-        if self.scan_cycle % 2 == 0 {
+        if self.scan_dot % 2 == 0 {
             if self.dma.is_active() {
                 return;
             }
 
-            if !self.win_stat.coincidence() && self.scan_cycle == 0 {
+            if !self.win_stat.coincidence() && self.scan_dot == 0 {
                 self.win_stat
                     .set_coincidence(self.pos.line_y == self.pos.window_y);
             }
 
             let obj_height = self.ctrl.obj_size().size();
-            let attr = self.oam.attribute(self.scan_cycle as usize / 2);
+            let attr = self.oam.attribute(self.scan_dot as usize / 2);
             let line_y = self.pos.line_y + 16;
 
             if attr.x > 0
@@ -219,10 +220,10 @@ impl Ppu {
                 self.obj_buffer.add(attr);
             }
         }
-        self.scan_cycle += 1;
+        self.scan_dot += 1;
     }
 
-    fn draw(&mut self, _cycle: Cycle) {
+    fn draw(&mut self) {
         use FetcherState::*;
 
         let mut iter = self.obj_buffer.iter_mut();
@@ -464,7 +465,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
-            cycle: Default::default(),
+            dot: Default::default(),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
             ctrl: Default::default(),
@@ -472,7 +473,7 @@ impl Default for Ppu {
             pos: Default::default(),
             stat: Default::default(),
             oam: Default::default(),
-            scan_cycle: Default::default(),
+            scan_dot: Default::default(),
             fetch: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
