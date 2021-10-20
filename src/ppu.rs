@@ -88,6 +88,17 @@ impl Ppu {
                     self.fifo.back.clear();
                     self.fifo.obj.clear();
 
+                    // Sort Sprites
+                    self.obj_buffer.inner.sort_by(|left, right| {
+                        left.zip(*right)
+                            .map(|(left, right)| right.x.cmp(&left.x))
+                            .unwrap_or(std::cmp::Ordering::Greater)
+                    });
+
+                    // if self.obj_buffer.len != 0 {
+                    //     dbg!(&self.obj_buffer);
+                    // }
+
                     self.stat.set_mode(PpuMode::Drawing);
                 }
 
@@ -578,7 +589,7 @@ impl Default for ObjectAttributeTable {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default)]
 struct ObjectAttribute {
     y: u8,
     x: u8,
