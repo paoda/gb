@@ -430,43 +430,39 @@ impl Ppu {
     }
 
     fn clock_fifo(&mut self) -> Option<GrayShade> {
-        use ObjectPaletteKind::*;
         use RenderPriority::*;
 
-        let obj_palette_0 = &self.monochrome.obj_palette_0;
-        let obj_palette_1 = &self.monochrome.obj_palette_1;
-
-        match self.fifo.back.pop_front() {
-            Some(bg_pixel) => match self.fifo.obj.pop_front() {
-                Some(obj_pixel) => match obj_pixel.priority {
-                    Object | BackgroundAndWindow if obj_pixel.shade_id == 0 => {
-                        Some(self.bg_pixel(bg_pixel.shade_id))
-                    }
-                    BackgroundAndWindow if bg_pixel.shade_id != 0 => {
-                        Some(self.bg_pixel(bg_pixel.shade_id))
-                    }
-                    Object | BackgroundAndWindow => {
-                        let maybe_sprite = match obj_pixel.palette_kind {
-                            Zero => obj_palette_0.shade(obj_pixel.shade_id),
-                            One => obj_palette_1.shade(obj_pixel.shade_id),
-                        };
-
-                        let sprite = maybe_sprite
-                            .expect("Sprite w/ a colour id of 0 has already been handled");
-                        Some(sprite)
-                    }
+        self.fifo
+            .back
+            .pop_front()
+            .map(|bg| match self.fifo.obj.pop_front() {
+                Some(obj) => match obj.priority {
+                    _ if obj.shade_id == 0 => self.bg_pixel(bg),
+                    BackgroundAndWindow if bg.shade_id != 0 => self.bg_pixel(bg),
+                    _ => self.obj_pixel(obj),
                 },
-                _ => Some(self.bg_pixel(bg_pixel.shade_id)),
-            },
-            None => None,
+                None => self.bg_pixel(bg),
+            })
+    }
+
+    fn obj_pixel(&self, obj: ObjPixelProperty) -> GrayShade {
+        use ObjectPaletteKind::*;
+        assert!(obj.shade_id != 0);
+
+        let p0 = &self.monochrome.obj_palette_0;
+        let p1 = &self.monochrome.obj_palette_1;
+
+        match obj.palette_kind {
+            Zero => p0.shade(obj.shade_id).expect("Object shade id is non-zero"),
+            One => p1.shade(obj.shade_id).expect("Object shade id is non-zero"),
         }
     }
 
-    fn bg_pixel(&self, shade_id: u8) -> GrayShade {
+    fn bg_pixel(&self, bg: BgPixelProperty) -> GrayShade {
         let bg_palette = &self.monochrome.bg_palette;
 
         if self.ctrl.bg_win_enabled() {
-            bg_palette.shade(shade_id)
+            bg_palette.shade(bg.shade_id)
         } else {
             bg_palette.shade(0)
         }
