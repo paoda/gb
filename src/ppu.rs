@@ -50,7 +50,7 @@ pub struct Ppu {
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
     frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
-    window_stat: WindowStatus,
+    win_stat: WindowStatus,
 
     scanline_start: bool,
     to_discard: u8,
@@ -104,7 +104,7 @@ impl Ppu {
 
                     // Increment Window line counter if scanline had any window pixels on it
                     // only increment once per scanline though
-                    if self.window_stat.should_draw() {
+                    if self.win_stat.should_draw() {
                         self.fetch.back.window_line.increment();
                     }
 
@@ -113,7 +113,7 @@ impl Ppu {
                     self.to_discard = 0;
 
                     self.fetch.hblank_reset();
-                    self.window_stat.hblank_reset();
+                    self.win_stat.hblank_reset();
                     self.obj_buffer.clear();
 
                     self.fifo.back.clear();
@@ -145,7 +145,7 @@ impl Ppu {
                         // Reset Window Line Counter in Fetcher
                         self.fetch.vblank_reset();
                         // Reset WY=LY coincidence flag
-                        self.window_stat.vblank_reset();
+                        self.win_stat.vblank_reset();
 
                         if self.stat.vblank_int() {
                             // Enable Vblank LCDStat Interrupt
@@ -202,8 +202,8 @@ impl Ppu {
                 return;
             }
 
-            if !self.window_stat.coincidence() && self.scan_cycle == 0 {
-                self.window_stat
+            if !self.win_stat.coincidence() && self.scan_cycle == 0 {
+                self.win_stat
                     .set_coincidence(self.pos.line_y == self.pos.window_y);
             }
 
@@ -317,11 +317,11 @@ impl Ppu {
         }
 
         if self.ctrl.window_enabled()
-            && !self.window_stat.should_draw()
-            && self.window_stat.coincidence()
+            && !self.win_stat.should_draw()
+            && self.win_stat.coincidence()
             && self.x_pos as i16 >= self.pos.window_x as i16 - 7
         {
-            self.window_stat.set_should_draw(true);
+            self.win_stat.set_should_draw(true);
             self.fetch.back.reset();
             self.fetch.x_pos = 0;
             self.fifo.back.clear();
@@ -334,7 +334,7 @@ impl Ppu {
 
                     self.fetch
                         .back
-                        .should_render_window(self.window_stat.should_draw());
+                        .should_render_window(self.win_stat.should_draw());
 
                     let addr = self.fetch.bg_tile_num_addr(&self.ctrl, &self.pos, x_pos);
 
@@ -476,7 +476,7 @@ impl Default for Ppu {
             fetch: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
-            window_stat: Default::default(),
+            win_stat: Default::default(),
             dma: Default::default(),
             x_pos: 0,
             scanline_start: true,
