@@ -83,6 +83,7 @@ impl Ppu {
                 if self.dot >= 80 {
                     self.x_pos = 0;
                     self.scanline_start = true;
+                    self.fetch.back.scanline_first = true;
                     self.to_discard = 0;
                     self.fifo.back.clear();
                     self.fifo.obj.clear();
@@ -318,6 +319,7 @@ impl Ppu {
 
         if self.fetch.back.is_enabled() {
             match self.fetch.back.state {
+                SleepOne => self.fetch.back.next(TileNumber),
                 TileNumber => {
                     let x_pos = self.fetch.x_pos;
 
@@ -328,35 +330,36 @@ impl Ppu {
                     let id = self.read_byte(addr);
                     self.fetch.back.tile.with_id(id);
 
-                    // Move on to the Next state in 2 T-cycles
-                    self.fetch.back.next(SleepOne);
+                    self.fetch.back.next(TileLow);
                 }
-                SleepOne => self.fetch.back.next(TileLow),
+                SleepTwo => self.fetch.back.next(TileLow),
                 TileLow => {
                     let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let low = self.read_byte(addr);
                     self.fetch.back.tile.with_low_byte(low);
 
-                    self.fetch.back.next(SleepTwo);
+                    self.fetch.back.next(SleepThree);
                 }
-                SleepTwo => self.fetch.back.next(TileHigh),
+                SleepThree => self.fetch.back.next(TileHigh),
                 TileHigh => {
                     let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
 
                     let high = self.read_byte(addr + 1);
                     self.fetch.back.tile.with_high_byte(high);
 
-                    self.fetch.back.next(SleepThree);
+                    if self.fetch.back.scanline_first {
+                        self.fetch.back.reset();
+
+                        self.fetch.back.scanline_first = false;
+                    } else {
+                        self.fetch.back.next(ToFifoOne);
+                    }
                 }
-                SleepThree => self.fetch.back.next(ToFifoOne),
-                ToFifoOne => {
-                    self.fetch.back.next(ToFifoTwo);
-                }
-                ToFifoTwo => {
+                ToFifoOne | ToFifoTwo => {
                     if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo) {
                         self.fetch.x_pos += 1;
-                        self.fetch.back.next(TileNumber);
+                        self.fetch.back.next(SleepOne);
                         self.fetch.back.tile = Default::default();
                     }
                 }
@@ -758,6 +761,7 @@ struct BackgroundFetcher {
     wl_count: u8,
     is_window_tile: bool,
     enabled: bool,
+    scanline_first: bool,
 }
 
 impl BackgroundFetcher {
@@ -788,7 +792,7 @@ impl Fetcher for BackgroundFetcher {
     }
 
     fn reset(&mut self) {
-        self.state = Default::default();
+        self.state = FetcherState::SleepOne;
         self.tile = Default::default();
     }
 
@@ -804,19 +808,29 @@ impl Fetcher for BackgroundFetcher {
 impl Default for BackgroundFetcher {
     fn default() -> Self {
         Self {
-            state: Default::default(),
+            state: FetcherState::SleepOne,
             tile: Default::default(),
             is_window_tile: Default::default(),
             wl_count: Default::default(),
             enabled: true,
+            scanline_first: true,
         }
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ObjectFetcher {
     state: FetcherState,
     tile: TileBuilder,
+}
+
+impl Default for ObjectFetcher {
+    fn default() -> Self {
+        Self {
+            state: FetcherState::TileNumber,
+            tile: Default::default(),
+        }
+    }
 }
 
 impl Fetcher for ObjectFetcher {
@@ -825,13 +839,12 @@ impl Fetcher for ObjectFetcher {
     }
 
     fn reset(&mut self) {
-        self.state = Default::default();
+        self.state = FetcherState::TileNumber;
         self.tile = Default::default();
     }
 
     fn hblank_reset(&mut self) {
-        self.state = Default::default();
-        self.tile = Default::default();
+        self.reset()
     }
 }
 
@@ -845,12 +858,6 @@ enum FetcherState {
     SleepThree,
     ToFifoOne,
     ToFifoTwo,
-}
-
-impl Default for FetcherState {
-    fn default() -> Self {
-        Self::TileNumber
-    }
 }
 
 #[derive(Debug, Default)]
