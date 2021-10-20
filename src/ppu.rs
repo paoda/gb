@@ -635,11 +635,6 @@ impl ObjectBuffer {
         self.inner[self.len] = Some(attr);
         self.len += 1;
     }
-
-    #[inline]
-    fn iter_mut(&mut self) -> std::slice::IterMut<'_, Option<ObjectAttribute>> {
-        self.inner.iter_mut()
-    }
 }
 
 impl Default for ObjectBuffer {
