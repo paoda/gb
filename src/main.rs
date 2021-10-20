@@ -1,12 +1,15 @@
 use std::convert::TryInto;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::emu::build::EmulatorBuilder;
+use gb::emu::CYCLES_IN_FRAME;
 use gb::{Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -41,6 +44,15 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
+    // Set up subscriber
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "gb=info");
+    }
+
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let mut emu_build =
         EmulatorBuilder::new().with_cart(m.value_of("rom").expect("ROM path provided"))?;
 
@@ -51,9 +63,11 @@ fn main() -> Result<()> {
     let mut emu = emu_build.finish();
 
     // Load Save file if it exists
+    info!("Attempt to load .sav");
     emu.try_load_sav().expect("Load save if exists");
     let rom_title = emu.title();
 
+    info!("Initialize Gamepad");
     let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
 
     // Initialize GUI
@@ -84,6 +98,7 @@ fn main() -> Result<()> {
 
         emu.set_prod(prod);
 
+        info!("Spawn Audio Thread");
         std::thread::spawn(move || {
             sink.sleep_until_end();
         });
@@ -93,11 +108,7 @@ fn main() -> Result<()> {
 
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
-            if pixels
-                .render()
-                .map_err(|e| anyhow!("pixels.render() failed: {}", e))
-                .is_err()
-            {
+            if pixels.render().is_err() {
                 emu.try_write_sav().expect("Write game save if need be");
 
                 *control_flow = ControlFlow::Exit;
@@ -119,8 +130,8 @@ fn main() -> Result<()> {
 
             cycle_count += gb::emu::run_frame(&mut emu, &mut gamepad, &input);
 
-            if cycle_count >= gb::emu::CYCLES_IN_FRAME {
-                cycle_count %= gb::emu::CYCLES_IN_FRAME;
+            if cycle_count >= CYCLES_IN_FRAME {
+                cycle_count %= CYCLES_IN_FRAME;
 
                 let buf: &mut [u8; GB_WIDTH * GB_HEIGHT * 4] = pixels
                     .get_frame()

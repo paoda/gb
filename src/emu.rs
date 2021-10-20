@@ -31,7 +31,7 @@ pub fn run_frame(emu: &mut Emulator, gamepad: &mut Gilrs, key: &WinitInputHelper
 }
 
 pub fn draw_frame(emu: &Emulator, buf: &mut [u8; GB_HEIGHT * GB_WIDTH * 4]) {
-    buf.copy_from_slice(emu.cpu.bus().ppu.frame_buf());
+    buf.copy_from_slice(emu.cpu.bus().ppu().frame_buf());
 }
 
 pub struct Emulator {
@@ -121,6 +121,8 @@ pub mod build {
     use std::io::{Read, Result};
     use std::path::Path;
 
+    use tracing::info;
+
     use crate::bus::BOOT_SIZE;
     use crate::cpu::Cpu;
 
@@ -159,8 +161,14 @@ pub mod build {
 
         pub fn finish(mut self) -> Emulator {
             let mut emu = Emulator::new(match self.boot {
-                Some(rom) => Cpu::with_boot(rom),
-                None => Cpu::with_boot(*include_bytes!("../bin/bootix_dmg.bin")),
+                Some(rom) => {
+                    info!("User-provided Boot ROM");
+                    Cpu::with_boot(rom)
+                }
+                None => {
+                    info!("Built-in Boot ROM");
+                    Cpu::with_boot(*include_bytes!("../bin/bootix_dmg.bin"))
+                }
             });
 
             if let Some(rom) = self.cart.take() {

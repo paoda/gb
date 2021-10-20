@@ -413,7 +413,6 @@ impl Ppu {
         self.pos.line_y = 0;
         self.stat.set_mode(PpuMode::HBlank);
 
-        // TODO: Is this an unnecessary performance hit?
         let mut blank = WHITE.repeat(self.frame_buf.len() / 4);
         self.frame_buf.swap_with_slice(&mut blank);
     }

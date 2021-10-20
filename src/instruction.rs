@@ -116,7 +116,7 @@ impl std::fmt::Debug for Instruction {
 impl Instruction {
     pub(crate) fn execute(cpu: &mut Cpu, instruction: Self) -> Cycle {
         match instruction {
-            Instruction::NOP => (4),
+            Instruction::NOP => 4,
             Instruction::LD(target, src) => match (target, src) {
                 (LDTarget::IndirectImmediateWord, LDSource::SP) => {
                     // LD (u16), SP | Store stack pointer in byte at 16-bit register
@@ -361,12 +361,12 @@ impl Instruction {
                     let (cycles, sum) = match reg {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
-                            ((4), Self::add(left, right, &mut flags))
+                            (4, Self::add(left, right, &mut flags))
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            ((8), Self::add(left, right, &mut flags))
+                            (8, Self::add(left, right, &mut flags))
                         }
                     };
 
@@ -610,13 +610,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
                             let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
-                            ((4), sum)
+                            (4, sum)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let sum = Self::add_with_carry_bit(left, right, flags.c(), &mut flags);
-                            ((8), sum)
+                            (8, sum)
                         }
                     };
                     cpu.set_register(CpuRegister::A, sum);
@@ -646,12 +646,12 @@ impl Instruction {
                     let (cycles, diff) = match reg {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
-                            ((4), Self::sub(left, right, &mut flags))
+                            (4, Self::sub(left, right, &mut flags))
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            ((8), Self::sub(left, right, &mut flags))
+                            (8, Self::sub(left, right, &mut flags))
                         }
                     };
                     cpu.set_register(CpuRegister::A, diff);
@@ -681,13 +681,13 @@ impl Instruction {
                         B | C | D | E | H | L | A => {
                             let right = cpu.register(reg.cpu_register());
                             let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
-                            ((4), diff)
+                            (4, diff)
                         }
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
                             let diff = Self::sub_with_carry(left, right, flags.c(), &mut flags);
-                            ((8), diff)
+                            (8, diff)
                         }
                     };
                     cpu.set_register(CpuRegister::A, diff);
@@ -717,7 +717,7 @@ impl Instruction {
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            ((8), left & right)
+                            (8, left & right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -743,7 +743,7 @@ impl Instruction {
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            ((8), left ^ right)
+                            (8, left ^ right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -769,7 +769,7 @@ impl Instruction {
                         IndirectHL => {
                             let addr = cpu.register_pair(RegisterPair::HL);
                             let right = Self::read_byte(&mut cpu.bus, addr);
-                            ((8), left | right)
+                            (8, left | right)
                         }
                     };
                     cpu.set_register(CpuRegister::A, acc);
@@ -1053,14 +1053,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let rotated = byte.rotate_left(1);
                         cpu.set_register(reg, rotated);
-                        ((8), byte >> 7, rotated)
+                        (8, byte >> 7, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let rotated = byte.rotate_left(1);
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        ((16), byte >> 7, rotated)
+                        (16, byte >> 7, rotated)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, most_sgfnt == 0x01);
@@ -1076,14 +1076,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let rotated = byte.rotate_right(1);
                         cpu.set_register(reg, rotated);
-                        ((8), byte & 0x01, rotated)
+                        (8, byte & 0x01, rotated)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let rotated = byte.rotate_right(1);
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        ((16), byte & 0x01, rotated)
+                        (16, byte & 0x01, rotated)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, least_sgfnt == 0x01);
@@ -1101,14 +1101,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let (rotated, carry) = Self::rl_thru_carry(byte, flags.c());
                         cpu.set_register(reg, rotated);
-                        ((8), rotated, carry)
+                        (8, rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let (rotated, carry) = Self::rl_thru_carry(byte, flags.c());
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        ((16), rotated, carry)
+                        (16, rotated, carry)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, carry);
@@ -1126,14 +1126,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let (rotated, carry) = Self::rr_thru_carry(byte, flags.c());
                         cpu.set_register(reg, rotated);
-                        ((8), rotated, carry)
+                        (8, rotated, carry)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let (rotated, carry) = Self::rr_thru_carry(byte, flags.c());
                         Self::write_byte(&mut cpu.bus, addr, rotated);
-                        ((16), rotated, carry)
+                        (16, rotated, carry)
                     }
                 };
                 cpu.update_flags(rotated == 0, false, false, carry);
@@ -1149,14 +1149,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = byte << 1;
                         cpu.set_register(reg, shifted);
-                        ((8), (byte >> 7) & 0x01, shifted)
+                        (8, (byte >> 7) & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = byte << 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        ((16), (byte >> 7) & 0x01, shifted)
+                        (16, (byte >> 7) & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shifted == 0, false, false, most_sgfnt == 0x01);
@@ -1172,14 +1172,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = ((byte >> 7) & 0x01) << 7 | byte >> 1;
                         cpu.set_register(reg, shifted);
-                        ((8), byte & 0x01, shifted)
+                        (8, byte & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = ((byte >> 7) & 0x01) << 7 | byte >> 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        ((16), byte & 0x01, shifted)
+                        (16, byte & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shifted == 0, false, false, least_sgfnt == 0x01);
@@ -1194,14 +1194,14 @@ impl Instruction {
                         let reg = reg.cpu_register();
                         let swapped = Self::swap_bits(cpu.register(reg));
                         cpu.set_register(reg, swapped);
-                        ((8), swapped)
+                        (8, swapped)
                     }
 
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let swapped = Self::swap_bits(Self::read_byte(&mut cpu.bus, addr));
                         Self::write_byte(&mut cpu.bus, addr, swapped);
-                        ((16), swapped)
+                        (16, swapped)
                     }
                 };
                 cpu.update_flags(swapped == 0, false, false, false);
@@ -1217,14 +1217,14 @@ impl Instruction {
                         let byte = cpu.register(reg);
                         let shifted = byte >> 1;
                         cpu.set_register(reg, shifted);
-                        ((8), byte & 0x01, shifted)
+                        (8, byte & 0x01, shifted)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
                         let shifted = byte >> 1;
                         Self::write_byte(&mut cpu.bus, addr, shifted);
-                        ((16), byte & 0x01, shifted)
+                        (16, byte & 0x01, shifted)
                     }
                 };
                 cpu.update_flags(shift_reg == 0, false, false, least_sgfnt == 0x01);
@@ -1239,12 +1239,12 @@ impl Instruction {
                     B | C | D | E | H | L | A => {
                         let reg = reg.cpu_register();
                         let byte = cpu.register(reg);
-                        ((8), ((byte >> bit) & 0x01) == 0x01)
+                        (8, ((byte >> bit) & 0x01) == 0x01)
                     }
                     IndirectHL => {
                         let addr = cpu.register_pair(RegisterPair::HL);
                         let byte = Self::read_byte(&mut cpu.bus, addr);
-                        ((12), ((byte >> bit) & 0x01) == 0x01)
+                        (12, ((byte >> bit) & 0x01) == 0x01)
                     }
                 };
                 flags.set_z(!is_set);

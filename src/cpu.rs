@@ -7,7 +7,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Default)]
 pub struct Cpu {
-    pub bus: Bus,
+    pub(crate) bus: Bus,
     reg: Registers,
     flags: Flags,
     ime: ImeState,
@@ -118,13 +118,10 @@ impl Cpu {
             use HaltKind::*;
 
             self.bus.clock();
-
-            let elapsed = match kind {
+            return match kind {
                 ImeEnabled | NonePending => 4,
                 SomePending => todo!("Implement HALT bug"),
             };
-
-            return elapsed;
         }
 
         let opcode = self.fetch();
@@ -133,11 +130,11 @@ impl Cpu {
         self.handle_ei();
 
         // For use in Blargg's Test ROMs
-        if self.read_byte(0xFF02) == 0x81 {
-            let c = self.read_byte(0xFF01) as char;
-            self.write_byte(0xFF02, 0x00);
-            eprint!("{}", c);
-        }
+        // if self.read_byte(0xFF02) == 0x81 {
+        //     let c = self.read_byte(0xFF01) as char;
+        //     self.write_byte(0xFF02, 0x00);
+        //     eprint!("{}", c);
+        // }
 
         elapsed
     }

@@ -1,3 +1,5 @@
+use tracing::{info, warn};
+
 use crate::bus::BusIo;
 
 const RAM_SIZE_ADDRESS: usize = 0x0149;
@@ -15,7 +17,7 @@ pub(crate) struct Cartridge {
 impl Cartridge {
     pub(crate) fn new(memory: Vec<u8>) -> Self {
         let title = Self::find_title(&memory);
-        eprintln!("Cartridge Title: {:?}", title);
+        info!("Title: {:?}", title);
 
         Self {
             mbc: Self::detect_mbc(&memory),
@@ -39,20 +41,20 @@ impl Cartridge {
         let ram_cap = ram_size.capacity();
         let rom_cap = rom_size.capacity();
 
-        eprintln!("Cartridge Ram Size: {} bytes", ram_cap);
-        eprintln!("Cartridge ROM Size: {} bytes", rom_size.capacity());
-        eprintln!("MBC Type: {:?}", mbc_kind);
+        info!("RAM size: {} bytes", ram_cap);
+        info!("ROM size: {} bytes", rom_size.capacity());
+        info!("MBC kind: {:?}", mbc_kind);
 
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
             MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
-            MBCKind::MBC1WithBattery => Box::new(MBC1::with_battery(ram_size, rom_size)), // TODO: Implement Saving
+            MBCKind::MBC1WithBattery => Box::new(MBC1::with_battery(ram_size, rom_size)),
             MBCKind::MBC2 => Box::new(MBC2::new(rom_cap)),
-            MBCKind::MBC2WithBattery => Box::new(MBC2::with_battery(rom_cap)), // TODO: Implement Saving
+            MBCKind::MBC2WithBattery => Box::new(MBC2::with_battery(rom_cap)),
             MBCKind::MBC3 => Box::new(MBC3::new(ram_cap)),
-            MBCKind::MBC3WithBattery => Box::new(MBC3::with_battery(ram_cap)), // TODO: Implement Saving
+            MBCKind::MBC3WithBattery => Box::new(MBC3::with_battery(ram_cap)),
             MBCKind::MBC5 => Box::new(MBC5::new(ram_cap, rom_cap)),
-            MBCKind::MBC5WithBattery => Box::new(MBC5::with_battery(ram_cap, rom_cap)), // TDO: Implement Saving
+            MBCKind::MBC5WithBattery => Box::new(MBC5::with_battery(ram_cap, rom_cap)),
         }
     }
 
@@ -596,8 +598,8 @@ impl MBCIo for NoMBC {
         MBCResult::Address(addr as usize)
     }
 
-    fn handle_write(&mut self, _addr: u16, _byte: u8) {
-        // eprintln!("Tried to write {:#04X} to a read-only cartridge", byte);
+    fn handle_write(&mut self, _: u16, byte: u8) {
+        warn!("Attempted write of {:#04X} to cartridge w/out MBC", byte);
     }
 }
 

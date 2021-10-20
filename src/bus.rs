@@ -1,3 +1,5 @@
+use tracing::warn;
+
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::high_ram::HighRam;
@@ -14,7 +16,7 @@ pub(crate) const BOOT_SIZE: usize = 0x100;
 pub struct Bus {
     boot: Option<[u8; BOOT_SIZE]>, // Boot ROM is 256b long
     cart: Option<Cartridge>,
-    pub(crate) ppu: Ppu,
+    ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
     pub(crate) timer: Timer,
@@ -99,6 +101,11 @@ impl Bus {
     #[inline]
     pub(crate) fn cart_mut(&mut self) -> Option<&mut Cartridge> {
         self.cart.as_mut()
+    }
+
+    #[inline]
+    pub fn ppu(&self) -> &Ppu {
+        &self.ppu
     }
 }
 
@@ -251,7 +258,7 @@ impl BusIo for Bus {
                     0x4A => self.ppu.pos.window_y,
                     0x4B => self.ppu.pos.window_x,
                     _ => {
-                        eprintln!("Read 0xFF from unused IO register {:#06X}.", addr);
+                        warn!("Attempted read from {:#06X} on IO", addr);
                         0xFF
                     }
                 }
@@ -368,7 +375,7 @@ impl BusIo for Bus {
                             self.boot = None;
                         }
                     }
-                    _ => eprintln!("Wrote {:#04X} to unused IO register {:#06X}.", byte, addr),
+                    _ => warn!("Attempted write of {:#04X} to {:#06X} on IO", byte, addr),
                 };
             }
             0xFF80..=0xFFFE => {

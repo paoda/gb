@@ -1,6 +1,7 @@
 use crate::bus::BusIo;
 use crate::emu::SM83_CLOCK_SPEED;
 use gen::SampleProducer;
+use tracing::warn;
 use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
@@ -54,7 +55,7 @@ impl BusIo for Apu {
             0x26 => self.ctrl.status(self),
             0x30..=0x3F => self.ch3.read_byte(addr),
             _ => {
-                eprintln!("Read 0xFF from unused IO register {:#06X} [APU]", addr);
+                warn!("Attempted read from {:#06X}", addr);
                 0xFF
             }
         }
@@ -85,10 +86,7 @@ impl BusIo for Apu {
             0x26 => self.set_status(byte),
             0x30..=0x3F => self.ch3.write_byte(addr, byte),
             _ if !self.ctrl.enabled => {}
-            _ => eprintln!(
-                "Wrote {:#04X} to unused IO register {:#06X} [APU]",
-                byte, addr
-            ),
+            _ => warn!("Attempted write of {:#04X} to {:#06X}", byte, addr),
         }
     }
 }
