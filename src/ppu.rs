@@ -45,7 +45,7 @@ pub struct Ppu {
     vram: Box<[u8; VRAM_SIZE]>,
     pub(crate) oam: ObjectAttributeTable,
     pub(crate) dma: DirectMemoryAccess,
-    scan_state: OamScanState,
+    scan_cycle: Cycle,
     fetch: PixelFetcher,
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
@@ -159,7 +159,7 @@ impl Ppu {
                             self.int.set_lcd_stat(true);
                         }
 
-                        self.scan_state.reset();
+                        self.scan_cycle = Default::default();
                         PpuMode::OamScan
                     };
 
@@ -188,8 +188,7 @@ impl Ppu {
                             self.int.set_lcd_stat(true);
                         }
 
-                        self.scan_state.reset();
-
+                        self.scan_cycle = Default::default();
                         self.stat.set_mode(PpuMode::OamScan);
                     }
                 }
@@ -198,34 +197,29 @@ impl Ppu {
     }
 
     fn scan_oam(&mut self) {
-        match self.scan_state.mode() {
-            OamScanMode::Scan if !self.dma.is_active() => {
-                if !self.window_stat.coincidence() && self.scan_state.count() == 0 {
-                    // Determine whether we should draw the window next frame
-                    self.window_stat
-                        .set_coincidence(self.pos.line_y == self.pos.window_y);
-                }
-
-                let sprite_height = self.ctrl.obj_size().as_u8();
-                let index = self.scan_state.count();
-
-                let attr = self.oam.attribute(index as usize);
-                let line_y = self.pos.line_y + 16;
-
-                if attr.x > 0
-                    && line_y >= attr.y
-                    && line_y < (attr.y + sprite_height)
-                    && !self.obj_buffer.is_full()
-                {
-                    self.obj_buffer.add(attr);
-                }
-
-                self.scan_state.increase();
+        if self.scan_cycle % 2 == 0 {
+            if self.dma.is_active() {
+                return;
             }
-            _ => {}
-        }
 
-        self.scan_state.next();
+            if !self.window_stat.coincidence() && self.scan_cycle == 0 {
+                self.window_stat
+                    .set_coincidence(self.pos.line_y == self.pos.window_y);
+            }
+
+            let obj_height = self.ctrl.obj_size().size();
+            let attr = self.oam.attribute(self.scan_cycle as usize / 2);
+            let line_y = self.pos.line_y + 16;
+
+            if attr.x > 0
+                && line_y >= attr.y
+                && line_y < (attr.y + obj_height)
+                && !self.obj_buffer.is_full()
+            {
+                self.obj_buffer.add(attr);
+            }
+        }
+        self.scan_cycle += 1;
     }
 
     fn draw(&mut self, _cycle: Cycle) {
@@ -478,7 +472,7 @@ impl Default for Ppu {
             pos: Default::default(),
             stat: Default::default(),
             oam: Default::default(),
-            scan_state: Default::default(),
+            scan_cycle: Default::default(),
             fetch: Default::default(),
             fifo: Default::default(),
             obj_buffer: Default::default(),
@@ -955,53 +949,6 @@ impl TileBuilder {
 
     fn bytes(&self) -> Option<(u8, u8)> {
         self.high.zip(self.low)
-    }
-}
-
-#[derive(Debug, Default)]
-struct OamScanState {
-    count: u8,
-    mode: OamScanMode,
-}
-
-impl OamScanState {
-    fn increase(&mut self) {
-        self.count += 1;
-        self.count %= 40;
-    }
-
-    fn reset(&mut self) {
-        self.count = Default::default();
-        self.mode = Default::default();
-    }
-
-    fn count(&self) -> u8 {
-        self.count
-    }
-
-    fn mode(&self) -> &OamScanMode {
-        &self.mode
-    }
-
-    fn next(&mut self) {
-        use OamScanMode::*;
-
-        self.mode = match self.mode {
-            Scan => Sleep,
-            Sleep => Scan,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum OamScanMode {
-    Scan,
-    Sleep,
-}
-
-impl Default for OamScanMode {
-    fn default() -> Self {
-        Self::Scan
     }
 }
 

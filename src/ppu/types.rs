@@ -183,7 +183,7 @@ pub enum ObjectSize {
 }
 
 impl ObjectSize {
-    pub(crate) fn as_u8(&self) -> u8 {
+    pub(crate) fn size(&self) -> u8 {
         use ObjectSize::*;
 
         match self {
