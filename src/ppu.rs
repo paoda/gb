@@ -83,7 +83,7 @@ impl Ppu {
                 if self.dot >= 80 {
                     self.x_pos = 0;
                     self.scanline_start = true;
-                    self.fetch.back.scanline_first = true;
+                    self.fetch.back.tile_high_reset = true;
                     self.to_discard = 0;
                     self.fifo.back.clear();
                     self.fifo.obj.clear();
@@ -235,7 +235,7 @@ impl Ppu {
                     if let Some(attr) = attr_opt {
                         if attr.x <= (self.x_pos + 8) {
                             self.fetch.back.reset();
-                            self.fetch.back.pause();
+                            self.fetch.back.enabled = false;
                             self.fifo.pause();
 
                             break attr_opt;
@@ -259,7 +259,7 @@ impl Ppu {
                     let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr);
-                    self.fetch.obj.tile.with_low_byte(byte);
+                    self.fetch.obj.tile.with_low(byte);
 
                     self.fetch.obj.next(SleepTwo);
                 }
@@ -270,7 +270,7 @@ impl Ppu {
                     let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr + 1);
-                    self.fetch.obj.tile.with_high_byte(byte);
+                    self.fetch.obj.tile.with_high(byte);
 
                     self.fetch.obj.next(SleepThree);
                 }
@@ -307,7 +307,7 @@ impl Ppu {
                         self.fifo.obj.push_back(fifo_info);
                     }
 
-                    self.fetch.back.resume();
+                    self.fetch.back.enabled = true;
                     self.fifo.resume();
                     let _ = std::mem::take(obj_attr);
 
@@ -317,52 +317,57 @@ impl Ppu {
             }
         }
 
-        if self.fetch.back.is_enabled() {
+        use NewFetcherState::*;
+
+        if self.fetch.back.enabled {
             match self.fetch.back.state {
-                SleepOne => self.fetch.back.next(TileNumber),
-                TileNumber => {
-                    let x_pos = self.fetch.x_pos;
+                TileNumberA => self.fetch.back.state = TileNumberB,
+                TileNumberB => {
+                    // Are we rendering the Window currently?
+                    self.fetch.back.draw_window = self.win_stat.enabled;
 
-                    self.fetch.back.should_render_window(self.win_stat.enabled);
-
-                    let addr = self.fetch.bg_tile_num_addr(&self.ctrl, &self.pos, x_pos);
+                    let addr =
+                        self.fetch
+                            .back
+                            .tile_id_addr(&self.ctrl, &self.pos, self.fetch.x_pos);
 
                     let id = self.read_byte(addr);
                     self.fetch.back.tile.with_id(id);
 
-                    self.fetch.back.next(TileLow);
+                    self.fetch.back.state = TileLowA;
                 }
-                SleepTwo => self.fetch.back.next(TileLow),
-                TileLow => {
-                    let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
+                TileLowA => self.fetch.back.state = TileLowB,
+                TileLowB => {
+                    let id = self.fetch.back.tile.id.expect("Tile ID present");
 
-                    let low = self.read_byte(addr);
-                    self.fetch.back.tile.with_low_byte(low);
+                    let addr = self.fetch.back.tile_addr(&self.ctrl, &self.pos, id);
+                    let byte = self.read_byte(addr);
+                    self.fetch.back.tile.with_low(byte);
 
-                    self.fetch.back.next(SleepThree);
+                    self.fetch.back.state = TileHighA;
                 }
-                SleepThree => self.fetch.back.next(TileHigh),
-                TileHigh => {
-                    let addr = self.fetch.bg_byte_addr(&self.ctrl, &self.pos);
+                TileHighA => self.fetch.back.state = TileHighB,
+                TileHighB => {
+                    let id = self.fetch.back.tile.id.expect("Tile ID present");
 
-                    let high = self.read_byte(addr + 1);
-                    self.fetch.back.tile.with_high_byte(high);
+                    let addr = self.fetch.back.tile_addr(&self.ctrl, &self.pos, id);
+                    let byte = self.read_byte(addr + 1);
+                    self.fetch.back.tile.with_high(byte);
 
-                    if self.fetch.back.scanline_first {
+                    if self.fetch.back.tile_high_reset {
                         self.fetch.back.reset();
-
-                        self.fetch.back.scanline_first = false;
+                        self.fetch.back.tile_high_reset = false;
                     } else {
-                        self.fetch.back.next(ToFifoOne);
+                        self.fetch.back.state = ToFifoA;
                     }
                 }
-                ToFifoOne | ToFifoTwo => {
-                    if let Ok(()) = self.fetch.send_to_fifo(&mut self.fifo) {
+                ToFifoA => {
+                    if let Ok(_) = self.fetch.send_to_fifo(&mut self.fifo) {
                         self.fetch.x_pos += 1;
-                        self.fetch.back.next(SleepOne);
-                        self.fetch.back.tile = Default::default();
+                        self.fetch.back.state = ToFifoB;
                     }
                 }
+                ToFifoB => self.fetch.back.reset(),
             }
         }
 
@@ -653,57 +658,6 @@ impl PixelFetcher {
         self.x_pos = 0;
     }
 
-    fn bg_tile_num_addr(&self, control: &LCDControl, pos: &ScreenPosition, x_pos: u8) -> u16 {
-        let line_y = pos.line_y;
-        let scroll_y = pos.scroll_y;
-        let scroll_x = pos.scroll_x;
-        let is_window = self.back.is_window_tile();
-
-        // Determine which tile map is being used
-        let tile_map = if is_window {
-            control.win_tile_map_addr()
-        } else {
-            control.bg_tile_map_addr()
-        };
-        let tile_map_addr = tile_map.into_address();
-
-        // Both Offsets are used to offset the tile map address we found above
-        // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
-
-        let scx_offset = if is_window { 0 } else { scroll_x / 8 };
-        let y_offset = if is_window {
-            self.back.wl_count as u16 / 8
-        } else {
-            ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
-        };
-
-        let x_offset = (scx_offset + x_pos) & 0x1F;
-        let offset = (32 * y_offset) + (x_offset as u16);
-
-        tile_map_addr + (offset & 0x3FF)
-    }
-
-    fn bg_byte_addr(&mut self, control: &LCDControl, pos: &ScreenPosition) -> u16 {
-        let line_y = pos.line_y;
-        let scroll_y = pos.scroll_y;
-        let is_window = self.back.is_window_tile();
-
-        let id = self.back.tile.id.expect("Tile Number is present");
-
-        let tile_data_addr = match control.tile_data_addr() {
-            TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as i8 as i16 * 16) as u16),
-            TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
-        };
-
-        let offset = if is_window {
-            self.back.wl_count as u16 % 8
-        } else {
-            (line_y as u16 + scroll_y as u16) % 8
-        };
-
-        tile_data_addr + (offset * 2)
-    }
-
     fn send_to_fifo(&self, fifo: &mut PixelFifo) -> Result<(), ()> {
         if !fifo.back.is_empty() {
             return Err(());
@@ -756,50 +710,78 @@ trait Fetcher {
 
 #[derive(Debug)]
 struct BackgroundFetcher {
-    state: FetcherState,
+    state: NewFetcherState,
     tile: TileBuilder,
     wl_count: u8,
-    is_window_tile: bool,
+    draw_window: bool,
     enabled: bool,
-    scanline_first: bool,
+    tile_high_reset: bool,
 }
 
 impl BackgroundFetcher {
-    fn should_render_window(&mut self, value: bool) {
-        self.is_window_tile = value;
+    fn tile_id_addr(&self, control: &LCDControl, pos: &ScreenPosition, x_pos: u8) -> u16 {
+        let line_y = pos.line_y;
+        let scroll_y = pos.scroll_y;
+        let scroll_x = pos.scroll_x;
+        let is_window = self.draw_window;
+
+        // Determine which tile map is being used
+        let tile_map = if is_window {
+            control.win_tile_map_addr()
+        } else {
+            control.bg_tile_map_addr()
+        };
+        let tile_map_addr = tile_map.into_address();
+
+        // Both Offsets are used to offset the tile map address we found above
+        // Offsets are ANDed wih 0x3FF so that we stay in bounds of tile map memory
+
+        let scx_offset = if is_window { 0 } else { scroll_x / 8 };
+        let y_offset = if is_window {
+            self.wl_count as u16 / 8
+        } else {
+            ((line_y as u16 + scroll_y as u16) & 0xFF) / 8
+        };
+
+        let x_offset = (scx_offset + x_pos) & 0x1F;
+        let offset = (32 * y_offset) + (x_offset as u16);
+
+        tile_map_addr + (offset & 0x3FF)
     }
 
-    fn is_window_tile(&self) -> bool {
-        self.is_window_tile
-    }
+    fn tile_addr(&mut self, control: &LCDControl, pos: &ScreenPosition, id: u8) -> u16 {
+        let line_y = pos.line_y;
+        let scroll_y = pos.scroll_y;
 
-    fn pause(&mut self) {
-        self.enabled = false;
-    }
+        let tile_data_addr = match control.tile_data_addr() {
+            TileDataAddress::X8800 => 0x9000u16.wrapping_add((id as i8 as i16 * 16) as u16),
+            TileDataAddress::X8000 => 0x8000 + (id as u16 * 16),
+        };
 
-    fn resume(&mut self) {
-        self.enabled = true;
-    }
+        let offset = if self.draw_window {
+            self.wl_count as u16 % 8
+        } else {
+            (line_y as u16 + scroll_y as u16) % 8
+        };
 
-    fn is_enabled(&self) -> bool {
-        self.enabled
+        tile_data_addr + (offset * 2)
     }
 }
 
 impl Fetcher for BackgroundFetcher {
     fn next(&mut self, state: FetcherState) {
-        self.state = state
+        todo!();
     }
 
     fn reset(&mut self) {
-        self.state = FetcherState::SleepOne;
+        self.state = NewFetcherState::TileNumberA;
         self.tile = Default::default();
     }
 
     fn hblank_reset(&mut self) {
         self.reset();
 
-        self.is_window_tile = false;
+        self.draw_window = false;
 
         self.enabled = true;
     }
@@ -808,12 +790,12 @@ impl Fetcher for BackgroundFetcher {
 impl Default for BackgroundFetcher {
     fn default() -> Self {
         Self {
-            state: FetcherState::SleepOne,
+            state: NewFetcherState::TileNumberA,
             tile: Default::default(),
-            is_window_tile: Default::default(),
+            draw_window: Default::default(),
             wl_count: Default::default(),
             enabled: true,
-            scanline_first: true,
+            tile_high_reset: true,
         }
     }
 }
@@ -846,6 +828,18 @@ impl Fetcher for ObjectFetcher {
     fn hblank_reset(&mut self) {
         self.reset()
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum NewFetcherState {
+    TileNumberA,
+    TileNumberB,
+    TileLowA,
+    TileLowB,
+    TileHighA,
+    TileHighB,
+    ToFifoA,
+    ToFifoB,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -917,11 +911,11 @@ impl TileBuilder {
         self.id = Some(id);
     }
 
-    fn with_low_byte(&mut self, data: u8) {
+    fn with_low(&mut self, data: u8) {
         self.low = Some(data);
     }
 
-    fn with_high_byte(&mut self, data: u8) {
+    fn with_high(&mut self, data: u8) {
         self.high = Some(data);
     }
 
