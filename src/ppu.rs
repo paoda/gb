@@ -237,34 +237,33 @@ impl Ppu {
     fn draw(&mut self) {
         use FetcherState::*;
 
-        let mut iter = self.obj_buffer.iter_mut();
-        let default = &mut None;
+        let mut obj_attr = &mut None;
 
-        let obj_attr = loop {
-            match iter.next() {
-                Some(attr_opt) => {
-                    if let Some(attr) = attr_opt {
-                        if attr.x <= (self.x_pos + 8) {
-                            self.fetch.back.reset();
-                            self.fetch.back.enabled = false;
-                            self.fifo.pause();
+        for maybe_attr in &mut self.obj_buffer.inner {
+            match maybe_attr {
+                Some(attr) if self.ctrl.obj_enabled() => {
+                    if attr.x <= (self.x_pos + 8) {
+                        self.fetch.back.reset();
+                        self.fetch.back.enabled = false;
+                        self.fifo.pause();
 
-                            break attr_opt;
-                        }
+                        obj_attr = maybe_attr;
+                        break;
                     }
                 }
-                None => break default,
+                _ => break,
             }
-        };
+        }
 
         if let Some(attr) = obj_attr {
             match self.fetch.obj.state {
-                TileNumber => {
+                TileNumberA => self.fetch.obj.state = TileNumberB,
+                TileNumberB => {
                     self.fetch.obj.tile.with_id(attr.tile_index);
-                    self.fetch.obj.next(SleepOne);
+                    self.fetch.obj.state = TileLowA;
                 }
-                SleepOne => self.fetch.obj.next(TileLow),
-                TileLow => {
+                TileLowA => self.fetch.obj.state = TileLowB,
+                TileLowB => {
                     let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
@@ -272,10 +271,10 @@ impl Ppu {
                     let byte = self.read_byte(addr);
                     self.fetch.obj.tile.with_low(byte);
 
-                    self.fetch.obj.next(SleepTwo);
+                    self.fetch.obj.state = TileHighA;
                 }
-                SleepTwo => self.fetch.obj.next(TileHigh),
-                TileHigh => {
+                TileHighA => self.fetch.obj.state = TileHighB,
+                TileHighB => {
                     let obj_size = self.ctrl.obj_size();
 
                     let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
@@ -283,10 +282,9 @@ impl Ppu {
                     let byte = self.read_byte(addr + 1);
                     self.fetch.obj.tile.with_high(byte);
 
-                    self.fetch.obj.next(SleepThree);
+                    self.fetch.obj.state = ToFifoA;
                 }
-                SleepThree => self.fetch.obj.next(ToFifoOne),
-                ToFifoOne => {
+                ToFifoA => {
                     // Load into Fifo
                     let (high, low) = self
                         .fetch
@@ -322,13 +320,11 @@ impl Ppu {
                     self.fifo.resume();
                     let _ = std::mem::take(obj_attr);
 
-                    self.fetch.obj.next(ToFifoTwo);
+                    self.fetch.obj.state = ToFifoB;
                 }
-                ToFifoTwo => self.fetch.obj.reset(),
+                ToFifoB => self.fetch.obj.reset(),
             }
         }
-
-        use NewFetcherState::*;
 
         if self.fetch.back.enabled {
             match self.fetch.back.state {
@@ -442,7 +438,7 @@ impl Ppu {
 
         match self.fifo.back.pop_front() {
             Some(bg_pixel) => match self.fifo.obj.pop_front() {
-                Some(obj_pixel) if self.ctrl.obj_enabled() => match obj_pixel.priority {
+                Some(obj_pixel) => match obj_pixel.priority {
                     Object | BackgroundAndWindow if obj_pixel.shade_id == 0 => {
                         Some(self.bg_pixel(bg_pixel.shade_id))
                     }
@@ -714,14 +710,13 @@ impl PixelFetcher {
 }
 
 trait Fetcher {
-    fn next(&mut self, state: FetcherState);
     fn reset(&mut self);
     fn hblank_reset(&mut self);
 }
 
 #[derive(Debug)]
 struct BackgroundFetcher {
-    state: NewFetcherState,
+    state: FetcherState,
     tile: TileBuilder,
     wl_count: u8,
     draw_window: bool,
@@ -780,12 +775,8 @@ impl BackgroundFetcher {
 }
 
 impl Fetcher for BackgroundFetcher {
-    fn next(&mut self, state: FetcherState) {
-        todo!();
-    }
-
     fn reset(&mut self) {
-        self.state = NewFetcherState::TileNumberA;
+        self.state = Default::default();
         self.tile = Default::default();
     }
 
@@ -801,7 +792,7 @@ impl Fetcher for BackgroundFetcher {
 impl Default for BackgroundFetcher {
     fn default() -> Self {
         Self {
-            state: NewFetcherState::TileNumberA,
+            state: Default::default(),
             tile: Default::default(),
             draw_window: Default::default(),
             wl_count: Default::default(),
@@ -820,19 +811,15 @@ struct ObjectFetcher {
 impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
-            state: FetcherState::TileNumber,
+            state: Default::default(),
             tile: Default::default(),
         }
     }
 }
 
 impl Fetcher for ObjectFetcher {
-    fn next(&mut self, state: FetcherState) {
-        self.state = state
-    }
-
     fn reset(&mut self) {
-        self.state = FetcherState::TileNumber;
+        self.state = Default::default();
         self.tile = Default::default();
     }
 
@@ -842,7 +829,7 @@ impl Fetcher for ObjectFetcher {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum NewFetcherState {
+enum FetcherState {
     TileNumberA,
     TileNumberB,
     TileLowA,
@@ -853,16 +840,10 @@ enum NewFetcherState {
     ToFifoB,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum FetcherState {
-    TileNumber,
-    SleepOne,
-    TileLow,
-    SleepTwo,
-    TileHigh,
-    SleepThree,
-    ToFifoOne,
-    ToFifoTwo,
+impl Default for FetcherState {
+    fn default() -> Self {
+        Self::TileNumberA
+    }
 }
 
 #[derive(Debug, Default)]
