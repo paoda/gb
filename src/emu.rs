@@ -120,7 +120,7 @@ impl Emulator {
                 save_path.set_extension("sav");
 
                 if let Ok(mut file) = File::open(&save_path) {
-                    tracing::info!("Loading {:?}", save_path);
+                    tracing::info!("Load {:?}", save_path);
 
                     let mut memory = Vec::new();
                     file.read_to_end(&mut memory)?;

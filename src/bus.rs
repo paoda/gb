@@ -123,14 +123,14 @@ impl Bus {
 
                 match self.cart.as_ref() {
                     Some(cart) => cart.read_byte(addr),
-                    None => panic!("Tried to read from a non-existent cartridge"),
+                    None => 0xFF,
                 }
             }
             0x8000..=0x9FFF => self.ppu.read_byte(addr), // 8KB Video RAM
             0xA000..=0xBFFF => match self.cart.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
-                None => panic!("Tried to read from a non-existent cartridge"),
+                None => 0xFF,
             },
             0xC000..=0xCFFF => self.work_ram.read_byte(addr), // 4KB Work RAM Bank 0
             0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
@@ -176,7 +176,7 @@ impl BusIo for Bus {
 
                 match self.cart.as_ref() {
                     Some(cart) => cart.read_byte(addr),
-                    None => panic!("Tried to read from a non-existent cartridge"),
+                    None => 0xFF,
                 }
             }
             0x8000..=0x9FFF => {
@@ -189,7 +189,7 @@ impl BusIo for Bus {
             0xA000..=0xBFFF => match self.cart.as_ref() {
                 // 8KB External RAM
                 Some(cart) => cart.read_byte(addr),
-                None => panic!("Tried to read from a non-existent cartridge"),
+                None => 0xFF,
             },
             0xC000..=0xCFFF => self.work_ram.read_byte(addr), // 4KB Work RAM Bank 0
             0xD000..=0xDFFF => self.var_ram.read_byte(addr),  // 4KB Work RAM Bank 1 -> N
@@ -279,9 +279,8 @@ impl BusIo for Bus {
             0x0000..=0x7FFF => {
                 // 16KB ROM bank 00 (ends at 0x3FFF)
                 // and 16KB ROM Bank 01 -> NN (switchable via MB)
-                match self.cart.as_mut() {
-                    Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent cartridge"),
+                if let Some(cart) = self.cart.as_mut() {
+                    cart.write_byte(addr, byte);
                 }
             }
             0x8000..=0x9FFF => {
@@ -293,9 +292,8 @@ impl BusIo for Bus {
             }
             0xA000..=0xBFFF => {
                 // 8KB External RAM
-                match self.cart.as_mut() {
-                    Some(cart) => cart.write_byte(addr, byte),
-                    None => panic!("Tried to write into non-existent cartridge"),
+                if let Some(cart) = self.cart.as_mut() {
+                    cart.write_byte(addr, byte);
                 }
             }
             0xC000..=0xCFFF => self.work_ram.write_byte(addr, byte), // 4KB Work RAM Bank 0

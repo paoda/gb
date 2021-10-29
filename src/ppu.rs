@@ -369,7 +369,7 @@ impl Ppu {
                     }
                 }
                 ToFifoA => {
-                    if let Ok(_) = self.fetch.send_to_fifo(&mut self.fifo) {
+                    if self.fetch.send_to_fifo(&mut self.fifo).is_ok() {
                         self.fetch.x_pos += 1;
                         self.fetch.back.state = ToFifoB;
                     }
