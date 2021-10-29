@@ -1,4 +1,5 @@
 use crate::apu::gen::SampleProducer;
+use crate::bus::BOOT_SIZE;
 use crate::cpu::Cpu;
 use crate::joypad::{self, Joypad};
 use crate::{Cycle, GB_HEIGHT, GB_WIDTH};
@@ -6,7 +7,7 @@ use clap::crate_name;
 use gilrs::Gilrs;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use winit_input_helper::WinitInputHelper;
 
@@ -39,12 +40,33 @@ pub struct Emulator {
     timestamp: Cycle,
 }
 
+impl Default for Emulator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Emulator {
-    fn new(cpu: Cpu) -> Self {
+    pub fn new() -> Self {
         Self {
-            cpu,
+            cpu: Cpu::with_boot(*include_bytes!("../bin/bootix_dmg.bin")),
             timestamp: Default::default(),
         }
+    }
+
+    pub fn from_boot_rom<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        Ok(Self {
+            cpu: Cpu::with_boot(Self::read_boot(path)?),
+            timestamp: Default::default(),
+        })
+    }
+
+    fn read_boot<P: AsRef<Path>>(path: P) -> std::io::Result<[u8; BOOT_SIZE]> {
+        let mut buf = [0; BOOT_SIZE];
+        let mut file = File::open(path.as_ref())?;
+
+        file.read_exact(&mut buf)?;
+        Ok(buf)
     }
 
     fn step(&mut self) -> Cycle {
@@ -53,7 +75,12 @@ impl Emulator {
         cycles
     }
 
-    fn load_cart(&mut self, rom: Vec<u8>) {
+    pub fn read_game_rom<P: AsRef<Path>>(&mut self, path: P) -> std::io::Result<()> {
+        self.load_rom(std::fs::read(path.as_ref())?);
+        Ok(())
+    }
+
+    fn load_rom(&mut self, rom: Vec<u8>) {
         self.cpu.bus_mut().load_cart(rom);
     }
 
@@ -92,10 +119,11 @@ impl Emulator {
                 save_path.push(title);
                 save_path.set_extension("sav");
 
-                if let Ok(mut file) = File::open(save_path) {
+                if let Ok(mut file) = File::open(&save_path) {
+                    tracing::info!("Loading {:?}", save_path);
+
                     let mut memory = Vec::new();
                     file.read_to_end(&mut memory)?;
-
                     cart.write_ext_ram(memory);
                 }
             }
@@ -112,70 +140,6 @@ impl Emulator {
                 Some(data_local.to_path_buf())
             }
             None => None,
-        }
-    }
-}
-
-pub mod build {
-    use std::fs::File;
-    use std::io::{Read, Result};
-    use std::path::Path;
-
-    use tracing::info;
-
-    use crate::bus::BOOT_SIZE;
-    use crate::cpu::Cpu;
-
-    use super::Emulator;
-
-    #[derive(Debug, Default)]
-    pub struct EmulatorBuilder {
-        boot: Option<[u8; BOOT_SIZE]>,
-        cart: Option<Vec<u8>>,
-    }
-
-    impl EmulatorBuilder {
-        pub fn new() -> Self {
-            Default::default()
-        }
-
-        pub fn with_boot<P: AsRef<Path>>(mut self, path: P) -> Result<Self> {
-            let mut file = File::open(path.as_ref())?;
-
-            let mut buf = [0x00; BOOT_SIZE];
-            file.read_exact(&mut buf)?;
-
-            self.boot = Some(buf);
-            Ok(self)
-        }
-
-        pub fn with_cart<P: AsRef<Path>>(mut self, path: P) -> Result<Self> {
-            let mut file = File::open(path.as_ref())?;
-
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf)?;
-
-            self.cart = Some(buf);
-            Ok(self)
-        }
-
-        pub fn finish(mut self) -> Emulator {
-            let mut emu = Emulator::new(match self.boot {
-                Some(rom) => {
-                    info!("User-provided Boot ROM");
-                    Cpu::with_boot(rom)
-                }
-                None => {
-                    info!("Built-in Boot ROM");
-                    Cpu::with_boot(*include_bytes!("../bin/bootix_dmg.bin"))
-                }
-            });
-
-            if let Some(rom) = self.cart.take() {
-                emu.load_cart(rom)
-            }
-
-            emu
         }
     }
 }

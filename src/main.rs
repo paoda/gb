@@ -2,8 +2,7 @@ use std::convert::TryInto;
 
 use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
-use gb::emu::build::EmulatorBuilder;
-use gb::emu::CYCLES_IN_FRAME;
+use gb::emu::{Emulator, CYCLES_IN_FRAME};
 use gb::{Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
@@ -30,7 +29,6 @@ fn main() -> Result<()> {
             Arg::with_name("rom")
                 .value_name("ROM_FILE")
                 .takes_value(true)
-                .required(true)
                 .index(1)
                 .help("Path to the Game ROM"),
         )
@@ -53,17 +51,23 @@ fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let mut emu_build =
-        EmulatorBuilder::new().with_cart(m.value_of("rom").expect("ROM path provided"))?;
+    let mut emu = match m.value_of("boot") {
+        Some(path) => {
+            tracing::info!("User-provided boot ROM");
+            Emulator::from_boot_rom(path)?
+        }
+        None => {
+            tracing::info!("Built-in boot ROM");
+            Emulator::new()
+        }
+    };
 
-    if let Some(path) = m.value_of("boot") {
-        emu_build = emu_build.with_boot(path)?;
+    if let Some(path) = m.value_of("rom") {
+        tracing::info!("User-provided cartridge ROM");
+        emu.read_game_rom(path)?;
     }
 
-    let mut emu = emu_build.finish();
-
     // Load Save file if it exists
-    info!("Attempt to load .sav");
     emu.try_load_sav().expect("Load save if exists");
     let rom_title = emu.title();
 
