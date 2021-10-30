@@ -262,6 +262,7 @@ impl BusIo for Bus {
                     0x49 => self.ppu.monochrome.obj_palette_1.into(),
                     0x4A => self.ppu.pos.window_y,
                     0x4B => self.ppu.pos.window_x,
+                    0x4F => 0xFF, // CGB VRAM Bank Select
                     _ => {
                         warn!("Attempted read from {:#06X} on IO", addr);
                         0xFF
@@ -372,12 +373,14 @@ impl BusIo for Bus {
                     0x4A => self.ppu.pos.window_y = byte,
                     0x4B => self.ppu.pos.window_x = byte,
                     0x4D => {} // CGB Specific Register
+                    0x4F => {} // CGB VRAM Bank Select
                     0x50 => {
                         // Disable Boot ROM
                         if byte != 0 {
                             self.boot = None;
                         }
                     }
+                    0x70 => {} // CGB WRAM Bank Select
                     _ => warn!("Attempted write of {:#04X} to {:#06X} on IO", byte, addr),
                 };
             }
