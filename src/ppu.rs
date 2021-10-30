@@ -4,7 +4,6 @@ use crate::GB_HEIGHT;
 use crate::GB_WIDTH;
 use dma::DirectMemoryAccess;
 use std::collections::VecDeque;
-use std::convert::TryInto;
 pub(crate) use types::PpuMode;
 use types::{
     BackgroundPalette, GrayShade, LCDControl, LCDStatus, ObjectFlags, ObjectPalette,

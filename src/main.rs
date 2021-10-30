@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use gb::emu::{Emulator, CYCLES_IN_FRAME};
