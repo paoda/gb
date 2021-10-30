@@ -7,7 +7,7 @@ use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
 use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
 use types::fs::{FrameSequencer, State as FSState};
-use types::{ChannelControl, SoundOutput};
+use types::{ChannelControl, NRx4, SoundOutput};
 
 pub mod gen;
 mod types;
@@ -82,7 +82,7 @@ impl BusIo for Apu {
             0x20 if self.ctrl.enabled => self.ch4.set_len(byte),
             0x21 if self.ctrl.enabled => self.ch4.set_envelope(byte),
             0x22 if self.ctrl.enabled => self.ch4.set_poly(byte),
-            0x23 if self.ctrl.enabled => self.ch4.set_frequency(byte),
+            0x23 if self.ctrl.enabled => self.ch4.set_frequency(&self.fs, byte),
             0x24 if self.ctrl.enabled => self.ctrl.set_channel(byte),
             0x25 if self.ctrl.enabled => self.ctrl.set_output(byte),
             0x26 => self.set_status(byte),
@@ -225,25 +225,13 @@ impl Apu {
         self.ch4.enabled = Default::default();
     }
 
-    fn process_length(freq_hi: &FrequencyHigh, counter: &mut u16, enabled: &mut bool) {
-        if freq_hi.length_enable() && *counter > 0 {
+    fn process_length(freq: &impl NRx4, counter: &mut u16, enabled: &mut bool) {
+        if freq.length_enable() && *counter > 0 {
             *counter -= 1;
 
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
             if *counter == 0 {
-                *enabled = false;
-            }
-        }
-    }
-
-    fn ch4_process_length(freq: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
-        if freq.length_enable() && *length_timer > 0 {
-            *length_timer -= 1;
-
-            // Check in this scope ensures (only) the above subtraction
-            // made length_timer 0
-            if *length_timer == 0 {
                 *enabled = false;
             }
         }
@@ -268,9 +256,9 @@ impl Apu {
             &mut self.ch3.enabled,
         );
 
-        Self::ch4_process_length(
+        Self::process_length(
             &self.ch4.freq,
-            &mut self.ch4.length_timer,
+            &mut self.ch4.length_counter,
             &mut self.ch4.enabled,
         );
     }
@@ -287,7 +275,7 @@ impl Apu {
             if self.ch1.sweep_enabled && period != 0 {
                 let new_freq = self.ch1.calc_sweep_freq();
 
-                if new_freq <= 2047 && self.ch1.sweep.shift_count() != 0 {
+                if new_freq <= 0x7FF && self.ch1.sweep.shift_count() != 0 {
                     self.ch1.set_frequency(new_freq);
                     self.ch1.shadow_freq = new_freq;
 
@@ -485,24 +473,17 @@ impl Channel1 {
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
     pub(crate) fn set_freq_hi(&mut self, fs: &FrameSequencer, byte: u8) {
-        let prev_le = self.freq_hi.length_enable();
-        self.freq_hi = byte.into();
-
-        obscure::nrx4::length_update(
-            &mut self.freq_hi,
-            fs,
-            &mut self.length_counter,
-            &mut self.enabled,
-            prev_le,
-        );
+        let mut new_freq: FrequencyHigh = byte.into();
 
         // If this bit is set, a trigger event occurs
-        if self.freq_hi.trigger() {
+        if new_freq.trigger() {
             self.enabled = true;
 
-            // Length behaviour during trigger event
             if self.length_counter == 0 {
-                self.length_counter = obscure::length_reload(&self.freq_hi, fs, 64);
+                self.length_counter = 64;
+
+                // length_counter was 0 so length evidently wasn't enabled
+                self.freq_hi.set_length_enable(false);
             };
 
             // reload freq_timer but last two bits are unmodified
@@ -529,6 +510,16 @@ impl Channel1 {
 
             self.enabled = self.is_dac_enabled();
         }
+
+        obscure::nrx4::length_update(
+            &mut new_freq,
+            fs,
+            &mut self.length_counter,
+            &mut self.enabled,
+            self.freq_hi.length_enable(),
+        );
+
+        self.freq_hi = new_freq;
     }
 
     fn tick(&mut self) {
@@ -664,7 +655,7 @@ impl Channel2 {
 
             // Reload length counter if need be
             if self.length_counter == 0 {
-                self.length_counter = obscure::length_reload(&self.freq_hi, fs, 64);
+                self.length_counter = 64;
             }
 
             // reload frequency timer
@@ -822,7 +813,7 @@ impl Channel3 {
 
             // Length behaviour during trigger event
             if self.length_counter == 0 {
-                self.length_counter = obscure::length_reload(&self.freq_hi, fs, 256);
+                self.length_counter = 256;
             }
 
             self.freq_timer = (2048 - self.frequency()) * 2;
@@ -889,7 +880,7 @@ pub(crate) struct Channel4 {
     current_volume: u8,
 
     // Length Functionality
-    length_timer: u16,
+    length_counter: u16,
 
     /// Linear Feedback Shift Register (15-bit)
     lf_shift: u16,
@@ -903,7 +894,7 @@ impl Channel4 {
     /// 0xFF20 | NR41 - Channel 4 Sound Length
     pub(crate) fn set_len(&mut self, byte: u8) {
         self.len = byte & 0x3F;
-        self.length_timer = 64 - self.len as u16;
+        self.length_counter = 64 - self.len as u16;
     }
 
     /// 0xFF21 | NR42 - Channel 4 Volume Envelope
@@ -936,25 +927,37 @@ impl Channel4 {
     }
 
     /// 0xFF23 | NR44 - Channel 4 Counter / Consecutive Selector and Restart
-    pub(crate) fn set_frequency(&mut self, byte: u8) {
+    pub(crate) fn set_frequency(&mut self, fs: &FrameSequencer, byte: u8) {
+        let prev_le = self.freq.length_enable();
         self.freq = byte.into();
 
-        if self.freq.initial() {
-            // Envelope behaviour during trigger event
+        obscure::nrx4::length_update(
+            &mut self.freq,
+            fs,
+            &mut self.length_counter,
+            &mut self.enabled,
+            prev_le,
+        );
+
+        if self.freq.trigger() {
+            self.enabled = true;
+
+            if self.length_counter == 0 {
+                self.length_counter = 64;
+            }
+
+            // FIXME: Frequency Timer reloaded?
+
+            // reload envelope
             self.period_timer = self.envelope.period();
+
+            //reload volume
             self.current_volume = self.envelope.init_vol();
 
-            // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 64;
-            }
-
-            // LFSR behaviour during trigger event
+            // LFSR reset
             self.lf_shift = 0x7FFF;
 
-            if self.is_dac_enabled() {
-                self.enabled = true;
-            }
+            self.enabled = self.is_dac_enabled();
         }
     }
 
@@ -1001,8 +1004,6 @@ impl Channel4 {
 }
 
 mod obscure {
-    use super::{FrameSequencer, FrequencyHigh};
-
     pub(super) mod square {
         pub(crate) fn freq_timer_reload(freq_timer: u16, frequency: u16) -> u16 {
             (freq_timer & 0x0003) | (((2048 - frequency) * 4) & 0xFFFC)
@@ -1010,7 +1011,7 @@ mod obscure {
     }
 
     pub(super) mod nrx4 {
-        use super::super::{FrameSequencer, FrequencyHigh};
+        use super::super::{FrameSequencer, NRx4};
 
         /// Implements the obscure behaviour when writing to NRX4 under certain
         /// conditions
@@ -1021,29 +1022,19 @@ mod obscure {
         /// * `counter` - mutable reference to a channel's internal enabled flag
         /// * `prev_le` - what length_enable was before NRx4 was written with a new value
         pub(crate) fn length_update(
-            freq_hi: &mut FrequencyHigh,
+            freq: &mut impl NRx4,
             fs: &FrameSequencer,
             counter: &mut u16,
             enabled: &mut bool,
             prev_le: bool,
         ) {
-            if !fs.next_clocks_length() {
-                if !prev_le && freq_hi.length_enable() && *counter != 0 {
-                    *counter -= 1;
+            if !fs.next_clocks_length() && !prev_le && freq.length_enable() && *counter != 0 {
+                *counter -= 1;
 
-                    if *counter == 0 && !freq_hi.trigger() {
-                        *enabled = false;
-                    }
+                if *counter == 0 && !freq.trigger() {
+                    *enabled = false;
                 }
             }
-        }
-    }
-
-    pub(crate) fn length_reload(freq_hi: &FrequencyHigh, fs: &FrameSequencer, default: u16) -> u16 {
-        if !fs.next_clocks_length() && freq_hi.length_enable() {
-            default - 1
-        } else {
-            default
         }
     }
 }

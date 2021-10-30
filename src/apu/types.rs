@@ -1,5 +1,11 @@
 use bitfield::bitfield;
 
+pub(crate) trait NRx4 {
+    fn trigger(&self) -> bool;
+    fn length_enable(&self) -> bool;
+    fn set_length_enable(&mut self, value: bool);
+}
+
 pub(crate) mod ch1 {
     use super::bitfield;
 
@@ -103,7 +109,7 @@ pub(super) mod ch3 {
 }
 
 pub(super) mod ch4 {
-    use super::bitfield;
+    use super::{bitfield, NRx4};
 
     bitfield! {
         pub struct PolynomialCounter(u8);
@@ -177,17 +183,21 @@ pub(super) mod ch4 {
     bitfield! {
         pub struct Frequency(u8);
         impl Debug;
-        _initial, _: 7;
-        _length_enable, _: 6;
+        _trigger, _: 7;
+        _length_enable, _set_length_enable: 6;
     }
 
-    impl Frequency {
-        pub(crate) fn length_enable(&self) -> bool {
+    impl NRx4 for Frequency {
+        fn trigger(&self) -> bool {
+            self._trigger()
+        }
+
+        fn length_enable(&self) -> bool {
             self._length_enable()
         }
 
-        pub(crate) fn initial(&self) -> bool {
-            self._initial()
+        fn set_length_enable(&mut self, value: bool) {
+            self._set_length_enable(value);
         }
     }
 
@@ -218,23 +228,27 @@ pub(super) mod ch4 {
 }
 
 pub(super) mod common {
-    use super::bitfield;
+    use super::{bitfield, NRx4};
 
     bitfield! {
         pub struct FrequencyHigh(u8);
         impl Debug;
         _trigger, _: 7;
-        _length_enable, _: 6;
+        _length_enable, _set_length_enable: 6;
         pub freq_bits, set_freq_bits: 2, 0;
     }
 
-    impl FrequencyHigh {
-        pub(crate) fn trigger(&self) -> bool {
+    impl NRx4 for FrequencyHigh {
+        fn trigger(&self) -> bool {
             self._trigger()
         }
 
-        pub(crate) fn length_enable(&self) -> bool {
+        fn length_enable(&self) -> bool {
             self._length_enable()
+        }
+
+        fn set_length_enable(&mut self, value: bool) {
+            self._set_length_enable(value);
         }
     }
 
@@ -557,22 +571,10 @@ pub(super) mod fs {
             };
         }
 
-        fn peek(&self) -> State {
-            use State::*;
-
-            match (self.step + 1) % 8 {
-                1 | 3 | 5 => Nothing,
-                0 | 4 => Length,
-                2 | 6 => LengthAndSweep,
-                7 => Envelope,
-                num => unreachable!("Step {} is invalid for the Frame Sequencer", num),
-            }
-        }
-
         pub(crate) fn next_clocks_length(&self) -> bool {
             use State::*;
 
-            match self.peek() {
+            match self.state {
                 Length | LengthAndSweep => true,
                 Nothing | Envelope => false,
             }
