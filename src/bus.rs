@@ -1,5 +1,3 @@
-use tracing::warn;
-
 use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::high_ram::HighRam;
@@ -264,7 +262,7 @@ impl BusIo for Bus {
                     0x4B => self.ppu.pos.window_x,
                     0x4F => 0xFF, // CGB VRAM Bank Select
                     _ => {
-                        warn!("Attempted read from {:#06X} on IO", addr);
+                        tracing::warn!("Attempted read from {:#06X} on IO", addr);
                         0xFF
                     }
                 }
@@ -381,7 +379,7 @@ impl BusIo for Bus {
                         }
                     }
                     0x70 => {} // CGB WRAM Bank Select
-                    _ => warn!("Attempted write of {:#04X} to {:#06X} on IO", byte, addr),
+                    _ => tracing::warn!("Attempted write of {:#04X} to {:#06X} on IO", byte, addr),
                 };
             }
             0xFF80..=0xFFFE => {

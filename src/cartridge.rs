@@ -1,5 +1,3 @@
-use tracing::{info, warn};
-
 use crate::bus::BusIo;
 
 const RAM_SIZE_ADDRESS: usize = 0x0149;
@@ -18,7 +16,7 @@ pub(crate) struct Cartridge {
 impl Cartridge {
     pub(crate) fn new(memory: Vec<u8>) -> Self {
         let title = Self::find_title(&memory);
-        info!("Title: {:?}", title);
+        tracing::info!("Title: {:?}", title);
 
         Self {
             mbc: Self::detect_mbc(&memory),
@@ -42,9 +40,9 @@ impl Cartridge {
         let ram_cap = ram_size.capacity();
         let rom_cap = rom_size.capacity();
 
-        info!("RAM size: {} bytes", ram_cap);
-        info!("ROM size: {} bytes", rom_size.capacity());
-        info!("MBC kind: {:?}", mbc_kind);
+        tracing::info!("RAM size: {} bytes", ram_cap);
+        tracing::info!("ROM size: {} bytes", rom_size.capacity());
+        tracing::info!("MBC kind: {:?}", mbc_kind);
 
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
@@ -604,7 +602,7 @@ impl MBCIo for NoMBC {
     }
 
     fn handle_write(&mut self, _: u16, byte: u8) {
-        warn!("Attempted write of {:#04X} to cartridge w/out MBC", byte);
+        tracing::warn!("Attempted write of {:#04X} to cartridge w/out MBC", byte);
     }
 }
 

@@ -5,7 +5,6 @@ use gb::{Cycle, GB_HEIGHT, GB_WIDTH};
 use gilrs::Gilrs;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use rodio::{OutputStream, Sink};
-use tracing::info;
 use tracing_subscriber::EnvFilter;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
@@ -69,7 +68,7 @@ fn main() -> Result<()> {
     emu.try_load_sav().expect("Load save if exists");
     let rom_title = emu.title();
 
-    info!("Initialize Gamepad");
+    tracing::info!("Initialize Gamepad");
     let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
 
     // Initialize GUI
@@ -100,7 +99,7 @@ fn main() -> Result<()> {
 
         emu.set_prod(prod);
 
-        info!("Spawn Audio Thread");
+        tracing::info!("Spawn Audio Thread");
         std::thread::spawn(move || {
             sink.sleep_until_end();
         });
