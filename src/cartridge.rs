@@ -5,7 +5,8 @@ use crate::bus::BusIo;
 const RAM_SIZE_ADDRESS: usize = 0x0149;
 const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
-const ROM_TITLE_RANGE: std::ops::RangeInclusive<usize> = 0x0134..=0x0143;
+const ROM_TITLE_START: usize = 0x134;
+const ROM_TITLE_MAX_SIZE: usize = 16;
 
 #[derive(Debug, Default)]
 pub(crate) struct Cartridge {
@@ -59,13 +60,17 @@ impl Cartridge {
     }
 
     fn find_title(memory: &[u8]) -> Option<String> {
-        let slice = &memory[ROM_TITLE_RANGE];
-        let with_nulls = std::str::from_utf8(slice).ok();
-        let trimmed = with_nulls.map(|s| s.trim_matches('\0').trim());
+        let title_bytes = &memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE)];
 
-        match trimmed {
+        // ASCII Byte array purposely does not have null terminator
+        let ascii = match title_bytes.iter().position(|byte| *byte == 0x00) {
+            Some(end) => &memory[ROM_TITLE_START..(ROM_TITLE_START + end)],
+            None => &memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE - 1)],
+        };
+
+        match std::str::from_utf8(ascii).ok() {
             Some("") | None => None,
-            Some(_) => trimmed.map(String::from),
+            Some(title) => Some(String::from(title)),
         }
     }
 
