@@ -178,12 +178,12 @@ pub(super) mod ch4 {
         pub struct Frequency(u8);
         impl Debug;
         _initial, _: 7;
-        _length_disable, _: 6;
+        _length_enable, _: 6;
     }
 
     impl Frequency {
-        pub(crate) fn length_disable(&self) -> bool {
-            self._length_disable()
+        pub(crate) fn length_enable(&self) -> bool {
+            self._length_enable()
         }
 
         pub(crate) fn initial(&self) -> bool {
@@ -224,7 +224,7 @@ pub(super) mod common {
         pub struct FrequencyHigh(u8);
         impl Debug;
         _initial, _: 7;
-        _length_disable, _: 6;
+        _length_enable, _: 6;
         pub freq_bits, set_freq_bits: 2, 0;
     }
 
@@ -233,8 +233,8 @@ pub(super) mod common {
             self._initial()
         }
 
-        pub(crate) fn length_disable(&self) -> bool {
-            self._length_disable()
+        pub(crate) fn length_enable(&self) -> bool {
+            self._length_enable()
         }
     }
 
@@ -557,6 +557,27 @@ pub(super) mod fs {
             };
         }
 
+        fn peek(&self) -> State {
+            use State::*;
+
+            match (self.step + 1) % 8 {
+                1 | 3 | 5 => Nothing,
+                0 | 4 => Length,
+                2 | 6 => LengthAndSweep,
+                7 => Envelope,
+                num => unreachable!("Step {} is invalid for the Frame Sequencer", num),
+            }
+        }
+
+        pub(crate) fn next_clocks_length(&self) -> bool {
+            use State::*;
+
+            match self.peek() {
+                Length | LengthAndSweep => true,
+                Nothing | Envelope => false,
+            }
+        }
+
         pub(crate) fn state(&self) -> State {
             self.state
         }
@@ -567,7 +588,7 @@ pub(super) mod fs {
         }
     }
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub(crate) enum State {
         Length,
         Nothing,

@@ -1,3 +1,4 @@
+use crate::apu::gen::SAMPLE_RATE;
 use crate::bus::BusIo;
 use crate::emu::SM83_CLOCK_SPEED;
 use gen::SampleProducer;
@@ -5,7 +6,7 @@ use types::ch1::{Sweep, SweepDirection};
 use types::ch3::Volume as Ch3Volume;
 use types::ch4::{CounterWidth, Frequency as Ch4Frequency, PolynomialCounter};
 use types::common::{EnvelopeDirection, FrequencyHigh, SoundDuty, VolumeEnvelope};
-use types::fs::{FrameSequencer, State as FrameSequencerState};
+use types::fs::{FrameSequencer, State as FSState};
 use types::{ChannelControl, SoundOutput};
 
 pub mod gen;
@@ -31,6 +32,8 @@ pub struct Apu {
 
     prod: Option<SampleProducer<f32>>,
     sample_counter: u64,
+
+    cap: f32,
 }
 
 impl BusIo for Apu {
@@ -66,7 +69,7 @@ impl BusIo for Apu {
             0x11 if self.ctrl.enabled => self.ch1.set_duty(byte),
             0x12 if self.ctrl.enabled => self.ch1.set_envelope(byte),
             0x13 if self.ctrl.enabled => self.ch1.set_freq_lo(byte),
-            0x14 if self.ctrl.enabled => self.ch1.set_freq_hi(byte),
+            0x14 if self.ctrl.enabled => self.ch1.set_freq_hi(&self.sequencer, byte),
             0x16 if self.ctrl.enabled => self.ch2.set_duty(byte),
             0x17 if self.ctrl.enabled => self.ch2.set_envelope(byte),
             0x18 if self.ctrl.enabled => self.ch2.set_freq_lo(byte),
@@ -96,7 +99,7 @@ impl Apu {
 
         // Frame Sequencer (512Hz)
         if self.is_falling_edge(12, div) {
-            use FrameSequencerState::*;
+            use FSState::*;
 
             match self.sequencer.state() {
                 Length => self.clock_length(),
@@ -121,25 +124,33 @@ impl Apu {
         if self.sample_counter >= SM83_CLOCK_SPEED {
             self.sample_counter %= SM83_CLOCK_SPEED;
 
-            if let Some(ref mut prod) = self.prod {
+            if let Some(prod) = self.prod.as_mut() {
                 if prod.available_blocking() {
                     // Sample the APU
 
+                    let ch1_amplitude =
+                        Self::high_pass(&mut self.cap, self.ch1.amplitude(), self.ch1.enabled);
                     let (left, right) = self.ctrl.out.ch1();
-                    let ch1_left = if left { self.ch1.amplitude() } else { 0.0 };
-                    let ch1_right = if right { self.ch1.amplitude() } else { 0.0 };
+                    let ch1_left = if left { ch1_amplitude } else { 0.0 };
+                    let ch1_right = if right { ch1_amplitude } else { 0.0 };
 
+                    let ch2_amplitude =
+                        Self::high_pass(&mut self.cap, self.ch2.amplitude(), self.ch2.enabled);
                     let (left, right) = self.ctrl.out.ch2();
-                    let ch2_left = if left { self.ch2.amplitude() } else { 0.0 };
-                    let ch2_right = if right { self.ch2.amplitude() } else { 0.0 };
+                    let ch2_left = if left { ch2_amplitude } else { 0.0 };
+                    let ch2_right = if right { ch2_amplitude } else { 0.0 };
 
+                    let ch3_amplitude =
+                        Self::high_pass(&mut self.cap, self.ch3.amplitude(), self.ch3.enabled);
                     let (left, right) = self.ctrl.out.ch3();
-                    let ch3_left = if left { self.ch3.amplitude() } else { 0.0 };
-                    let ch3_right = if right { self.ch3.amplitude() } else { 0.0 };
+                    let ch3_left = if left { ch3_amplitude } else { 0.0 };
+                    let ch3_right = if right { ch3_amplitude } else { 0.0 };
 
+                    let ch4_amplitude =
+                        Self::high_pass(&mut self.cap, self.ch4.amplitude(), self.ch4.enabled);
                     let (left, right) = self.ctrl.out.ch4();
-                    let ch4_left = if left { self.ch4.amplitude() } else { 0.0 };
-                    let ch4_right = if right { self.ch4.amplitude() } else { 0.0 };
+                    let ch4_left = if left { ch4_amplitude } else { 0.0 };
+                    let ch4_right = if right { ch4_amplitude } else { 0.0 };
 
                     let left_mixed = (ch1_left + ch2_left + ch3_left + ch4_left) / 4.0;
                     let right_mixed = (ch1_right + ch2_right + ch3_right + ch4_right) / 4.0;
@@ -214,20 +225,20 @@ impl Apu {
         self.ch4.enabled = Default::default();
     }
 
-    fn process_length(freq_hi: &FrequencyHigh, length_timer: &mut u16, enabled: &mut bool) {
-        if freq_hi.length_disable() && *length_timer > 0 {
-            *length_timer -= 1;
+    fn process_length(freq_hi: &FrequencyHigh, counter: &mut u16, enabled: &mut bool) {
+        if freq_hi.length_enable() && *counter > 0 {
+            *counter -= 1;
 
             // Check in this scope ensures (only) the above subtraction
             // made length_timer 0
-            if *length_timer == 0 {
+            if *counter == 0 {
                 *enabled = false;
             }
         }
     }
 
     fn ch4_process_length(freq: &Ch4Frequency, length_timer: &mut u16, enabled: &mut bool) {
-        if freq.length_disable() && *length_timer > 0 {
+        if freq.length_enable() && *length_timer > 0 {
             *length_timer -= 1;
 
             // Check in this scope ensures (only) the above subtraction
@@ -241,7 +252,7 @@ impl Apu {
     fn clock_length(&mut self) {
         Self::process_length(
             &self.ch1.freq_hi,
-            &mut self.ch1.length_timer,
+            &mut self.ch1.length_counter,
             &mut self.ch1.enabled,
         );
 
@@ -334,6 +345,19 @@ impl Apu {
             None => false,
         }
     }
+
+    fn high_pass(capacitor: &mut f32, input: f32, enabled: bool) -> f32 {
+        const CHARGE_FACTOR: f32 = 0.999958;
+
+        let mut output = 0.0;
+        if enabled {
+            output = input - *capacitor;
+            *capacitor =
+                input - output * CHARGE_FACTOR.powi(SM83_CLOCK_SPEED as i32 / SAMPLE_RATE as i32);
+        }
+
+        output
+    }
 }
 
 #[derive(Debug, Default)]
@@ -405,7 +429,7 @@ pub(crate) struct Channel1 {
     sweep_enabled: bool,
 
     // Length Functionality
-    length_timer: u16,
+    length_counter: u16,
 
     freq_timer: u16,
     duty_pos: u8,
@@ -432,7 +456,7 @@ impl Channel1 {
     /// 0xFF11 | NR11 - Channel 1 Sound length / Wave pattern duty
     pub(crate) fn set_duty(&mut self, byte: u8) {
         self.duty = byte.into();
-        self.length_timer = 64 - self.duty.sound_length() as u16;
+        self.length_counter = 64 - self.duty.sound_length() as u16;
     }
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
@@ -460,8 +484,19 @@ impl Channel1 {
     }
 
     /// 0xFF14 | NR14 - Channel 1 Frequency high
-    pub(crate) fn set_freq_hi(&mut self, byte: u8) {
+    pub(crate) fn set_freq_hi(&mut self, fs: &FrameSequencer, byte: u8) {
+        let prev_le = self.freq_hi.length_enable();
         self.freq_hi = byte.into();
+
+        if !fs.next_clocks_length() {
+            if !prev_le && self.freq_hi.length_enable() && self.length_counter != 0 {
+                self.length_counter -= 1;
+
+                if self.length_counter == 0 && !self.freq_hi.initial() {
+                    self.enabled = false;
+                }
+            }
+        }
 
         // If this bit is set, a trigger event occurs
         if self.freq_hi.initial() {
@@ -470,9 +505,13 @@ impl Channel1 {
             }
 
             // Length behaviour during trigger event
-            if self.length_timer == 0 {
-                self.length_timer = 64;
-            }
+            if self.length_counter == 0 {
+                self.length_counter = if self.freq_hi.length_enable() && !fs.next_clocks_length() {
+                    63
+                } else {
+                    64
+                };
+            };
 
             // Envelope Behaviour during trigger event
             self.period_timer = self.envelope.period();
