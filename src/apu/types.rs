@@ -223,14 +223,14 @@ pub(super) mod common {
     bitfield! {
         pub struct FrequencyHigh(u8);
         impl Debug;
-        _initial, _: 7;
+        _trigger, _: 7;
         _length_enable, _: 6;
         pub freq_bits, set_freq_bits: 2, 0;
     }
 
     impl FrequencyHigh {
-        pub(crate) fn initial(&self) -> bool {
-            self._initial()
+        pub(crate) fn trigger(&self) -> bool {
+            self._trigger()
         }
 
         pub(crate) fn length_enable(&self) -> bool {
