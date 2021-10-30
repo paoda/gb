@@ -437,7 +437,7 @@ impl Channel1 {
     }
 
     /// 0xFF12 | NR12 - Channel 1 Volume Envelope
-    pub fn envelope(&self) -> u8 {
+    pub(crate) fn envelope(&self) -> u8 {
         u8::from(self.envelope)
     }
 

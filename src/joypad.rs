@@ -111,7 +111,7 @@ impl ButtonEvent {
 }
 
 #[inline]
-pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
+pub(crate) fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
     use winit::event::VirtualKeyCode;
 
     // TODO: What do I have to do to get a match statement here?
@@ -177,7 +177,7 @@ pub fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
 }
 
 #[inline]
-pub fn handle_gamepad_input(pad: &mut Joypad, event: GamepadEvent) {
+pub(crate) fn handle_gamepad_input(pad: &mut Joypad, event: GamepadEvent) {
     use Button::*;
     use GamepadEventType::*;
 

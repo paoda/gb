@@ -103,7 +103,7 @@ impl Cpu {
     /// routine.
     ///
     /// Handle HALT and interrupts.
-    pub fn step(&mut self) -> Cycle {
+    pub(crate) fn step(&mut self) -> Cycle {
         // Log instructions
         // if self.reg.pc > 0xFF {
         //     let out = std::io::stdout();

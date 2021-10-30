@@ -90,7 +90,7 @@ impl Emulator {
     }
 
     pub fn set_prod(&mut self, prod: SampleProducer<f32>) {
-        self.cpu.bus_mut().apu.attach_producer(prod)
+        self.cpu.bus_mut().apu_mut().attach_producer(prod)
     }
 
     pub fn title(&self) -> &str {

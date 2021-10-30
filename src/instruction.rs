@@ -1893,7 +1893,7 @@ mod table {
     }
 
     impl Group1RegisterPair {
-        pub fn as_register_pair(&self) -> RegisterPair {
+        pub(crate) fn as_register_pair(&self) -> RegisterPair {
             use Group1RegisterPair::*;
 
             match self {
@@ -1927,7 +1927,7 @@ mod table {
     }
 
     impl Group2RegisterPair {
-        pub fn as_register_pair(&self) -> RegisterPair {
+        pub(crate) fn as_register_pair(&self) -> RegisterPair {
             use Group2RegisterPair::*;
 
             match self {
@@ -1961,7 +1961,7 @@ mod table {
     }
 
     impl Group3RegisterPair {
-        pub fn as_register_pair(&self) -> RegisterPair {
+        pub(crate) fn as_register_pair(&self) -> RegisterPair {
             use Group3RegisterPair::*;
 
             match self {
@@ -2003,7 +2003,7 @@ mod table {
     }
 
     impl Register {
-        pub fn cpu_register(&self) -> CpuRegister {
+        pub(crate) fn cpu_register(&self) -> CpuRegister {
             use Register::*;
 
             match self {

@@ -19,12 +19,12 @@ pub struct Bus {
     ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
-    pub(crate) timer: Timer,
+    timer: Timer,
     int: Interrupt,
-    pub(crate) apu: Apu,
+    apu: Apu,
     high_ram: HighRam,
     serial: Serial,
-    pub(crate) joypad: Joypad,
+    joypad: Joypad,
 }
 
 impl Default for Bus {
@@ -104,13 +104,18 @@ impl Bus {
     }
 
     #[inline]
+    pub(crate) fn apu_mut(&mut self) -> &mut Apu {
+        &mut self.apu
+    }
+
+    #[inline]
     pub fn ppu(&self) -> &Ppu {
         &self.ppu
     }
 }
 
 impl Bus {
-    pub fn oam_read_byte(&self, addr: u16) -> u8 {
+    pub(crate) fn oam_read_byte(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => {
                 // 16KB ROM bank 00 (ends at 0x3FFF)
@@ -157,7 +162,7 @@ impl Bus {
         }
     }
 
-    pub fn oam_write_byte(&mut self, addr: u16, byte: u8) {
+    pub(crate) fn oam_write_byte(&mut self, addr: u16, byte: u8) {
         self.ppu.oam.write_byte(addr, byte);
     }
 }
