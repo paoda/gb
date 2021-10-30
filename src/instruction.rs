@@ -334,7 +334,6 @@ impl Instruction {
             Instruction::ADD(target, src) => match (target, src) {
                 (AddTarget::HL, AddSource::Group1(pair)) => {
                     // ADD HL, r16 | Add 16-bit register to HL
-                    // FIXME: Memory Timings are not properly emulated for this instruction
                     use Group1RegisterPair::*;
                     let mut flags: Flags = *cpu.flags();
 
@@ -342,10 +341,11 @@ impl Instruction {
                         BC | DE | HL | SP => {
                             let left = cpu.register_pair(RegisterPair::HL);
                             let right = cpu.register_pair(pair.as_register_pair());
-                            cpu.set_register_pair(
-                                RegisterPair::HL,
-                                Self::add_u16(left, right, &mut flags),
-                            );
+                            let result = Self::add_u16(left, right, &mut flags);
+
+                            cpu.set_register(CpuRegister::L, result as u8);
+                            cpu.bus.clock();
+                            cpu.set_register(CpuRegister::H, (result >> 8) as u8);
                         }
                     }
                     cpu.set_flags(flags);
@@ -376,12 +376,15 @@ impl Instruction {
                 }
                 (AddTarget::SP, AddSource::ImmediateSignedByte) => {
                     // ADD SP, i8 | Add i8 to stack pointer
-                    // FIXME: Memory Timings are not properly emulated for this instruction
                     let mut flags: Flags = *cpu.flags();
 
                     let left = cpu.register_pair(RegisterPair::SP);
                     let sum = Self::add_u16_i8(left, Self::imm_byte(cpu) as i8, &mut flags);
+                    cpu.bus.clock(); // internal
+
                     cpu.set_register_pair(RegisterPair::SP, sum);
+                    cpu.bus.clock();
+
                     cpu.set_flags(flags);
                     16
                 }
@@ -423,7 +426,6 @@ impl Instruction {
                     AllRegisters::Group1(pair) => {
                         // INC r16 | Increment 16-bit register
                         // Note: No flags are set with this version of the INC instruction
-                        // FIXME: Memory Timings are not properly emulated for this instruction
                         use Group1RegisterPair::*;
 
                         match pair {
@@ -431,6 +433,7 @@ impl Instruction {
                                 let pair = pair.as_register_pair();
                                 let left = cpu.register_pair(pair);
                                 cpu.set_register_pair(pair, left.wrapping_add(1));
+                                cpu.bus.clock(); // internal
                             }
                         }
                         8
@@ -462,7 +465,6 @@ impl Instruction {
                     }
                     AllRegisters::Group1(pair) => {
                         // DEC r16 | Decrement Register Pair
-                        // FIXME: Memory Timings are not properly emulated for this instruction
                         use Group1RegisterPair::*;
 
                         match pair {
@@ -470,6 +472,7 @@ impl Instruction {
                                 let pair = pair.as_register_pair();
                                 let left = cpu.register_pair(pair);
                                 cpu.set_register_pair(pair, left.wrapping_sub(1));
+                                cpu.bus.clock(); // internal
                             }
                         };
                         8
