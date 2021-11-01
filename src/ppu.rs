@@ -48,7 +48,7 @@ pub struct Ppu {
     fetch: PixelFetcher,
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
-    frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
+    pub(crate) frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
     win_stat: WindowStatus,
 
     scanline_start: bool,
@@ -421,11 +421,6 @@ impl Ppu {
 
         let mut blank = WHITE.repeat(self.frame_buf.len() / 4);
         self.frame_buf.swap_with_slice(&mut blank);
-    }
-
-    #[inline]
-    pub(crate) fn frame_buf(&self) -> &[u8; GB_HEIGHT * GB_WIDTH * 4] {
-        &self.frame_buf
     }
 
     fn clock_fifo(&mut self) -> Option<GrayShade> {

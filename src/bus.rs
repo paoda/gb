@@ -13,8 +13,8 @@ pub(crate) const BOOT_SIZE: usize = 0x100;
 #[derive(Debug)]
 pub struct Bus {
     boot: Option<[u8; BOOT_SIZE]>, // Boot ROM is 256b long
-    cart: Option<Cartridge>,
-    ppu: Ppu,
+    pub(crate) cart: Option<Cartridge>,
+    pub(crate) ppu: Ppu,
     work_ram: WorkRam,
     var_ram: VariableWorkRam,
     timer: Timer,
@@ -22,7 +22,7 @@ pub struct Bus {
     apu: Apu,
     high_ram: HighRam,
     serial: Serial,
-    joypad: Joypad,
+    pub(crate) joyp: Joypad,
 }
 
 impl Default for Bus {
@@ -38,7 +38,7 @@ impl Default for Bus {
             apu: Default::default(),
             high_ram: Default::default(),
             serial: Default::default(),
-            joypad: Default::default(),
+            joyp: Default::default(),
         }
     }
 }
@@ -87,28 +87,8 @@ impl Bus {
     }
 
     #[inline]
-    pub(crate) fn joyp_mut(&mut self) -> &mut Joypad {
-        &mut self.joypad
-    }
-
-    #[inline]
-    pub(crate) fn cart(&self) -> Option<&Cartridge> {
-        self.cart.as_ref()
-    }
-
-    #[inline]
-    pub(crate) fn cart_mut(&mut self) -> Option<&mut Cartridge> {
-        self.cart.as_mut()
-    }
-
-    #[inline]
     pub(crate) fn apu_mut(&mut self) -> &mut Apu {
         &mut self.apu
-    }
-
-    #[inline]
-    pub fn ppu(&self) -> &Ppu {
-        &self.ppu
     }
 }
 
@@ -239,7 +219,7 @@ impl BusIo for Bus {
                 // Every address here starts with 0xFF so we can just check the
                 // low byte to figure out which register it is
                 match addr & 0x00FF {
-                    0x00 => self.joypad.p1,
+                    0x00 => self.joyp.p1,
                     0x01 => self.serial.next,
                     0x02 => self.serial.ctrl.into(),
                     0x04 => (self.timer.divider >> 8) as u8,
@@ -337,7 +317,7 @@ impl BusIo for Bus {
                 // Every address here starts with 0xFF so we can just check the
                 // low byte to figure out which register it is
                 match addr & 0x00FF {
-                    0x00 => self.joypad.update(byte),
+                    0x00 => self.joyp.update(byte),
                     0x01 => self.serial.next = byte,
                     0x02 => self.serial.ctrl = byte.into(),
                     0x04 => self.timer.divider = 0x0000,
@@ -401,7 +381,7 @@ impl Bus {
         let lcd_stat = self.ppu.int.lcd_stat();
 
         // Read the current interrupt information from the Joypad
-        let joypad = self.joypad.interrupt();
+        let joypad = self.joyp.interrupt();
 
         // Read the current interrupt information from the Timer
         let timer = self.timer.interrupt();
@@ -431,7 +411,7 @@ impl Bus {
         self.ppu.int.set_lcd_stat(lcd_stat);
 
         // Update the Joypad's instance of the following interrupts
-        self.joypad.set_interrupt(joypad);
+        self.joyp.set_interrupt(joypad);
 
         // Update the Timer's instance of the following interrupts
         self.timer.set_interrupt(timer);

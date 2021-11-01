@@ -1,7 +1,6 @@
 use crate::apu::gen::SampleProducer;
 use crate::bus::BOOT_SIZE;
 use crate::cpu::Cpu;
-use crate::joypad::{self, Joypad};
 use crate::{Cycle, GB_HEIGHT, GB_WIDTH};
 use clap::crate_name;
 use gilrs::Gilrs;
@@ -20,9 +19,9 @@ pub fn run_frame(emu: &mut Emulator, gamepad: &mut Gilrs, key: &WinitInputHelper
     let mut elapsed = 0;
 
     if let Some(event) = gamepad.next_event() {
-        joypad::handle_gamepad_input(emu.joyp_mut(), event);
+        crate::joypad::handle_gamepad_input(&mut emu.cpu.bus.joyp, event);
     }
-    joypad::handle_keyboard_input(emu.joyp_mut(), key);
+    crate::joypad::handle_keyboard_input(&mut emu.cpu.bus.joyp, key);
 
     while elapsed < CYCLES_IN_FRAME {
         elapsed += emu.step();
@@ -32,7 +31,7 @@ pub fn run_frame(emu: &mut Emulator, gamepad: &mut Gilrs, key: &WinitInputHelper
 }
 
 pub fn draw_frame(emu: &Emulator, buf: &mut [u8; GB_HEIGHT * GB_WIDTH * 4]) {
-    buf.copy_from_slice(emu.cpu.bus.ppu().frame_buf());
+    buf.copy_from_slice(emu.cpu.bus.ppu.frame_buf.as_ref());
 }
 
 pub struct Emulator {
@@ -84,11 +83,6 @@ impl Emulator {
         self.cpu.bus.load_cart(rom);
     }
 
-    #[inline]
-    fn joyp_mut(&mut self) -> &mut Joypad {
-        self.cpu.bus.joyp_mut()
-    }
-
     pub fn set_prod(&mut self, prod: SampleProducer<f32>) {
         self.cpu.bus.apu_mut().attach_producer(prod)
     }
@@ -98,7 +92,7 @@ impl Emulator {
     }
 
     pub fn try_write_sav(&self) -> std::io::Result<()> {
-        if let Some(ext_ram) = self.cpu.bus.cart().map(|c| c.ext_ram()).flatten() {
+        if let Some(ext_ram) = self.cpu.bus.cart.as_ref().map(|c| c.ext_ram()).flatten() {
             if let Some(title) = self.cpu.bus.cart_title() {
                 let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
                 save_path.push(title);
@@ -113,7 +107,7 @@ impl Emulator {
     }
 
     pub fn try_load_sav(&mut self) -> std::io::Result<()> {
-        if let Some(cart) = self.cpu.bus.cart_mut() {
+        if let Some(cart) = &mut self.cpu.bus.cart {
             if let Some(title) = cart.title() {
                 let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
                 save_path.push(title);
