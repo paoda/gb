@@ -32,7 +32,7 @@ pub fn run_frame(emu: &mut Emulator, gamepad: &mut Gilrs, key: &WinitInputHelper
 }
 
 pub fn draw_frame(emu: &Emulator, buf: &mut [u8; GB_HEIGHT * GB_WIDTH * 4]) {
-    buf.copy_from_slice(emu.cpu.bus().ppu().frame_buf());
+    buf.copy_from_slice(emu.cpu.bus.ppu().frame_buf());
 }
 
 pub struct Emulator {
@@ -81,25 +81,25 @@ impl Emulator {
     }
 
     fn load_rom(&mut self, rom: Vec<u8>) {
-        self.cpu.bus_mut().load_cart(rom);
+        self.cpu.bus.load_cart(rom);
     }
 
     #[inline]
     fn joyp_mut(&mut self) -> &mut Joypad {
-        self.cpu.bus_mut().joyp_mut()
+        self.cpu.bus.joyp_mut()
     }
 
     pub fn set_prod(&mut self, prod: SampleProducer<f32>) {
-        self.cpu.bus_mut().apu_mut().attach_producer(prod)
+        self.cpu.bus.apu_mut().attach_producer(prod)
     }
 
     pub fn title(&self) -> &str {
-        self.cpu.bus().cart_title().unwrap_or(DEFAULT_TITLE)
+        self.cpu.bus.cart_title().unwrap_or(DEFAULT_TITLE)
     }
 
     pub fn try_write_sav(&self) -> std::io::Result<()> {
-        if let Some(ext_ram) = self.cpu.bus().cart().map(|c| c.ext_ram()).flatten() {
-            if let Some(title) = self.cpu.bus().cart_title() {
+        if let Some(ext_ram) = self.cpu.bus.cart().map(|c| c.ext_ram()).flatten() {
+            if let Some(title) = self.cpu.bus.cart_title() {
                 let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
                 save_path.push(title);
                 save_path.set_extension("sav");
@@ -113,7 +113,7 @@ impl Emulator {
     }
 
     pub fn try_load_sav(&mut self) -> std::io::Result<()> {
-        if let Some(cart) = self.cpu.bus_mut().cart_mut() {
+        if let Some(cart) = self.cpu.bus.cart_mut() {
             if let Some(title) = cart.title() {
                 let mut save_path = Self::data_path().unwrap_or_else(|| PathBuf::from("."));
                 save_path.push(title);

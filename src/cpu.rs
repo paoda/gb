@@ -151,16 +151,6 @@ impl BusIo for Cpu {
 }
 
 impl Cpu {
-    #[inline]
-    pub(crate) fn bus(&self) -> &Bus {
-        &self.bus
-    }
-
-    #[inline]
-    pub(crate) fn bus_mut(&mut self) -> &mut Bus {
-        &mut self.bus
-    }
-
     fn handle_ei(&mut self) {
         match self.ime {
             ImeState::EiExecuted => self.ime = ImeState::Pending,
