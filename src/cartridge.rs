@@ -289,12 +289,12 @@ impl MBCIo for MBC1 {
     }
 }
 
-impl RtcTick for MBC1 {
+impl RtClockTick for MBC1 {
     fn tick(&mut self) {}
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-struct Rtc {
+struct RtClock {
     /// 6-bit unsigned integer
     sec: u8,
     /// 6-bit unsigned integer
@@ -307,7 +307,7 @@ struct Rtc {
     cycles: Cycle,
 }
 
-impl Rtc {
+impl RtClock {
     fn inc_day(&mut self) {
         // TODO: Figure out order of operations, the brackets are a bit too defenseive here
         let days: u16 = (((self.day_high.ninth() as u16) << 8) | self.day_low as u16) + 1;
@@ -321,7 +321,7 @@ impl Rtc {
     }
 }
 
-impl RtcTick for Rtc {
+impl RtClockTick for RtClock {
     fn tick(&mut self) {
         // This is the sort of situation where you'd want to use a scheduler.
         if self.day_high.halt() {
@@ -353,7 +353,7 @@ impl RtcTick for Rtc {
     }
 }
 
-trait RtcTick {
+trait RtClockTick {
     fn tick(&mut self);
 }
 
@@ -393,7 +393,7 @@ impl From<DayHigh> for u8 {
 #[derive(Debug, Clone, Copy)]
 enum MBC3Device {
     ExternalRam,
-    Rtc(RtcRegister),
+    Clock(RtcRegister),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -420,8 +420,8 @@ struct MBC3 {
     prev_latch_write: Option<u8>,
 
     has_battery: bool,
-    rtc: Rtc,
-    rtc_latch: Option<Rtc>,
+    rtc: RtClock,
+    rtc_latch: Option<RtClock>,
 }
 
 impl MBC3 {
@@ -481,21 +481,18 @@ impl MBCIo for MBC3 {
                 Some(MBC3Device::ExternalRam) if self.devs_enabled => {
                     Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
                 }
-                Some(MBC3Device::Rtc(rtc_reg)) if self.devs_enabled => Value(match rtc_reg {
-                    Second => self.rtc_latch.as_ref().map(|rtc| rtc.sec).unwrap_or(0xFF),
-                    Minute => self.rtc_latch.as_ref().map(|rtc| rtc.min).unwrap_or(0xFF),
-                    Hour => self.rtc_latch.as_ref().map(|rtc| rtc.hr).unwrap_or(0xFF),
-                    DayLow => self
-                        .rtc_latch
+                Some(MBC3Device::Clock(reg)) if self.devs_enabled => Value(
+                    self.rtc_latch
                         .as_ref()
-                        .map(|rtc| rtc.day_low)
+                        .map(|rtc| match reg {
+                            Second => rtc.sec,
+                            Minute => rtc.min,
+                            Hour => rtc.hr,
+                            DayLow => rtc.day_low,
+                            DayHigh => rtc.day_high.into(),
+                        })
                         .unwrap_or(0xFF),
-                    DayHigh => self
-                        .rtc_latch
-                        .as_ref()
-                        .map(|rtc| rtc.day_high.into())
-                        .unwrap_or(0xFF),
-                }),
+                ),
                 _ => Value(0xFF),
             },
             _ => unreachable!("A read from {:#06X} should not be handled by MBC3", addr),
@@ -520,11 +517,11 @@ impl MBCIo for MBC3 {
                     self.ram_bank = byte & 0x03;
                     self.mapped = Some(MBC3Device::ExternalRam);
                 }
-                0x08 => self.mapped = Some(MBC3Device::Rtc(Second)),
-                0x09 => self.mapped = Some(MBC3Device::Rtc(Minute)),
-                0x0A => self.mapped = Some(MBC3Device::Rtc(Hour)),
-                0x0B => self.mapped = Some(MBC3Device::Rtc(DayLow)),
-                0x0C => self.mapped = Some(MBC3Device::Rtc(DayHigh)),
+                0x08 => self.mapped = Some(MBC3Device::Clock(Second)),
+                0x09 => self.mapped = Some(MBC3Device::Clock(Minute)),
+                0x0A => self.mapped = Some(MBC3Device::Clock(Hour)),
+                0x0B => self.mapped = Some(MBC3Device::Clock(DayLow)),
+                0x0C => self.mapped = Some(MBC3Device::Clock(DayHigh)),
 
                 _ => {}
             },
@@ -540,7 +537,7 @@ impl MBCIo for MBC3 {
                 Some(MBC3Device::ExternalRam) if self.devs_enabled => {
                     self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
                 }
-                Some(MBC3Device::Rtc(rtc_reg)) if self.devs_enabled => match rtc_reg {
+                Some(MBC3Device::Clock(rtc_reg)) if self.devs_enabled => match rtc_reg {
                     Second => self.rtc.sec = byte & 0x3F,
                     Minute => self.rtc.min = byte & 0x3F,
                     Hour => self.rtc.hr = byte & 0x1F,
@@ -554,7 +551,7 @@ impl MBCIo for MBC3 {
     }
 }
 
-impl RtcTick for MBC3 {
+impl RtClockTick for MBC3 {
     fn tick(&mut self) {
         self.rtc.tick();
     }
@@ -647,7 +644,7 @@ impl MBCIo for MBC5 {
     }
 }
 
-impl RtcTick for MBC5 {
+impl RtClockTick for MBC5 {
     fn tick(&mut self) {}
 }
 
@@ -739,7 +736,7 @@ impl MBCIo for MBC2 {
     }
 }
 
-impl RtcTick for MBC2 {
+impl RtClockTick for MBC2 {
     fn tick(&mut self) {}
 }
 
@@ -766,11 +763,11 @@ impl MBCIo for NoMBC {
     }
 }
 
-impl RtcTick for NoMBC {
+impl RtClockTick for NoMBC {
     fn tick(&mut self) {}
 }
 
-trait MBCIo: Savable + RtcTick {
+trait MBCIo: Savable + RtClockTick {
     fn handle_read(&self, addr: u16) -> MBCResult;
     fn handle_write(&mut self, addr: u16, byte: u8);
 }
