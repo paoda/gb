@@ -73,6 +73,7 @@ impl Bus {
     fn tick(&mut self, limit: u8) {
         for _ in 0..limit {
             self.timer.tick();
+            self.cart.as_mut().map(|cart| cart.tick());
             self.ppu.tick();
             self.apu.tick(self.timer.divider);
             self.dma_tick()

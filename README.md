@@ -4,10 +4,10 @@
 ### Status
 * From [Blargg Test ROMs](https://github.com/L-P/blargg-test-roms/)
     * [x] cpu_instrs
-    * [x] instr_timing
+    * [ ] instr_timing (kind of)
     * [x] mem_timing
     * [x] mem_timing-2
-    * [ ] Partially dmg_sound 
+    * [ ] dmg_sound (partial) 
 * [x] [dmg-acid2](https://github.com/mattcurrie/dmg-acid2)
 * From [mooneye-gb](https://github.com/Gekkio/mooneye-gb):
     * Cartridges:
@@ -16,7 +16,7 @@
         * [x] MBC2
         * [x] MBC5
 * Implements a cycle-accurate PPU FIFO
-    * Doesn't \*exactly\* work right just yet
+    * Doesn't \*exactly\* work just yet
 
 Supports: ROM-only, MBC1, MBC2, MBC3 and MBC5 games.
 
