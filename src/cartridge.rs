@@ -538,7 +538,11 @@ impl MBCIo for MBC3 {
                     self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
                 }
                 Some(MBC3Device::Clock(rtc_reg)) if self.devs_enabled => match rtc_reg {
-                    Second => self.rtc.sec = byte & 0x3F,
+                    Second => {
+                        self.rtc.sec = byte & 0x3F;
+                        // Writing to RTC S resets the internal sub-second counter
+                        self.rtc.cycles = 0;
+                    }
                     Minute => self.rtc.min = byte & 0x3F,
                     Hour => self.rtc.hr = byte & 0x1F,
                     DayLow => self.rtc.day_low = byte & 0xFF,
