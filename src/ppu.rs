@@ -42,7 +42,7 @@ pub struct Ppu {
     pub(crate) monochrome: Monochrome,
     pub(crate) pos: ScreenPosition,
     vram: Box<[u8; VRAM_SIZE]>,
-    pub(crate) oam: ObjectAttributeTable,
+    pub(crate) oam: ObjectAttrTable,
     pub(crate) dma: DirectMemoryAccess,
     scan_dot: Cycle,
     fetch: PixelFetcher,
@@ -539,11 +539,11 @@ pub(crate) struct Monochrome {
 }
 
 #[derive(Debug)]
-pub(crate) struct ObjectAttributeTable {
+pub(crate) struct ObjectAttrTable {
     buf: Box<[u8; OAM_SIZE]>,
 }
 
-impl BusIo for ObjectAttributeTable {
+impl BusIo for ObjectAttrTable {
     fn read_byte(&self, addr: u16) -> u8 {
         let index = (addr - 0xFE00) as usize;
         self.buf[index]
@@ -555,8 +555,8 @@ impl BusIo for ObjectAttributeTable {
     }
 }
 
-impl ObjectAttributeTable {
-    fn attribute(&self, index: usize) -> ObjectAttribute {
+impl ObjectAttrTable {
+    fn attribute(&self, index: usize) -> ObjectAttr {
         let start = index * 4;
 
         let slice: &[u8; 4] = self.buf[start..(start + 4)]
@@ -567,7 +567,7 @@ impl ObjectAttributeTable {
     }
 }
 
-impl Default for ObjectAttributeTable {
+impl Default for ObjectAttrTable {
     fn default() -> Self {
         Self {
             buf: Box::new([0; OAM_SIZE]),
@@ -576,14 +576,14 @@ impl Default for ObjectAttributeTable {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct ObjectAttribute {
+struct ObjectAttr {
     y: u8,
     x: u8,
     tile_index: u8,
     flags: ObjectFlags,
 }
 
-impl From<[u8; 4]> for ObjectAttribute {
+impl From<[u8; 4]> for ObjectAttr {
     fn from(bytes: [u8; 4]) -> Self {
         Self {
             y: bytes[0],
@@ -594,7 +594,7 @@ impl From<[u8; 4]> for ObjectAttribute {
     }
 }
 
-impl<'a> From<&'a [u8; 4]> for ObjectAttribute {
+impl<'a> From<&'a [u8; 4]> for ObjectAttr {
     fn from(bytes: &'a [u8; 4]) -> Self {
         Self {
             y: bytes[0],
@@ -607,7 +607,7 @@ impl<'a> From<&'a [u8; 4]> for ObjectAttribute {
 
 #[derive(Debug)]
 struct ObjectBuffer {
-    inner: [Option<ObjectAttribute>; OBJECT_LIMIT],
+    inner: [Option<ObjectAttr>; OBJECT_LIMIT],
     len: usize,
 }
 
@@ -621,7 +621,7 @@ impl ObjectBuffer {
         self.len = 0;
     }
 
-    fn add(&mut self, attr: ObjectAttribute) {
+    fn add(&mut self, attr: ObjectAttr) {
         self.inner[self.len] = Some(attr);
         self.len += 1;
     }
@@ -673,7 +673,7 @@ impl PixelFetcher {
         Ok(())
     }
 
-    fn get_obj_addr(attr: &ObjectAttribute, pos: &ScreenPosition, size: ObjectSize) -> u16 {
+    fn get_obj_addr(attr: &ObjectAttr, pos: &ScreenPosition, size: ObjectSize) -> u16 {
         let line_y = pos.line_y;
 
         // TODO: Why is the offset 14 and 30 respectively?
