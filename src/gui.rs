@@ -35,9 +35,9 @@ impl GuiState {
     }
 }
 
-/// This is meant to serve as a Default value. Therefore this KeyboardInput should **always** represent an **unused** key
-/// performing an **unused** action
-///
+/// To avoid using an [Option<KeyboardInput>] to keep track of user input from winit,
+/// we can use a "default" value. However, in order for this to work the chosen "default"
+/// value must be an **unused** key, so that it is ignored by the emulator.
 pub fn unused_key() -> KeyboardInput {
     #![allow(deprecated)]
 
