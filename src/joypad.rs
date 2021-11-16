@@ -1,5 +1,5 @@
 use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType};
-use winit_input_helper::WinitInputHelper;
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
 
 #[derive(Debug)]
 pub struct Joypad {
@@ -111,68 +111,33 @@ impl ButtonEvent {
 }
 
 #[inline]
-pub(crate) fn handle_keyboard_input(pad: &mut Joypad, input: &WinitInputHelper) {
-    use winit::event::VirtualKeyCode;
-
-    // TODO: What do I have to do to get a match statement here?
-
+pub(crate) fn handle_keyboard_input(pad: &mut Joypad, key: KeyboardInput) {
     let state = &mut pad.ext;
     let irq = &mut pad.interrupt;
 
-    if input.key_pressed(VirtualKeyCode::Down) {
-        state.dpad_down.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Down) {
-        state.dpad_down.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::Up) {
-        state.dpad_up.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Up) {
-        state.dpad_up.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::Left) {
-        state.dpad_left.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Left) {
-        state.dpad_left.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::Right) {
-        state.dpad_right.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Right) {
-        state.dpad_right.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::Return) {
-        state.start.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Return) {
-        state.start.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::RShift) {
-        state.select.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::RShift) {
-        state.select.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::Z) {
-        state.south.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::Z) {
-        state.south.update(false, irq);
-    }
-
-    if input.key_pressed(VirtualKeyCode::X) {
-        state.east.update(true, irq);
-    }
-    if input.key_released(VirtualKeyCode::X) {
-        state.east.update(false, irq);
+    match key.state {
+        ElementState::Pressed => match key.virtual_keycode {
+            Some(VirtualKeyCode::Down) => state.dpad_down.update(true, irq),
+            Some(VirtualKeyCode::Up) => state.dpad_up.update(true, irq),
+            Some(VirtualKeyCode::Left) => state.dpad_left.update(true, irq),
+            Some(VirtualKeyCode::Right) => state.dpad_right.update(true, irq),
+            Some(VirtualKeyCode::Return) => state.start.update(true, irq),
+            Some(VirtualKeyCode::RShift) => state.select.update(true, irq),
+            Some(VirtualKeyCode::Z) => state.south.update(true, irq),
+            Some(VirtualKeyCode::X) => state.east.update(true, irq),
+            None | Some(_) => {}
+        },
+        ElementState::Released => match key.virtual_keycode {
+            Some(VirtualKeyCode::Down) => state.dpad_down.update(false, irq),
+            Some(VirtualKeyCode::Up) => state.dpad_up.update(false, irq),
+            Some(VirtualKeyCode::Left) => state.dpad_left.update(false, irq),
+            Some(VirtualKeyCode::Right) => state.dpad_right.update(false, irq),
+            Some(VirtualKeyCode::Return) => state.start.update(false, irq),
+            Some(VirtualKeyCode::RShift) => state.select.update(false, irq),
+            Some(VirtualKeyCode::Z) => state.south.update(false, irq),
+            Some(VirtualKeyCode::X) => state.east.update(false, irq),
+            None | Some(_) => {}
+        },
     }
 }
 

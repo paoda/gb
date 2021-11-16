@@ -545,7 +545,7 @@ impl MBCIo for MBC3 {
                     }
                     Minute => self.rtc.min = byte & 0x3F,
                     Hour => self.rtc.hr = byte & 0x1F,
-                    DayLow => self.rtc.day_low = byte & 0xFF,
+                    DayLow => self.rtc.day_low = byte,
                     DayHigh => self.rtc.day_high = (byte & 0xC1).into(),
                 },
                 _ => {}

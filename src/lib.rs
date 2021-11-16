@@ -9,6 +9,7 @@ mod bus;
 mod cartridge;
 mod cpu;
 pub mod emu;
+pub mod gui;
 mod high_ram;
 mod instruction;
 mod interrupt;
