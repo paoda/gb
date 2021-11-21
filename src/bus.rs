@@ -19,7 +19,7 @@ pub struct Bus {
     var_ram: VariableWorkRam,
     timer: Timer,
     int: Interrupt,
-    apu: Apu,
+    pub(crate) apu: Apu,
     high_ram: HighRam,
     serial: Serial,
     pub(crate) joyp: Joypad,
@@ -88,11 +88,6 @@ impl Bus {
             let byte = self.oam_read_byte(src_addr);
             self.oam_write_byte(dest_addr, byte);
         }
-    }
-
-    #[inline]
-    pub(crate) fn apu_mut(&mut self) -> &mut Apu {
-        &mut self.apu
     }
 }
 

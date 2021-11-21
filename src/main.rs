@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use egui_wgpu_backend::RenderPass;
-use gb::emu::Emulator;
+use gb::emu;
 use gb::gui::GuiState;
 use gilrs::Gilrs;
 use rodio::{OutputStream, Sink};
@@ -63,33 +63,33 @@ fn main() {
 
     // We interrupt your boiler plate to initialize the emulator so that
     // we can copy it's empty pixel buffer to the GPU
-    let mut emu = match m.value_of("boot") {
+    let mut cpu = match m.value_of("boot") {
         Some(path) => {
             tracing::info!("User-provided boot ROM");
-            Emulator::from_boot_rom(path).expect("initialize emulator with custom boot rom")
+            emu::from_boot_rom(path).expect("initialize emulator with custom boot rom")
         }
         None => {
             tracing::info!("Built-in boot ROM");
-            Emulator::new()
+            Default::default()
         }
     };
 
     // Set up the WGPU (and then EGUI) texture we'll be working with.
     let texture_size = gb::gui::texture_size();
     let texture = gb::gui::create_texture(&device, texture_size);
-    gb::gui::write_to_texture(&queue, &texture, gb::emu::pixel_buf(&emu), texture_size);
+    gb::gui::write_to_texture(&queue, &texture, gb::emu::pixel_buf(&cpu), texture_size);
     let texture_id = gb::gui::expose_texture_to_egui(&mut render_pass, &device, &texture);
 
     // Load ROM if filepath was provided
     if let Some(path) = m.value_of("rom") {
         tracing::info!("User-provided cartridge ROM");
-        emu.read_game_rom(path).expect("read game rom from path");
+        emu::read_game_rom(&mut cpu, path).expect("read game rom from path");
     }
 
     // Load Save File if it exists
     // FIXME: Shouldn't the API be better than this?
-    emu.try_load_sav().expect("Load save if exists");
-    let rom_title = emu.title().to_string();
+    emu::load_save(&mut cpu).expect("Load save if exists");
+    let rom_title = emu::rom_title(&cpu).to_string();
 
     tracing::info!("Initialize Gamepad");
     let mut gamepad = Gilrs::new().expect("Initialize Controller Support");
@@ -106,7 +106,7 @@ fn main() {
             s
         };
 
-        emu.set_prod(prod);
+        emu::set_audio_producer(&mut cpu, prod);
 
         tracing::info!("Spawn Audio Thread");
         std::thread::spawn(move || {
@@ -130,14 +130,14 @@ fn main() {
                     *control_flow = ControlFlow::Exit;
                 }
 
-                gb::emu::run_frame(&mut emu, &mut gamepad, last_key);
+                gb::emu::run_frame(&mut cpu, &mut gamepad, last_key);
 
                 window.request_redraw();
             }
             Event::RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
 
-                let data = gb::emu::pixel_buf(&emu);
+                let data = gb::emu::pixel_buf(&cpu);
                 gb::gui::write_to_texture(&queue, &texture, data, texture_size);
 
                 let output_frame = match surface.get_current_texture() {

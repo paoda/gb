@@ -5,7 +5,7 @@ use crate::Cycle;
 use bitfield::bitfield;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Cpu {
     pub(crate) bus: Bus,
     reg: Registers,
@@ -15,29 +15,13 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    #[allow(dead_code)]
-    pub(crate) fn without_boot() -> Self {
-        Self {
-            reg: Registers {
-                a: 0x01,
-                b: 0x00,
-                c: 0x13,
-                d: 0x00,
-                e: 0xD8,
-                h: 0x01,
-                l: 0x4D,
-                sp: 0xFFFE,
-                pc: 0x0100,
-            },
-            flags: 0xb0.into(),
-            ..Default::default()
-        }
-    }
-
-    pub(crate) fn with_boot(rom: [u8; BOOT_SIZE]) -> Self {
+    pub(crate) fn new(rom: [u8; BOOT_SIZE]) -> Self {
         Self {
             bus: Bus::with_boot(rom),
-            ..Default::default()
+            reg: Default::default(),
+            flags: Default::default(),
+            ime: Default::default(),
+            state: Default::default(),
         }
     }
 
@@ -66,6 +50,12 @@ impl Cpu {
             State::Halt(kind) => Some(kind),
             _ => None,
         }
+    }
+}
+
+impl Default for Cpu {
+    fn default() -> Self {
+        Cpu::new(*include_bytes!("../bin/bootix_dmg.bin"))
     }
 }
 
