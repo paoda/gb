@@ -6,54 +6,53 @@ use crate::Cycle;
 
 const RAM_SIZE_ADDRESS: usize = 0x0149;
 const ROM_SIZE_ADDRESS: usize = 0x0148;
-const MBC_TYPE_ADDRESS: usize = 0x0147;
+const MBC_KIND_ADDRESS: usize = 0x0147;
 const ROM_TITLE_START: usize = 0x134;
 const ROM_TITLE_MAX_SIZE: usize = 16;
 const ROM_MANUFACTURER_START: usize = 0x13F;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Cartridge {
-    memory: Vec<u8>,
+    mem: Vec<u8>,
     pub(crate) title: Option<String>,
     mbc: Box<dyn MBCIo>,
 }
 
 impl Cartridge {
-    pub(crate) fn new(memory: Vec<u8>) -> Self {
-        let title_mem: &[u8; 16] = memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE)]
+    pub(crate) fn new(mem: Vec<u8>) -> Self {
+        let title_mem: &[u8; 16] = mem[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE)]
             .try_into()
             .expect("coerce slice containing cartridge title from ROM to [u8; 16]");
+
         let title = Self::detect_title(title_mem);
+        let mbc = Self::detect_mbc(&mem);
         tracing::info!("Title: {:?}", title);
 
-        Self {
-            mbc: Self::detect_mbc(&memory),
-            title,
-            memory,
-        }
+        Self { mem, title, mbc }
     }
 
     pub(crate) fn ext_ram(&self) -> Option<&[u8]> {
         self.mbc.ext_ram()
     }
 
-    pub(crate) fn write_ext_ram(&mut self, memory: Vec<u8>) {
-        self.mbc.write_ext_ram(memory)
+    pub(crate) fn write_ext_ram(&mut self, mem: Vec<u8>) {
+        self.mbc.write_ext_ram(mem)
     }
 
+    #[inline]
     pub(crate) fn tick(&mut self) {
         self.mbc.tick()
     }
 
-    fn detect_mbc(memory: &[u8]) -> Box<dyn MBCIo> {
-        let ram_size = Self::detect_ram_info(memory);
-        let rom_size = Self::detect_rom_info(memory);
-        let mbc_kind = Self::find_mbc(memory);
+    fn detect_mbc(mem: &[u8]) -> Box<dyn MBCIo> {
+        let ram_size: RamSize = mem[RAM_SIZE_ADDRESS].into();
+        let rom_size: RomSize = mem[ROM_SIZE_ADDRESS].into();
+        let mbc_kind = Self::detect_mbc_kind(mem[MBC_KIND_ADDRESS]);
         let ram_cap = ram_size.capacity();
         let rom_cap = rom_size.capacity();
 
         tracing::info!("RAM size: {} bytes", ram_cap);
-        tracing::info!("ROM size: {} bytes", rom_size.capacity());
+        tracing::info!("ROM size: {} bytes", rom_cap);
         tracing::info!("MBC kind: {:?}", mbc_kind);
 
         match mbc_kind {
@@ -88,20 +87,10 @@ impl Cartridge {
         }
     }
 
-    fn detect_ram_info(memory: &[u8]) -> RamSize {
-        let id = memory[RAM_SIZE_ADDRESS];
-        id.into()
-    }
-
-    fn detect_rom_info(memory: &[u8]) -> RomSize {
-        let id = memory[ROM_SIZE_ADDRESS];
-        id.into()
-    }
-
-    fn find_mbc(memory: &[u8]) -> MBCKind {
+    fn detect_mbc_kind(id: u8) -> MBCKind {
         use MBCKind::*;
 
-        match memory[MBC_TYPE_ADDRESS] {
+        match id {
             0x00 => None,
             0x01 | 0x02 => MBC1,
             0x03 => MBC1WithBattery,
@@ -121,7 +110,7 @@ impl BusIo for Cartridge {
         use MBCResult::*;
 
         match self.mbc.handle_read(addr) {
-            Address(addr) => self.memory[addr],
+            Address(addr) => self.mem[addr],
             Value(byte) => byte,
         }
     }
@@ -139,7 +128,7 @@ struct MBC1 {
     ram_bank: u8,
     mode: bool,
     ram_size: RamSize,
-    memory: Vec<u8>,
+    mem: Vec<u8>,
     rom_size: RomSize,
     mem_enabled: bool,
 
@@ -150,7 +139,7 @@ impl MBC1 {
     fn new(ram_size: RamSize, rom_size: RomSize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size.capacity() as usize],
+            mem: vec![0; ram_size.capacity() as usize],
             ram_size,
             rom_size,
             ram_bank: Default::default(),
@@ -163,7 +152,7 @@ impl MBC1 {
     fn with_battery(ram_size: RamSize, rom_size: RomSize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_size.capacity() as usize],
+            mem: vec![0; ram_size.capacity() as usize],
             ram_size,
             rom_size,
             ram_bank: Default::default(),
@@ -241,14 +230,14 @@ impl MBC1 {
 impl Savable for MBC1 {
     fn ext_ram(&self) -> Option<&[u8]> {
         match self.has_battery {
-            true => Some(&self.memory),
+            true => Some(&self.mem),
             false => None,
         }
     }
 
     fn write_ext_ram(&mut self, memory: Vec<u8>) {
         if self.has_battery {
-            self.memory.copy_from_slice(&memory);
+            self.mem.copy_from_slice(&memory);
         }
     }
 }
@@ -266,7 +255,7 @@ impl MBCIo for MBC1 {
                 Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
             }
             0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
-                Value(self.memory[self.ram_addr(addr)])
+                Value(self.mem[self.ram_addr(addr)])
             }
             0xA000..=0xBFFF => Value(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC1", addr),
@@ -285,7 +274,7 @@ impl MBCIo for MBC1 {
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
             0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
                 let ram_addr = self.ram_addr(addr);
-                self.memory[ram_addr] = byte;
+                self.mem[ram_addr] = byte;
             }
             0xA000..=0xBFFF => {} // Ram isn't enabled, ignored write
             _ => unreachable!("A write to {:#06X} should not be handled by MBC1", addr),
@@ -797,12 +786,6 @@ enum MBCKind {
     MBC3WithBattery,
     MBC5,
     MBC5WithBattery,
-}
-
-impl Default for MBCKind {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
