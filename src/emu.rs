@@ -16,7 +16,7 @@ use winit::event_loop::ControlFlow;
 pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_CLOCK_SPEED);
 pub const CYCLES_IN_FRAME: Cycle = 456 * 154; // 456 Cycles times 154 scanlines
 pub(crate) const SM83_CLOCK_SPEED: u64 = 0x40_0000; // Hz which is 4.194304Mhz
-const DEFAULT_TITLE: &str = "DMG-01 Emulator";
+const DEFAULT_TITLE: &str = "Game Boy Screen";
 
 pub fn run_frame(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput) -> Cycle {
     let mut elapsed = 0;

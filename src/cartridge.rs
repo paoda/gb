@@ -9,6 +9,7 @@ const ROM_SIZE_ADDRESS: usize = 0x0148;
 const MBC_TYPE_ADDRESS: usize = 0x0147;
 const ROM_TITLE_START: usize = 0x134;
 const ROM_TITLE_MAX_SIZE: usize = 16;
+const ROM_MANUFACTURER_START: usize = 0x13F;
 
 #[derive(Debug, Default)]
 pub(crate) struct Cartridge {
@@ -19,7 +20,10 @@ pub(crate) struct Cartridge {
 
 impl Cartridge {
     pub(crate) fn new(memory: Vec<u8>) -> Self {
-        let title = Self::find_title(&memory);
+        let title_mem: &[u8; 16] = memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE)]
+            .try_into()
+            .expect("coerce slice containing cartridge title from ROM to [u8; 16]");
+        let title = Self::detect_title(title_mem);
         tracing::info!("Title: {:?}", title);
 
         Self {
@@ -65,18 +69,22 @@ impl Cartridge {
         }
     }
 
-    fn find_title(memory: &[u8]) -> Option<String> {
-        let title_bytes = &memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE)];
+    fn detect_title(title_mem: &[u8; ROM_TITLE_MAX_SIZE]) -> Option<String> {
+        const ALT_TITLE_LEN: usize = ROM_MANUFACTURER_START - ROM_TITLE_START;
 
-        // ASCII Byte array purposely does not have null terminator
-        let ascii = match title_bytes.iter().position(|byte| *byte == 0x00) {
-            Some(end) => &memory[ROM_TITLE_START..(ROM_TITLE_START + end)],
-            None => &memory[ROM_TITLE_START..(ROM_TITLE_START + ROM_TITLE_MAX_SIZE - 1)],
+        // byte slice we have here is purposely not null terminated
+        let ascii = match title_mem.iter().position(|b| *b == 0x00) {
+            Some(end) => &title_mem[0..end],
+            None => &title_mem[0..ROM_TITLE_MAX_SIZE],
         };
 
         match std::str::from_utf8(ascii).ok() {
-            Some("") | None => None,
-            Some(title) => Some(String::from(title)),
+            None => match std::str::from_utf8(&title_mem[0..ALT_TITLE_LEN]).ok() {
+                Some("") | None => None,
+                Some(title) => Some(String::from(title.trim())),
+            },
+            Some("") => None,
+            Some(title) => Some(String::from(title.trim())),
         }
     }
 
@@ -911,4 +919,71 @@ impl Default for Box<dyn MBCIo> {
 trait Savable {
     fn ext_ram(&self) -> Option<&[u8]>;
     fn write_ext_ram(&mut self, memory: Vec<u8>);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cartridge;
+
+    #[test]
+    fn empty_rom_title() {
+        let title = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ];
+
+        assert_eq!(None, Cartridge::detect_title(&title));
+    }
+
+    #[test]
+    fn normal_rom_title() {
+        let title = [
+            0x50, 0x4F, 0x4B, 0x45, 0x4D, 0x4F, 0x4E, 0x20, 0x42, 0x4C, 0x55, 0x45, 0x00, 0x00,
+            0x00, 0x00,
+        ];
+
+        assert_eq!(
+            Some(String::from("POKEMON BLUE")),
+            Cartridge::detect_title(&title)
+        );
+    }
+
+    #[test]
+    fn extra_spaces_title() {
+        let title = [
+            0x54, 0x4f, 0x4b, 0x49, 0x4d, 0x45, 0x4b, 0x49, 0x20, 0x43, 0x55, 0x4c, 0x20, 0x20, 0,
+            0,
+        ];
+
+        assert_eq!(
+            Some(String::from("TOKIMEKI CUL")),
+            Cartridge::detect_title(&title)
+        )
+    }
+
+    #[test]
+    fn long_title() {
+        let title = [
+            0x54, 0x4f, 0x4b, 0x49, 0x4d, 0x45, 0x4b, 0x49, 0x20, 0x43, 0x55, 0x4c, 0x54, 0x55,
+            0x52, 0x45,
+        ];
+
+        assert_eq!(
+            Some(String::from("TOKIMEKI CULTURE")),
+            Cartridge::detect_title(&title),
+        );
+    }
+
+    #[test]
+    fn publisher_code_and_title() {
+        let title: [u8; 16] = [
+            0x47, 0x52, 0x41, 0x4E, 0x44, 0x20, 0x54, 0x48, 0x45, 0x46, 0x54, 0x41, 0x4F, 0x41,
+            0x45, 0x80,
+        ];
+
+        assert_eq!(
+            Some(String::from("GRAND THEFT")),
+            Cartridge::detect_title(&title)
+        );
+    }
 }

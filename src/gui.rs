@@ -15,6 +15,7 @@ use crate::{GB_HEIGHT, GB_WIDTH};
 
 const EGUI_DIMENSIONS: (usize, usize) = (1280, 720);
 const FILTER_MODE: FilterMode = FilterMode::Nearest;
+const WINDOW_TITLE: &str = "DMG-01 Emulator";
 
 const SCALE: f32 = 3.0;
 
@@ -57,7 +58,7 @@ pub fn build_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
         .with_decorations(true)
         .with_resizable(true)
         .with_transparent(false)
-        .with_title("DMG-01 Emulator")
+        .with_title(WINDOW_TITLE)
         .with_inner_size(PhysicalSize {
             width: EGUI_DIMENSIONS.0 as f32,
             height: EGUI_DIMENSIONS.1 as f32,
