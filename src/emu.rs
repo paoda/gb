@@ -70,6 +70,7 @@ pub fn write_save(cpu: &Cpu) {
         Some(cart) => match write_save_to_file(cart) {
             Ok(path) => tracing::info!("Wrote to save at {:?}", path),
             Err(err @ SaveError::NotApplicable) => tracing::warn!("Unable to Save: {:?}", err),
+            Err(SaveError::DiffSize) => unreachable!(),
             Err(SaveError::Io(err)) => tracing::error!("{:?}", err),
         },
         None => tracing::error!("No cartridge is currently present"),
@@ -80,7 +81,8 @@ pub fn load_save(cpu: &mut Cpu) {
     match cpu.bus.cart.as_mut() {
         Some(cart) => match read_save_from_file(cart) {
             Ok(path) => tracing::info!("Loaded save from {:?}", path),
-            Err(err @ SaveError::NotApplicable) => tracing::warn!("Unable to load save: {:?}", err),
+            Err(err @ SaveError::NotApplicable) => tracing::warn!("Unable to load save: {}", err),
+            Err(err @ SaveError::DiffSize) => tracing::error!("Unable to load save: {}", err),
             Err(SaveError::Io(err)) => match err.kind() {
                 std::io::ErrorKind::NotFound => tracing::warn!("Save not found"),
                 _ => tracing::error!("{:?}", err),
@@ -106,8 +108,8 @@ fn write_save_to_file(cart: &Cartridge) -> Result<PathBuf, SaveError> {
 }
 
 fn read_save_from_file(cart: &mut Cartridge) -> Result<PathBuf, SaveError> {
-    match cart.title.as_deref() {
-        Some(title) => {
+    match cart.title.clone().zip(cart.ext_ram_mut()) {
+        Some((title, ext_ram)) => {
             let mut save_path = data_path().unwrap_or_else(|| PathBuf::from("."));
             save_path.push(title);
             save_path.set_extension("sav");
@@ -116,10 +118,11 @@ fn read_save_from_file(cart: &mut Cartridge) -> Result<PathBuf, SaveError> {
             let mut memory = Vec::new();
             file.read_to_end(&mut memory)?;
 
-            // FIXME: We call this whether we can write to Ext RAM or not.
-            // We should add a check that ensures that by this point we know whether
-            // the cartridge has external RAM or not.
-            cart.write_ext_ram(memory);
+            if ext_ram.len() != memory.len() {
+                return Err(SaveError::DiffSize);
+            }
+
+            ext_ram.copy_from_slice(&memory);
             Ok(save_path)
         }
         None => Err(SaveError::NotApplicable),
@@ -151,4 +154,6 @@ pub enum SaveError {
     NotApplicable,
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("save file size differs from external ram")]
+    DiffSize,
 }

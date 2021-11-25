@@ -35,8 +35,8 @@ impl Cartridge {
         self.mbc.ext_ram()
     }
 
-    pub(crate) fn write_ext_ram(&mut self, mem: Vec<u8>) {
-        self.mbc.write_ext_ram(mem)
+    pub(crate) fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.mbc.ext_ram_mut()
     }
 
     #[inline]
@@ -57,14 +57,15 @@ impl Cartridge {
 
         match mbc_kind {
             MBCKind::None => Box::new(NoMBC),
-            MBCKind::MBC1 => Box::new(MBC1::new(ram_size, rom_size)),
-            MBCKind::MBC1WithBattery => Box::new(MBC1::with_battery(ram_size, rom_size)),
-            MBCKind::MBC2 => Box::new(MBC2::new(rom_cap)),
-            MBCKind::MBC2WithBattery => Box::new(MBC2::with_battery(rom_cap)),
-            MBCKind::MBC3 => Box::new(MBC3::new(ram_cap)),
-            MBCKind::MBC3WithBattery => Box::new(MBC3::with_battery(ram_cap)),
-            MBCKind::MBC5 => Box::new(MBC5::new(ram_cap, rom_cap)),
-            MBCKind::MBC5WithBattery => Box::new(MBC5::with_battery(ram_cap, rom_cap)),
+            MBCKind::MBC1(hw) => Box::new(MBC1::new(hw, ram_size, rom_size)),
+            MBCKind::MBC2(hw) => Box::new(MBC2::new(hw, rom_cap)),
+            MBCKind::MBC3(hw @ MBC3Hardware::RTC) => Box::new(MBC3::new(hw, ram_cap)),
+            MBCKind::MBC3(hw @ MBC3Hardware::RTCAndBatteryRAM) => Box::new(MBC3::new(hw, ram_cap)),
+            MBCKind::MBC5(hw @ MBC5Hardware::None) => Box::new(MBC5::new(hw, ram_cap, rom_cap)),
+            MBCKind::MBC5(hw @ MBC5Hardware::BatteryRAM) => {
+                Box::new(MBC5::new(hw, ram_cap, rom_cap))
+            }
+            kind => todo!("ROMS with {:?} are currently unsupported", kind),
         }
     }
 
@@ -92,15 +93,25 @@ impl Cartridge {
 
         match id {
             0x00 => None,
-            0x01 | 0x02 => MBC1,
-            0x03 => MBC1WithBattery,
-            0x05 => MBC2,
-            0x06 => MBC2WithBattery,
-            0x19 | 0x1A => MBC5,
-            0x1B => MBC5WithBattery,
-            0x13 => MBC3WithBattery,
-            0x11 | 0x12 => MBC3,
-            id => unimplemented!("id {:#04X} is an unsupported MBC", id),
+            0x01 => MBC1(MBC1Hardware::None),
+            0x02 => MBC1(MBC1Hardware::RAM),
+            0x03 => MBC1(MBC1Hardware::BatteryRAM),
+            0x05 => MBC2(MBC2Hardware::None),
+            0x06 => MBC2(MBC2Hardware::BatteryRAM),
+            0x08 | 0x09 => unimplemented!("NoMBC + RAM and NoMBC + Battery unsupported"),
+            0x0B | 0x0C | 0x0D => unimplemented!("MM01 unsupported"),
+            0x0F => MBC3(MBC3Hardware::RTC),
+            0x10 => MBC3(MBC3Hardware::RTCAndBatteryRAM),
+            0x11 => MBC3(MBC3Hardware::None),
+            0x12 => MBC3(MBC3Hardware::RAM),
+            0x13 => MBC3(MBC3Hardware::BatteryRAM),
+            0x19 => MBC5(MBC5Hardware::None),
+            0x1A => MBC5(MBC5Hardware::RAM),
+            0x1B => MBC5(MBC5Hardware::BatteryRAM),
+            0x1C => MBC5(MBC5Hardware::Rumble),
+            0x1D => MBC5(MBC5Hardware::RumbleRAM),
+            0x1E => MBC5(MBC5Hardware::RumbleBatteryRAM),
+            id => unimplemented!("MBC with code {:#04X} is unsupported", id),
         }
     }
 }
@@ -110,8 +121,8 @@ impl BusIo for Cartridge {
         use MBCResult::*;
 
         match self.mbc.handle_read(addr) {
-            Address(addr) => self.mem[addr],
-            Value(byte) => byte,
+            Addr(addr) => self.mem[addr],
+            Byte(byte) => byte,
         }
     }
 
@@ -132,11 +143,11 @@ struct MBC1 {
     rom_size: RomSize,
     mem_enabled: bool,
 
-    has_battery: bool,
+    hw: MBC1Hardware,
 }
 
 impl MBC1 {
-    fn new(ram_size: RamSize, rom_size: RomSize) -> Self {
+    fn new(hw: MBC1Hardware, ram_size: RamSize, rom_size: RomSize) -> Self {
         Self {
             rom_bank: 0x01,
             mem: vec![0; ram_size.capacity() as usize],
@@ -145,20 +156,7 @@ impl MBC1 {
             ram_bank: Default::default(),
             mode: Default::default(),
             mem_enabled: Default::default(),
-            has_battery: Default::default(),
-        }
-    }
-
-    fn with_battery(ram_size: RamSize, rom_size: RomSize) -> Self {
-        Self {
-            rom_bank: 0x01,
-            mem: vec![0; ram_size.capacity() as usize],
-            ram_size,
-            rom_size,
-            ram_bank: Default::default(),
-            mode: Default::default(),
-            mem_enabled: Default::default(),
-            has_battery: true,
+            hw,
         }
     }
 
@@ -229,15 +227,16 @@ impl MBC1 {
 
 impl Savable for MBC1 {
     fn ext_ram(&self) -> Option<&[u8]> {
-        match self.has_battery {
-            true => Some(&self.mem),
-            false => None,
+        match self.hw {
+            MBC1Hardware::BatteryRAM => Some(&self.mem),
+            _ => None,
         }
     }
 
-    fn write_ext_ram(&mut self, memory: Vec<u8>) {
-        if self.has_battery {
-            self.mem.copy_from_slice(&memory);
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        match self.hw {
+            MBC1Hardware::BatteryRAM => Some(&mut self.mem),
+            _ => None,
         }
     }
 }
@@ -248,16 +247,12 @@ impl MBCIo for MBC1 {
 
         match addr {
             0x0000..=0x3FFF if self.mode => {
-                Address(0x4000 * self.zero_bank() as usize + addr as usize)
+                Addr(0x4000 * self.zero_bank() as usize + addr as usize)
             }
-            0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => {
-                Address(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000))
-            }
-            0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
-                Value(self.mem[self.ram_addr(addr)])
-            }
-            0xA000..=0xBFFF => Value(0xFF),
+            0x0000..=0x3FFF => Addr(addr as usize),
+            0x4000..=0x7FFF => Addr(0x4000 * self.high_bank() as usize + (addr as usize - 0x4000)),
+            0xA000..=0xBFFF if self.mem_enabled => Byte(self.mem[self.ram_addr(addr)]),
+            0xA000..=0xBFFF => Byte(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC1", addr),
         }
     }
@@ -272,7 +267,7 @@ impl MBCIo for MBC1 {
             }
             0x4000..=0x5FFF => self.ram_bank = byte & 0x03,
             0x6000..=0x7FFF => self.mode = (byte & 0x01) == 0x01,
-            0xA000..=0xBFFF if self.mem_enabled && self.ram_size != RamSize::None => {
+            0xA000..=0xBFFF if self.mem_enabled => {
                 let ram_addr = self.ram_addr(addr);
                 self.mem[ram_addr] = byte;
             }
@@ -407,34 +402,20 @@ struct MBC3 {
 
     devs_enabled: bool,
     mapped: Option<MBC3Device>,
-    memory: Vec<u8>,
+    mem: Vec<u8>,
 
     // RTC Data Latch Previous Write
     prev_latch_write: Option<u8>,
 
-    has_battery: bool,
+    hw: MBC3Hardware,
     rtc: RtClock,
     rtc_latch: Option<RtClock>,
 }
 
 impl MBC3 {
-    fn new(ram_cap: usize) -> Self {
+    fn new(hw: MBC3Hardware, ram_cap: usize) -> Self {
         Self {
-            memory: vec![0; ram_cap],
-            rom_bank: Default::default(),
-            ram_bank: Default::default(),
-            devs_enabled: Default::default(),
-            mapped: Default::default(),
-            prev_latch_write: Default::default(),
-            has_battery: Default::default(),
-            rtc: Default::default(),
-            rtc_latch: Default::default(),
-        }
-    }
-
-    fn with_battery(ram_cap: usize) -> Self {
-        Self {
-            memory: vec![0; ram_cap],
+            mem: vec![0; ram_cap],
             rom_bank: Default::default(),
             ram_bank: Default::default(),
             devs_enabled: Default::default(),
@@ -442,22 +423,23 @@ impl MBC3 {
             prev_latch_write: Default::default(),
             rtc: Default::default(),
             rtc_latch: Default::default(),
-            has_battery: true,
+            hw,
         }
     }
 }
 
 impl Savable for MBC3 {
     fn ext_ram(&self) -> Option<&[u8]> {
-        match self.has_battery {
-            true => Some(&self.memory),
-            false => None,
+        match self.hw {
+            MBC3Hardware::BatteryRAM | MBC3Hardware::RTCAndBatteryRAM => Some(&self.mem),
+            _ => None,
         }
     }
 
-    fn write_ext_ram(&mut self, memory: Vec<u8>) {
-        if self.has_battery {
-            self.memory.copy_from_slice(&memory);
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        match self.hw {
+            MBC3Hardware::BatteryRAM | MBC3Hardware::RTCAndBatteryRAM => Some(&mut self.mem),
+            _ => None,
         }
     }
 }
@@ -468,13 +450,13 @@ impl MBCIo for MBC3 {
         use RtcRegister::*;
 
         let res = match addr {
-            0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => Address(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
+            0x0000..=0x3FFF => Addr(addr as usize),
+            0x4000..=0x7FFF => Addr(0x4000 * self.rom_bank as usize + (addr as usize - 0x4000)),
             0xA000..=0xBFFF => match self.mapped {
                 Some(MBC3Device::ExternalRam) if self.devs_enabled => {
-                    Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
+                    Byte(self.mem[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
                 }
-                Some(MBC3Device::Clock(reg)) if self.devs_enabled => Value(
+                Some(MBC3Device::Clock(reg)) if self.devs_enabled => Byte(
                     self.rtc_latch
                         .as_ref()
                         .map(|rtc| match reg {
@@ -486,7 +468,7 @@ impl MBCIo for MBC3 {
                         })
                         .unwrap_or(0xFF),
                 ),
-                _ => Value(0xFF),
+                _ => Byte(0xFF),
             },
             _ => unreachable!("A read from {:#06X} should not be handled by MBC3", addr),
         };
@@ -528,7 +510,7 @@ impl MBCIo for MBC3 {
             }
             0xA000..=0xBFFF => match self.mapped {
                 Some(MBC3Device::ExternalRam) if self.devs_enabled => {
-                    self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
+                    self.mem[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte
                 }
                 Some(MBC3Device::Clock(rtc_reg)) if self.devs_enabled => match rtc_reg {
                     Second => {
@@ -550,7 +532,9 @@ impl MBCIo for MBC3 {
 
 impl RtClockTick for MBC3 {
     fn tick(&mut self) {
-        self.rtc.tick();
+        if let MBC3Hardware::RTCAndBatteryRAM | MBC3Hardware::RTC = self.hw {
+            self.rtc.tick();
+        }
     }
 }
 
@@ -562,32 +546,21 @@ struct MBC5 {
     ram_bank: u8,
 
     rom_cap: usize,
-    memory: Vec<u8>,
+    mem: Vec<u8>,
     mem_enabled: bool,
 
-    has_battery: bool,
+    hw: MBC5Hardware,
 }
 
 impl MBC5 {
-    fn new(ram_cap: usize, rom_cap: usize) -> Self {
+    fn new(hw: MBC5Hardware, ram_cap: usize, rom_cap: usize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: vec![0; ram_cap],
+            mem: vec![0; ram_cap],
             rom_cap,
             ram_bank: Default::default(),
             mem_enabled: Default::default(),
-            has_battery: Default::default(),
-        }
-    }
-
-    fn with_battery(ram_cap: usize, rom_cap: usize) -> Self {
-        Self {
-            rom_bank: 0x01,
-            memory: vec![0; ram_cap],
-            rom_cap,
-            ram_bank: Default::default(),
-            mem_enabled: Default::default(),
-            has_battery: true,
+            hw,
         }
     }
 
@@ -598,15 +571,16 @@ impl MBC5 {
 
 impl Savable for MBC5 {
     fn ext_ram(&self) -> Option<&[u8]> {
-        match self.has_battery {
-            true => Some(&self.memory),
-            false => None,
+        match self.hw {
+            MBC5Hardware::RumbleBatteryRAM | MBC5Hardware::BatteryRAM => Some(&self.mem),
+            _ => None,
         }
     }
 
-    fn write_ext_ram(&mut self, memory: Vec<u8>) {
-        if self.has_battery {
-            self.memory.copy_from_slice(&memory);
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        match self.hw {
+            MBC5Hardware::RumbleBatteryRAM | MBC5Hardware::BatteryRAM => Some(&mut self.mem),
+            _ => None,
         }
     }
 }
@@ -616,12 +590,12 @@ impl MBCIo for MBC5 {
         use MBCResult::*;
 
         match addr {
-            0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => Address(self.bank_addr(addr)),
+            0x0000..=0x3FFF => Addr(addr as usize),
+            0x4000..=0x7FFF => Addr(self.bank_addr(addr)),
             0xA000..=0xBFFF if self.mem_enabled => {
-                Value(self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
+                Byte(self.mem[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)])
             }
-            0xA000..=0xBFFF => Value(0xFF),
+            0xA000..=0xBFFF => Byte(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC5", addr),
         }
     }
@@ -633,7 +607,7 @@ impl MBCIo for MBC5 {
             0x3000..=0x3FFF => self.rom_bank = (self.rom_bank & 0x00FF) | (byte as u16 & 0x01) << 8,
             0x4000..=0x5FFF => self.ram_bank = byte & 0x0F,
             0xA000..=0xBFFF if self.mem_enabled => {
-                self.memory[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte;
+                self.mem[0x2000 * self.ram_bank as usize + (addr as usize - 0xA000)] = byte;
             }
             0xA000..=0xBFFF => {}
             _ => unreachable!("A write to {:#06X} should not be handled by MBC5", addr),
@@ -649,33 +623,23 @@ impl RtClockTick for MBC5 {
 struct MBC2 {
     /// 4-bit number
     rom_bank: u8,
-    memory: Box<[u8; Self::RAM_SIZE]>,
-    mem_enabled: bool,
+    mem: Box<[u8; Self::RAM_SIZE]>,
 
+    mem_enabled: bool,
     rom_cap: usize,
-    has_battery: bool,
+    hw: MBC2Hardware,
 }
 
 impl MBC2 {
     const RAM_SIZE: usize = 0x0200;
 
-    fn new(rom_cap: usize) -> Self {
+    fn new(hw: MBC2Hardware, rom_cap: usize) -> Self {
         Self {
             rom_bank: 0x01,
-            memory: Box::new([0; Self::RAM_SIZE]),
+            mem: Box::new([0; Self::RAM_SIZE]),
             rom_cap,
             mem_enabled: Default::default(),
-            has_battery: Default::default(),
-        }
-    }
-
-    fn with_battery(rom_cap: usize) -> Self {
-        Self {
-            rom_bank: 0x01,
-            memory: Box::new([0; Self::RAM_SIZE]),
-            rom_cap,
-            mem_enabled: Default::default(),
-            has_battery: true,
+            hw,
         }
     }
 
@@ -686,15 +650,16 @@ impl MBC2 {
 
 impl Savable for MBC2 {
     fn ext_ram(&self) -> Option<&[u8]> {
-        match self.has_battery {
-            true => Some(self.memory.as_ref()),
-            false => None,
+        match self.hw {
+            MBC2Hardware::BatteryRAM => Some(self.mem.as_ref()),
+            MBC2Hardware::None => None,
         }
     }
 
-    fn write_ext_ram(&mut self, memory: Vec<u8>) {
-        if self.has_battery {
-            self.memory.copy_from_slice(&memory);
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        match self.hw {
+            MBC2Hardware::BatteryRAM => Some(self.mem.as_mut()),
+            MBC2Hardware::None => None,
         }
     }
 }
@@ -704,13 +669,13 @@ impl MBCIo for MBC2 {
         use MBCResult::*;
 
         match addr {
-            0x0000..=0x3FFF => Address(addr as usize),
-            0x4000..=0x7FFF => Address(self.rom_addr(addr)),
+            0x0000..=0x3FFF => Addr(addr as usize),
+            0x4000..=0x7FFF => Addr(self.rom_addr(addr)),
             0xA000..=0xBFFF if self.mem_enabled => {
                 let mbc2_addr = addr as usize & (Self::RAM_SIZE - 1);
-                Value(self.memory[mbc2_addr] | 0xF0)
+                Byte(self.mem[mbc2_addr] | 0xF0)
             }
-            0xA000..=0xBFFF => Value(0xFF),
+            0xA000..=0xBFFF => Byte(0xFF),
             _ => unreachable!("A read from {:#06X} should not be handled by MBC2", addr),
         }
     }
@@ -725,7 +690,7 @@ impl MBCIo for MBC2 {
             0x0000..=0x3FFF => self.mem_enabled = nybble == 0x0A,
             0xA000..=0xBFFF if self.mem_enabled => {
                 let mbc2_addr = addr as usize & (Self::RAM_SIZE - 1);
-                self.memory[mbc2_addr] = nybble;
+                self.mem[mbc2_addr] = nybble;
             }
             0x4000..=0x7FFF | 0xA000..=0xBFFF => {}
             _ => unreachable!("A write to {:#06X} should not be handled by MBC2", addr),
@@ -745,14 +710,14 @@ impl Savable for NoMBC {
         None
     }
 
-    fn write_ext_ram(&mut self, _memory: Vec<u8>) {
-        // Nothing Happens Here
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]> {
+        None
     }
 }
 
 impl MBCIo for NoMBC {
     fn handle_read(&self, addr: u16) -> MBCResult {
-        MBCResult::Address(addr as usize)
+        MBCResult::Addr(addr as usize)
     }
 
     fn handle_write(&mut self, _: u16, byte: u8) {
@@ -771,21 +736,49 @@ trait MBCIo: Savable + RtClockTick {
 
 #[derive(Debug, Clone, Copy)]
 enum MBCResult {
-    Address(usize),
-    Value(u8),
+    Addr(usize),
+    Byte(u8),
 }
 
 #[derive(Debug, Clone, Copy)]
 enum MBCKind {
     None,
-    MBC1,
-    MBC1WithBattery,
-    MBC2,
-    MBC2WithBattery,
-    MBC3,
-    MBC3WithBattery,
-    MBC5,
-    MBC5WithBattery,
+    MBC1(MBC1Hardware),
+    MBC2(MBC2Hardware),
+    MBC3(MBC3Hardware),
+    MBC5(MBC5Hardware),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MBC1Hardware {
+    None,
+    RAM,
+    BatteryRAM,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MBC2Hardware {
+    None,
+    BatteryRAM,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MBC3Hardware {
+    RTC,
+    RTCAndBatteryRAM,
+    None,
+    RAM,
+    BatteryRAM,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MBC5Hardware {
+    None,
+    RAM,
+    BatteryRAM,
+    Rumble,
+    RumbleRAM,
+    RumbleBatteryRAM,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -810,12 +803,6 @@ impl RamSize {
             Sixteen => 0x20000,
             Eight => 0x10000,
         }
-    }
-}
-
-impl Default for RamSize {
-    fn default() -> Self {
-        Self::None
     }
 }
 
@@ -893,15 +880,9 @@ impl std::fmt::Debug for Box<dyn MBCIo> {
     }
 }
 
-impl Default for Box<dyn MBCIo> {
-    fn default() -> Self {
-        Box::new(NoMBC)
-    }
-}
-
 trait Savable {
     fn ext_ram(&self) -> Option<&[u8]>;
-    fn write_ext_ram(&mut self, memory: Vec<u8>);
+    fn ext_ram_mut(&mut self) -> Option<&mut [u8]>;
 }
 
 #[cfg(test)]
