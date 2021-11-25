@@ -1,9 +1,18 @@
 use bitfield::bitfield;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Interrupt {
     pub(crate) flag: InterruptFlag,
     pub(crate) enable: InterruptEnable,
+}
+
+impl Default for Interrupt {
+    fn default() -> Self {
+        Self {
+            flag: InterruptFlag(0),
+            enable: InterruptEnable(0),
+        }
+    }
 }
 
 bitfield! {
@@ -20,12 +29,6 @@ impl Copy for InterruptEnable {}
 impl Clone for InterruptEnable {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for InterruptEnable {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
@@ -55,12 +58,6 @@ impl Copy for InterruptFlag {}
 impl Clone for InterruptFlag {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for InterruptFlag {
-    fn default() -> Self {
-        Self(0)
     }
 }
 

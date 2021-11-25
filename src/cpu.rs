@@ -19,9 +19,9 @@ impl Cpu {
         Self {
             bus: Bus::with_boot(rom),
             reg: Default::default(),
-            flags: Default::default(),
-            ime: Default::default(),
-            state: Default::default(),
+            flags: Flags(0),
+            ime: ImeState::Disabled,
+            state: State::Execute,
         }
     }
 
@@ -238,12 +238,6 @@ enum State {
     // Stop,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self::Execute
-    }
-}
-
 impl Cpu {
     pub(crate) fn set_register(&mut self, register: Register, value: u8) {
         use Register::*;
@@ -437,12 +431,6 @@ impl Clone for Flags {
     }
 }
 
-impl Default for Flags {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         if self.z() {
@@ -496,10 +484,4 @@ pub(crate) enum ImeState {
     EiExecuted,
     Pending,
     Enabled,
-}
-
-impl Default for ImeState {
-    fn default() -> Self {
-        Self::Disabled
-    }
 }

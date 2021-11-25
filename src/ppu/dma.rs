@@ -1,11 +1,21 @@
 use crate::Cycle;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct DirectMemoryAccess {
     pub(crate) state: DmaState,
     cycle: Cycle,
     /// 0xFF46 | DMA - Transfer and Start Address
     pub(crate) start: DmaAddress,
+}
+
+impl Default for DirectMemoryAccess {
+    fn default() -> Self {
+        Self {
+            state: DmaState::Disabled,
+            cycle: Default::default(),
+            start: Default::default(),
+        }
+    }
 }
 
 impl DirectMemoryAccess {
@@ -67,12 +77,6 @@ pub(crate) enum DmaState {
     Disabled,
     Pending,
     Transferring,
-}
-
-impl Default for DmaState {
-    fn default() -> Self {
-        Self::Disabled
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]

@@ -211,8 +211,8 @@ impl Apu {
         self.ch4.poly = Default::default();
         self.ch4.freq = Default::default();
 
-        self.ctrl.channel = Default::default();
-        self.ctrl.out = Default::default();
+        self.ctrl.channel = ChannelControl(0);
+        self.ctrl.out = SoundOutput(0);
 
         // Disable the Channels
         self.ch1.enabled = Default::default();
@@ -344,7 +344,7 @@ impl Apu {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct SoundControl {
     /// 0xFF24 | NR50 - Channel Control
     channel: ChannelControl,
@@ -352,6 +352,16 @@ pub(crate) struct SoundControl {
     out: SoundOutput,
 
     enabled: bool,
+}
+
+impl Default for SoundControl {
+    fn default() -> Self {
+        Self {
+            channel: ChannelControl(0),
+            out: SoundOutput(0),
+            enabled: Default::default(),
+        }
+    }
 }
 
 impl SoundControl {

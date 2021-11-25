@@ -297,7 +297,7 @@ struct RtClock {
 
 impl RtClock {
     fn inc_day(&mut self) {
-        // TODO: Figure out order of operations, the brackets are a bit too defenseive here
+        // TODO: Figure out order of operations, the brackets are a bit too defensive here
         let days: u16 = (((self.day_high.ninth() as u16) << 8) | self.day_low as u16) + 1;
 
         if days > 0x1FF {

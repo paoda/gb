@@ -106,7 +106,7 @@ impl Timer {
 impl Default for Timer {
     fn default() -> Self {
         Self {
-            ctrl: Default::default(),
+            ctrl: TimerControl(0),
             counter: 0,
             modulo: 0,
             divider: 0,
@@ -154,12 +154,6 @@ impl Copy for TimerControl {}
 impl Clone for TimerControl {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for TimerControl {
-    fn default() -> Self {
-        Self(0)
     }
 }
 

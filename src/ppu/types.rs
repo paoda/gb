@@ -29,12 +29,6 @@ impl Clone for LCDStatus {
     }
 }
 
-impl Default for LCDStatus {
-    fn default() -> Self {
-        Self(0x80) // bit 7 is always 1
-    }
-}
-
 impl From<LCDStatus> for u8 {
     fn from(status: LCDStatus) -> Self {
         status.0
@@ -67,12 +61,6 @@ impl From<PpuMode> for u8 {
     }
 }
 
-impl Default for PpuMode {
-    fn default() -> Self {
-        Self::HBlank
-    }
-}
-
 bitfield! {
     pub struct LCDControl(u8);
     impl Debug;
@@ -90,12 +78,6 @@ impl Copy for LCDControl {}
 impl Clone for LCDControl {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for LCDControl {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
@@ -142,12 +124,6 @@ impl From<TileMapAddress> for u8 {
     }
 }
 
-impl Default for TileMapAddress {
-    fn default() -> Self {
-        Self::X9800
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum TileDataAddress {
     X8800 = 0,
@@ -167,12 +143,6 @@ impl From<u8> for TileDataAddress {
 impl From<TileDataAddress> for u8 {
     fn from(reg: TileDataAddress) -> Self {
         reg as Self
-    }
-}
-
-impl Default for TileDataAddress {
-    fn default() -> Self {
-        Self::X8800
     }
 }
 
@@ -209,12 +179,6 @@ impl From<ObjectSize> for u8 {
     }
 }
 
-impl Default for ObjectSize {
-    fn default() -> Self {
-        Self::Eight
-    }
-}
-
 bitfield! {
     pub struct BackgroundPalette(u8);
     impl Debug;
@@ -240,12 +204,6 @@ impl Copy for BackgroundPalette {}
 impl Clone for BackgroundPalette {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for BackgroundPalette {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
@@ -285,12 +243,6 @@ impl Copy for ObjectPalette {}
 impl Clone for ObjectPalette {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for ObjectPalette {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
@@ -361,22 +313,10 @@ impl From<ObjectFlags> for u8 {
     }
 }
 
-impl Default for ObjectFlags {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum ObjectPaletteKind {
     Zero = 0,
     One = 1,
-}
-
-impl Default for ObjectPaletteKind {
-    fn default() -> Self {
-        Self::Zero
-    }
 }
 
 impl From<u8> for ObjectPaletteKind {
@@ -417,12 +357,6 @@ impl From<RenderPriority> for u8 {
     }
 }
 
-impl Default for RenderPriority {
-    fn default() -> Self {
-        Self::Object
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum GrayShade {
     White = 0,
@@ -439,12 +373,6 @@ impl GrayShade {
             GrayShade::DarkGray => DARK_GRAY,
             GrayShade::Black => BLACK,
         }
-    }
-}
-
-impl Default for GrayShade {
-    fn default() -> Self {
-        Self::White
     }
 }
 

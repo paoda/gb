@@ -1,11 +1,20 @@
 use bitfield::bitfield;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Serial {
     /// 0xFF01 | SB - Serial Transfer Data
     pub(crate) next: u8,
     /// 0xFF02 | SC - Serial Transfer Control
     pub(crate) ctrl: SerialControl,
+}
+
+impl Default for Serial {
+    fn default() -> Self {
+        Self {
+            next: Default::default(),
+            ctrl: SerialControl(0),
+        }
+    }
 }
 
 bitfield! {
@@ -20,12 +29,6 @@ impl Copy for SerialControl {}
 impl Clone for SerialControl {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for SerialControl {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
@@ -47,12 +50,6 @@ enum ShiftClock {
     Internal = 1,
 }
 
-impl Default for ShiftClock {
-    fn default() -> Self {
-        Self::External
-    }
-}
-
 impl From<u8> for ShiftClock {
     fn from(byte: u8) -> Self {
         match byte & 0b01 {
@@ -67,12 +64,6 @@ impl From<u8> for ShiftClock {
 enum ClockSpeed {
     Normal = 0,
     Fast = 1,
-}
-
-impl Default for ClockSpeed {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl From<u8> for ClockSpeed {

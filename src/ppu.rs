@@ -470,10 +470,10 @@ impl Default for Ppu {
             dot: Default::default(),
             frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
             int: Default::default(),
-            ctrl: Default::default(),
+            ctrl: LCDControl(0),
             monochrome: Default::default(),
             pos: Default::default(),
-            stat: Default::default(),
+            stat: LCDStatus(0x80), // bit 7 is always 1
             oam: Default::default(),
             scan_dot: Default::default(),
             fetch: Default::default(),
@@ -528,7 +528,7 @@ pub(crate) struct ScreenPosition {
     pub(crate) window_x: u8,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Monochrome {
     /// 0xFF47 | BGP - Background Palette Data
     pub(crate) bg_palette: BackgroundPalette,
@@ -536,6 +536,16 @@ pub(crate) struct Monochrome {
     pub(crate) obj_palette_0: ObjectPalette,
     /// 0xFF49 | OBP1 - Object Palette 1 Data
     pub(crate) obj_palette_1: ObjectPalette,
+}
+
+impl Default for Monochrome {
+    fn default() -> Self {
+        Self {
+            bg_palette: BackgroundPalette(0),
+            obj_palette_0: ObjectPalette(0),
+            obj_palette_1: ObjectPalette(0),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -575,7 +585,7 @@ impl Default for ObjectAttrTable {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 struct ObjectAttr {
     y: u8,
     x: u8,
@@ -836,7 +846,7 @@ struct BgPixelProperty {
     shade_id: u8,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ObjPixelProperty {
     shade_id: u8,
     palette_kind: ObjectPaletteKind,

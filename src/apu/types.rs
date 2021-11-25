@@ -416,12 +416,6 @@ pub(super) mod common {
         }
     }
 
-    impl Default for WavePattern {
-        fn default() -> Self {
-            Self::OneEighth // Rationale: OneEighth is 0x00
-        }
-    }
-
     impl From<WavePattern> for u8 {
         fn from(pattern: WavePattern) -> Self {
             pattern as Self
@@ -479,12 +473,6 @@ impl Clone for SoundOutput {
     }
 }
 
-impl Default for SoundOutput {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
 impl From<u8> for SoundOutput {
     fn from(byte: u8) -> Self {
         Self(byte)
@@ -520,12 +508,6 @@ impl Copy for ChannelControl {}
 impl Clone for ChannelControl {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl Default for ChannelControl {
-    fn default() -> Self {
-        Self(0)
     }
 }
 
