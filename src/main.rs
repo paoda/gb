@@ -8,7 +8,7 @@ use gilrs::Gilrs;
 use rodio::{OutputStream, Sink};
 use tracing_subscriber::EnvFilter;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::EventLoop;
 
 const AUDIO_ENABLED: bool = true;
 
@@ -86,9 +86,8 @@ fn main() {
         emu::read_game_rom(&mut cpu, path).expect("read game rom from path");
     }
 
-    // Load Save File if it exists
-    // FIXME: Shouldn't the API be better than this?
-    emu::load_save(&mut cpu).expect("Load save if exists");
+    emu::load_save(&mut cpu);
+
     let rom_title = emu::rom_title(&cpu).to_string();
 
     tracing::info!("Initialize Gamepad");
@@ -106,7 +105,7 @@ fn main() {
             s
         };
 
-        emu::set_audio_producer(&mut cpu, prod);
+        emu::set_audio_prod(&mut cpu, prod);
 
         tracing::info!("Spawn Audio Thread");
         std::thread::spawn(move || {
@@ -127,7 +126,7 @@ fn main() {
         match event {
             Event::MainEventsCleared => {
                 if app.quit {
-                    *control_flow = ControlFlow::Exit;
+                    emu::save_and_exit(&cpu, control_flow);
                 }
 
                 gb::emu::run_frame(&mut cpu, &mut gamepad, last_key);
@@ -187,7 +186,7 @@ fn main() {
                     surface.configure(&device, &config);
                 }
                 WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
+                    emu::save_and_exit(&cpu, control_flow);
                 }
                 WindowEvent::KeyboardInput { input, .. } => last_key = input,
                 _ => {}

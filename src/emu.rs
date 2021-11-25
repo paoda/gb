@@ -1,5 +1,6 @@
 use crate::apu::gen::SampleProducer;
 use crate::bus::BOOT_SIZE;
+use crate::cartridge::Cartridge;
 use crate::cpu::Cpu;
 use crate::{Cycle, GB_HEIGHT, GB_WIDTH};
 use clap::crate_name;
@@ -8,7 +9,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use thiserror::Error;
 use winit::event::KeyboardInput;
+use winit::event_loop::ControlFlow;
 
 pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_CLOCK_SPEED);
 pub const CYCLES_IN_FRAME: Cycle = 456 * 154; // 456 Cycles times 154 scanlines
@@ -30,6 +33,12 @@ pub fn run_frame(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput) -> Cycl
     elapsed
 }
 
+pub fn save_and_exit(cpu: &Cpu, control_flow: &mut ControlFlow) {
+    write_save(cpu);
+    *control_flow = ControlFlow::Exit;
+}
+
+#[inline]
 pub fn pixel_buf(cpu: &Cpu) -> &[u8; GB_HEIGHT * GB_WIDTH * 4] {
     cpu.bus.ppu.frame_buf.as_ref()
 }
@@ -39,50 +48,82 @@ pub fn from_boot_rom<P: AsRef<Path>>(path: P) -> std::io::Result<Cpu> {
 }
 
 pub fn read_game_rom<P: AsRef<Path>>(cpu: &mut Cpu, path: P) -> std::io::Result<()> {
-    Ok(cpu.bus.load_cart(std::fs::read(path.as_ref())?))
+    cpu.bus.cart = Some(Cartridge::new(std::fs::read(path.as_ref())?));
+    Ok(())
 }
 
-pub fn set_audio_producer(cpu: &mut Cpu, producer: SampleProducer<f32>) {
-    cpu.bus.apu.attach_producer(producer);
+pub fn set_audio_prod(cpu: &mut Cpu, prod: SampleProducer<f32>) {
+    cpu.bus.apu.prod = Some(prod);
 }
 
 pub fn rom_title(cpu: &Cpu) -> &str {
-    cpu.bus.cart_title().unwrap_or(DEFAULT_TITLE)
+    cpu.bus
+        .cart
+        .as_ref()
+        .map(|c| c.title.as_deref())
+        .flatten()
+        .unwrap_or(DEFAULT_TITLE)
 }
 
-pub fn write_save(cpu: &Cpu) -> std::io::Result<()> {
-    if let Some(ext_ram) = cpu.bus.cart.as_ref().map(|c| c.ext_ram()).flatten() {
-        if let Some(title) = cpu.bus.cart_title() {
+pub fn write_save(cpu: &Cpu) {
+    match cpu.bus.cart.as_ref() {
+        Some(cart) => match write_save_to_file(cart) {
+            Ok(path) => tracing::info!("Wrote to save at {:?}", path),
+            Err(err @ SaveError::NotApplicable) => tracing::warn!("Unable to Save: {:?}", err),
+            Err(SaveError::Io(err)) => tracing::error!("{:?}", err),
+        },
+        None => tracing::error!("No cartridge is currently present"),
+    }
+}
+
+pub fn load_save(cpu: &mut Cpu) {
+    match cpu.bus.cart.as_mut() {
+        Some(cart) => match read_save_from_file(cart) {
+            Ok(path) => tracing::info!("Loaded save from {:?}", path),
+            Err(err @ SaveError::NotApplicable) => tracing::warn!("Unable to load save: {:?}", err),
+            Err(SaveError::Io(err)) => match err.kind() {
+                std::io::ErrorKind::NotFound => tracing::warn!("Save not found"),
+                _ => tracing::error!("{:?}", err),
+            },
+        },
+        None => tracing::error!("No cartridge is currently present"),
+    }
+}
+
+fn write_save_to_file(cart: &Cartridge) -> Result<PathBuf, SaveError> {
+    match cart.title.as_ref().zip(cart.ext_ram()) {
+        Some((title, ram)) => {
             let mut save_path = data_path().unwrap_or_else(|| PathBuf::from("."));
             save_path.push(title);
             save_path.set_extension("sav");
 
-            let mut file = File::create(save_path)?;
-            file.write_all(ext_ram)?;
+            let mut file = File::create(&save_path)?;
+            file.write_all(ram)?;
+            Ok(save_path)
         }
+        None => Err(SaveError::NotApplicable),
     }
-
-    Ok(())
 }
 
-pub fn load_save(cpu: &mut Cpu) -> std::io::Result<()> {
-    if let Some(cart) = &mut cpu.bus.cart {
-        if let Some(title) = cart.title() {
+fn read_save_from_file(cart: &mut Cartridge) -> Result<PathBuf, SaveError> {
+    match cart.title.as_deref() {
+        Some(title) => {
             let mut save_path = data_path().unwrap_or_else(|| PathBuf::from("."));
             save_path.push(title);
             save_path.set_extension("sav");
 
-            if let Ok(mut file) = File::open(&save_path) {
-                tracing::info!("Load {:?}", save_path);
+            let mut file = File::open(&save_path)?;
+            let mut memory = Vec::new();
+            file.read_to_end(&mut memory)?;
 
-                let mut memory = Vec::new();
-                file.read_to_end(&mut memory)?;
-                cart.write_ext_ram(memory);
-            }
+            // FIXME: We call this whether we can write to Ext RAM or not.
+            // We should add a check that ensures that by this point we know whether
+            // the cartridge has external RAM or not.
+            cart.write_ext_ram(memory);
+            Ok(save_path)
         }
+        None => Err(SaveError::NotApplicable),
     }
-
-    Ok(())
 }
 
 fn read_boot<P: AsRef<Path>>(path: P) -> std::io::Result<[u8; BOOT_SIZE]> {
@@ -102,4 +143,12 @@ fn data_path() -> Option<PathBuf> {
         }
         None => None,
     }
+}
+
+#[derive(Debug, Error)]
+pub enum SaveError {
+    #[error("cartridge lacks title and/or external ram")]
+    NotApplicable,
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }

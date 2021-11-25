@@ -810,6 +810,7 @@ dependencies = [
  "pollster",
  "rodio",
  "rtrb",
+ "thiserror",
  "tracing",
  "tracing-subscriber",
  "wgpu",

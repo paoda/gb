@@ -30,7 +30,7 @@ pub struct Apu {
     fs: FrameSequencer,
     div_prev: Option<u16>,
 
-    prod: Option<SampleProducer<f32>>,
+    pub(crate) prod: Option<SampleProducer<f32>>,
     sample_counter: u64,
 
     cap: f32,
@@ -186,10 +186,6 @@ impl Apu {
             self.reset();
         } else {
         }
-    }
-
-    pub fn attach_producer(&mut self, prod: SampleProducer<f32>) {
-        self.prod = Some(prod);
     }
 
     fn reset(&mut self) {

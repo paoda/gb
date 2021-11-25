@@ -13,7 +13,7 @@ const ROM_TITLE_MAX_SIZE: usize = 16;
 #[derive(Debug, Default)]
 pub(crate) struct Cartridge {
     memory: Vec<u8>,
-    title: Option<String>,
+    pub(crate) title: Option<String>,
     mbc: Box<dyn MBCIo>,
 }
 
@@ -78,10 +78,6 @@ impl Cartridge {
             Some("") | None => None,
             Some(title) => Some(String::from(title)),
         }
-    }
-
-    pub(crate) fn title(&self) -> Option<&str> {
-        self.title.as_deref()
     }
 
     fn detect_ram_info(memory: &[u8]) -> RamSize {

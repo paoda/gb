@@ -51,14 +51,6 @@ impl Bus {
         }
     }
 
-    pub(crate) fn load_cart(&mut self, rom: Vec<u8>) {
-        self.cart = Some(Cartridge::new(rom));
-    }
-
-    pub(crate) fn cart_title(&self) -> Option<&str> {
-        self.cart.as_ref()?.title()
-    }
-
     #[allow(dead_code)]
     pub(crate) fn boot_mapped(&self) -> bool {
         self.boot.is_some()
