@@ -797,19 +797,10 @@ impl Default for BackgroundFetcher {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct ObjectFetcher {
     state: FetcherState,
     tile: TileBuilder,
-}
-
-impl Default for ObjectFetcher {
-    fn default() -> Self {
-        Self {
-            state: Default::default(),
-            tile: Default::default(),
-        }
-    }
 }
 
 impl Fetcher for ObjectFetcher {

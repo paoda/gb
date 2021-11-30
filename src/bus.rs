@@ -10,7 +10,7 @@ use crate::work_ram::{VariableWorkRam, WorkRam};
 
 pub(crate) const BOOT_SIZE: usize = 0x100;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Bus {
     boot: Option<[u8; BOOT_SIZE]>, // Boot ROM is 256b long
     pub(crate) cart: Option<Cartridge>,
@@ -23,24 +23,6 @@ pub struct Bus {
     high_ram: HighRam,
     serial: Serial,
     pub(crate) joyp: Joypad,
-}
-
-impl Default for Bus {
-    fn default() -> Self {
-        Self {
-            boot: None,
-            cart: None,
-            ppu: Default::default(),
-            work_ram: Default::default(),
-            var_ram: Default::default(),
-            timer: Default::default(),
-            int: Default::default(),
-            apu: Default::default(),
-            high_ram: Default::default(),
-            serial: Default::default(),
-            joyp: Default::default(),
-        }
-    }
 }
 
 impl Bus {
