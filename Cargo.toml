@@ -22,7 +22,7 @@ rtrb = "0.2"
 directories-next = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["std", "env-filter"] }
-thiserror = "1.0.30"
+thiserror = "1.0"
 
 [profile.release]
 debug = true
