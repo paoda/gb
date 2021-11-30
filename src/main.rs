@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use egui_wgpu_backend::RenderPass;
-use gb::emu;
-use gb::gui::GuiState;
+use gb::{emu, gui};
 use gilrs::Gilrs;
+use gui::GuiState;
 use rodio::{OutputStream, Sink};
 use tracing_subscriber::EnvFilter;
 use winit::event::{Event, WindowEvent};
@@ -45,20 +45,20 @@ fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    // --Here lies a lot of Winit + WGPU Boilerplate--
+    // --Here lies a lot of winit + wgpu Boilerplate--
     let event_loop: EventLoop<Event<()>> = EventLoop::with_user_event();
-    let window = gb::gui::build_window(&event_loop).expect("build window");
+    let window = gui::build_window(&event_loop).expect("build window");
 
-    let (instance, surface) = gb::gui::create_surface(&window);
-    let adapter = gb::gui::request_adapter(&instance, &surface).expect("request adaptor");
-    let (device, queue) = gb::gui::request_device(&adapter).expect("request device");
+    let (instance, surface) = gui::create_surface(&window);
+    let adapter = gui::request_adapter(&instance, &surface).expect("request adaptor");
+    let (device, queue) = gui::request_device(&adapter).expect("request device");
     let format = surface
         .get_preferred_format(&adapter)
         .expect("get surface format");
 
-    let mut config = gb::gui::surface_config(&window, format);
+    let mut config = gui::surface_config(&window, format);
     surface.configure(&device, &config);
-    let mut platform = gb::gui::platform_desc(&window);
+    let mut platform = gui::platform_desc(&window);
     let mut render_pass = RenderPass::new(&device, format, 1);
 
     // We interrupt your boiler plate to initialize the emulator so that
@@ -74,11 +74,11 @@ fn main() {
         }
     };
 
-    // Set up the WGPU (and then EGUI) texture we'll be working with.
-    let texture_size = gb::gui::texture_size();
-    let texture = gb::gui::create_texture(&device, texture_size);
-    gb::gui::write_to_texture(&queue, &texture, gb::emu::pixel_buf(&cpu), texture_size);
-    let texture_id = gb::gui::expose_texture_to_egui(&mut render_pass, &device, &texture);
+    // Set up the wgpu (and then EGUI) texture we'll be working with.
+    let texture_size = gui::texture_size();
+    let texture = gui::create_texture(&device, texture_size);
+    gui::write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
+    let texture_id = gui::expose_texture_to_egui(&mut render_pass, &device, &texture);
 
     // Load ROM if filepath was provided
     if let Some(path) = m.value_of("rom") {
@@ -115,7 +115,7 @@ fn main() {
 
     // Set up state for the Immediate-mode GUI
     let mut app = GuiState::new(rom_title);
-    let mut last_key = gb::gui::unused_key();
+    let mut last_key = gui::unused_key();
 
     // used for egui animations
     let start_time = Instant::now();
@@ -129,15 +129,15 @@ fn main() {
                     emu::save_and_exit(&cpu, control_flow);
                 }
 
-                gb::emu::run_frame(&mut cpu, &mut gamepad, last_key);
+                emu::run_frame(&mut cpu, &mut gamepad, last_key);
 
                 window.request_redraw();
             }
             Event::RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
 
-                let data = gb::emu::pixel_buf(&cpu);
-                gb::gui::write_to_texture(&queue, &texture, data, texture_size);
+                let data = emu::pixel_buf(&cpu);
+                gui::write_to_texture(&queue, &texture, data, texture_size);
 
                 let output_frame = match surface.get_current_texture() {
                     Ok(frame) => frame,
@@ -146,17 +146,17 @@ fn main() {
                         return;
                     }
                 };
-                let output_view = gb::gui::create_view(&output_frame);
+                let output_view = gui::create_view(&output_frame);
 
                 // Begin to draw Egui components
                 platform.begin_frame();
-                gb::gui::draw_egui(&mut app, &platform.context(), texture_id);
+                gui::draw_egui(&mut app, &platform.context(), texture_id);
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (_, paint_commands) = platform.end_frame(Some(&window));
                 let paint_jobs = platform.context().tessellate(paint_commands);
 
-                let mut encoder = gb::gui::create_command_encoder(&device);
-                let screen_descriptor = gb::gui::create_screen_descriptor(&window, &config);
+                let mut encoder = gui::create_command_encoder(&device);
+                let screen_descriptor = gui::create_screen_descriptor(&window, &config);
 
                 // Upload all resources for the GPU.
                 render_pass.update_texture(&device, &queue, &platform.context().texture());
@@ -164,7 +164,7 @@ fn main() {
                 render_pass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
                 // Record all render passes.
-                gb::gui::execute_render_pass(
+                gui::execute_render_pass(
                     &mut render_pass,
                     &mut encoder,
                     &output_view,

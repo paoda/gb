@@ -11,12 +11,12 @@ pub(crate) struct WorkRam {
 }
 
 impl BusIo for WorkRam {
-    fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.bank[addr as usize - WORK_RAM_START_ADDRESS] = byte;
-    }
-
     fn read_byte(&self, addr: u16) -> u8 {
         self.bank[addr as usize - WORK_RAM_START_ADDRESS]
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.bank[addr as usize - WORK_RAM_START_ADDRESS] = byte;
     }
 }
 
@@ -42,11 +42,11 @@ impl Default for VariableWorkRam {
 }
 
 impl BusIo for VariableWorkRam {
-    fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.buf[addr as usize - VARIABLE_WORK_RAM_START_ADDRESS] = byte;
-    }
-
     fn read_byte(&self, addr: u16) -> u8 {
         self.buf[addr as usize - VARIABLE_WORK_RAM_START_ADDRESS]
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.buf[addr as usize - VARIABLE_WORK_RAM_START_ADDRESS] = byte;
     }
 }

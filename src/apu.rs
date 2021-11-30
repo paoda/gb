@@ -587,7 +587,7 @@ impl Channel1 {
 pub(crate) struct Channel2 {
     /// 0xFF16 | NR21 - Channel 2 Sound length / Wave Pattern Duty
     duty: SoundDuty,
-    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    /// 0xFF17 | NR22 - Channel 2 Volume Envelope
     envelope: VolumeEnvelope,
     /// 0xFF18 | NR23 - Channel 2 Frequency low (lower 8 bits only)
     freq_lo: u8,
@@ -619,12 +619,12 @@ impl Channel2 {
         self.length_counter = 64 - self.duty.sound_length() as u16;
     }
 
-    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    /// 0xFF17 | NR22 - Channel 2 Volume Envelope
     pub(crate) fn envelope(&self) -> u8 {
         u8::from(self.envelope)
     }
 
-    /// 0xFF17 | NR22 - Channel 2 Volume ENvelope
+    /// 0xFF17 | NR22 - Channel 2 Volume Envelope
     pub(crate) fn set_envelope(&mut self, byte: u8) {
         self.envelope = byte.into();
 

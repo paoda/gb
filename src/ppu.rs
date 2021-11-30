@@ -265,7 +265,7 @@ impl Ppu {
                 TileLowB => {
                     let obj_size = self.ctrl.obj_size();
 
-                    let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr);
                     self.fetch.obj.tile.with_low(byte);
@@ -276,7 +276,7 @@ impl Ppu {
                 TileHighB => {
                     let obj_size = self.ctrl.obj_size();
 
-                    let addr = PixelFetcher::get_obj_addr(attr, &self.pos, obj_size);
+                    let addr = PixelFetcher::obj_addr(attr, &self.pos, obj_size);
 
                     let byte = self.read_byte(addr + 1);
                     self.fetch.obj.tile.with_high(byte);
@@ -441,7 +441,7 @@ impl Ppu {
 
     fn obj_pixel(&self, obj: ObjPixelProperty) -> GrayShade {
         use ObjectPaletteKind::*;
-        assert!(obj.shade_id != 0);
+        assert_ne!(obj.shade_id, 0);
 
         let p0 = &self.monochrome.obj_palette_0;
         let p1 = &self.monochrome.obj_palette_1;
@@ -683,7 +683,7 @@ impl PixelFetcher {
         Ok(())
     }
 
-    fn get_obj_addr(attr: &ObjectAttr, pos: &ScreenPosition, size: ObjectSize) -> u16 {
+    fn obj_addr(attr: &ObjectAttr, pos: &ScreenPosition, size: ObjectSize) -> u16 {
         let line_y = pos.line_y;
 
         // TODO: Why is the offset 14 and 30 respectively?

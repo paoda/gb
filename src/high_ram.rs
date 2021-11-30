@@ -17,11 +17,11 @@ impl Default for HighRam {
 }
 
 impl BusIo for HighRam {
-    fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.buf[addr as usize - HIGH_RAM_START_ADDRESS] = byte;
-    }
-
     fn read_byte(&self, addr: u16) -> u8 {
         self.buf[addr as usize - HIGH_RAM_START_ADDRESS]
+    }
+
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        self.buf[addr as usize - HIGH_RAM_START_ADDRESS] = byte;
     }
 }
