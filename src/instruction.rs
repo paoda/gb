@@ -2150,3 +2150,149 @@ mod table {
         }
     }
 }
+
+pub(crate) mod dbg {
+    use super::add::{Source as AddSource, Target as AddTarget};
+    use super::jump::JumpCondition;
+    use super::load::{Source as LDSource, Target as LDTarget};
+    use super::{AllRegisters, BusIo, Cpu, Instruction, RegisterPair};
+
+    pub(crate) fn tmp_disasm(cpu: &Cpu, limit: u8) -> String {
+        let mut asm = String::new();
+        let mut pc = cpu.register_pair(RegisterPair::PC);
+
+        for _ in 0..limit {
+            let opcode = cpu.read_byte(pc);
+            pc += 1;
+
+            let instr = if opcode == 0xCB {
+                let opcode = cpu.read_byte(pc);
+                pc += 1;
+
+                Instruction::prefixed(opcode)
+            } else {
+                Instruction::unprefixed(opcode)
+            };
+
+            let instr_asm = format!("{:04X} {:?}\n", pc - 1, instr);
+            asm.push_str(&instr_asm);
+
+            pc += delta::pc_inc_count(instr)
+        }
+
+        asm
+    }
+
+    fn disasm(cpu: &Cpu, pc: u16, instr: Instruction) -> String {
+        use Instruction::*;
+
+        let imm_byte = cpu.read_byte(pc + 1);
+        let imm_word = (cpu.read_byte(pc + 2) as u16) << 8 | imm_byte as u16;
+
+        match instr {
+            NOP => format!("NOP"),
+            LD(LDTarget::IndirectImmediateWord, LDSource::SP) => {
+                format!("LD ({:#06X}), SP", imm_word)
+            }
+            STOP => format!("STOP"),
+            JR(JumpCondition::Always) => format!("JR {}", imm_byte as i8),
+            JR(cond) => format!("JR {:?} {}", cond, imm_byte as i8),
+            LD(LDTarget::Group1(rp), LDSource::ImmediateWord) => {
+                format!("LD {:?} {:#06X}", rp, imm_word)
+            }
+            ADD(AddTarget::HL, AddSource::Group1(rp)) => format!("ADD HL, {:?}", rp),
+            LD(LDTarget::IndirectGroup2(rp), LDSource::A) => format!("LD ({:?}), A", rp),
+            LD(LDTarget::A, LDSource::IndirectGroup2(rp)) => format!("LD A, ({:?})", rp),
+
+            _ => todo!(),
+        }
+    }
+
+    mod delta {
+        use super::super::add::{Source as AddSource, Target as AddTarget};
+        use super::super::alu::Source as AluSource;
+        use super::super::jump::{JumpCondition, JumpLocation};
+        use super::super::load::{Source as LDSource, Target as LDTarget};
+        use super::super::{AllRegisters, Instruction};
+
+        pub(super) fn pc_inc_count(instr: Instruction) -> u16 {
+            use Instruction::*;
+
+            match instr {
+                // Unprefixed
+                NOP => 0,
+                LD(LDTarget::IndirectImmediateWord, LDSource::SP) => 2,
+                STOP => 0,
+                JR(_) => 1,
+                LD(LDTarget::Group1(_), LDSource::ImmediateWord) => 2,
+                ADD(AddTarget::HL, AddSource::Group1(_)) => 0,
+                LD(LDTarget::IndirectGroup2(_), LDSource::A) => 0,
+                LD(LDTarget::A, LDSource::IndirectGroup2(_)) => 0,
+                INC(AllRegisters::Group1(_)) => 0,
+                DEC(AllRegisters::Group1(_)) => 0,
+                INC(AllRegisters::Register(_)) => 0,
+                DEC(AllRegisters::Register(_)) => 0,
+                LD(LDTarget::Register(_), LDSource::ImmediateByte) => 1,
+                RLCA => 0,
+                RRCA => 0,
+                RLA => 0,
+                RRA => 0,
+                DAA => 0,
+                CPL => 0,
+                SCF => 0,
+                CCF => 0,
+                HALT => 0,
+                LD(LDTarget::Register(_), LDSource::Register(_)) => 0,
+                ADD(AddTarget::A, AddSource::Register(_)) => 0,
+                ADC(AluSource::Register(_)) => 0,
+                SUB(AluSource::Register(_)) => 0,
+                SBC(AluSource::Register(_)) => 0,
+                AND(AluSource::Register(_)) => 0,
+                XOR(AluSource::Register(_)) => 0,
+                OR(AluSource::Register(_)) => 0,
+                CP(AluSource::Register(_)) => 0,
+                RET(_) => 0,
+                LD(LDTarget::IoWithImmediateOffset, LDSource::A) => 1,
+                ADD(AddTarget::SP, AddSource::ImmediateSignedByte) => 1,
+                LD(LDTarget::A, LDSource::IoWithImmediateOffset) => 1,
+                LDHL => 1,
+                POP(_) => 0,
+                RETI => 0,
+                JP(JumpCondition::Always, JumpLocation::HL) => 0,
+                LD(LDTarget::SP, LDSource::HL) => 0,
+                JP(_, JumpLocation::ImmediateWord) => 2,
+                LD(LDTarget::IoWithC, LDSource::A) => 0,
+                LD(LDTarget::IndirectImmediateWord, LDSource::A) => 2,
+                LD(LDTarget::A, LDSource::IoWithC) => 0,
+                LD(LDTarget::A, LDSource::IndirectImmediateWord) => 2,
+                DI => 0,
+                EI => 0,
+                CALL(_) => 0,
+                PUSH(_) => 0,
+                ADD(AddTarget::A, AddSource::ImmediateByte) => 1,
+                ADC(AluSource::ImmediateByte) => 1,
+                SUB(AluSource::ImmediateByte) => 1,
+                SBC(AluSource::ImmediateByte) => 1,
+                AND(AluSource::ImmediateByte) => 1,
+                XOR(AluSource::ImmediateByte) => 1,
+                OR(AluSource::ImmediateByte) => 1,
+                CP(AluSource::ImmediateByte) => 1,
+                RST(_) => 0,
+
+                // Prefixed
+                RLC(_) => 0,
+                RRC(_) => 0,
+                RL(_) => 0,
+                RR(_) => 0,
+                SLA(_) => 0,
+                SRA(_) => 0,
+                SWAP(_) => 0,
+                SRL(_) => 0,
+                BIT(_, _) => 0,
+                RES(_, _) => 0,
+                SET(_, _) => 0,
+                _ => unreachable!("{:?} is an illegal instruction", instr),
+            }
+        }
+    }
+}

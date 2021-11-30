@@ -485,3 +485,42 @@ pub(crate) enum ImeState {
     Pending,
     Enabled,
 }
+
+pub(crate) mod dbg {
+    use super::{Cpu, ImeState, RegisterPair};
+
+    pub(crate) fn flags(cpu: &Cpu) -> u8 {
+        cpu.flags.into()
+    }
+
+    pub(crate) fn af(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::AF)
+    }
+
+    pub(crate) fn bc(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::BC)
+    }
+
+    pub(crate) fn de(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::DE)
+    }
+
+    pub(crate) fn hl(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::HL)
+    }
+
+    pub(crate) fn sp(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::SP)
+    }
+
+    pub(crate) fn pc(cpu: &Cpu) -> u16 {
+        cpu.register_pair(RegisterPair::PC)
+    }
+
+    pub(crate) fn ime(cpu: &Cpu) -> bool {
+        match cpu.ime {
+            ImeState::Enabled => true,
+            _ => false,
+        }
+    }
+}

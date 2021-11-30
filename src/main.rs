@@ -150,7 +150,7 @@ fn main() {
 
                 // Begin to draw Egui components
                 platform.begin_frame();
-                gui::draw_egui(&mut app, &platform.context(), texture_id);
+                gui::draw_egui(&cpu, &mut app, &platform.context(), texture_id);
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (_, paint_commands) = platform.end_frame(Some(&window));
                 let paint_jobs = platform.context().tessellate(paint_commands);

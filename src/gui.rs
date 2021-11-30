@@ -11,6 +11,7 @@ use winit::event::{ElementState, KeyboardInput};
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 
+use crate::cpu::Cpu;
 use crate::{GB_HEIGHT, GB_WIDTH};
 
 const EGUI_DIMENSIONS: (usize, usize) = (1280, 720);
@@ -221,7 +222,13 @@ pub fn execute_render_pass(
 }
 
 #[inline]
-pub fn draw_egui(app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
+pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
+    use crate::{cpu, instruction};
+
+    fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
+        ui.add(egui::TextEdit::multiline(&mut text).code_editor())
+    }
+
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         egui::menu::menu(ui, "File", |ui| {
             if ui.button("Quit").clicked() {
@@ -234,6 +241,74 @@ pub fn draw_egui(app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
                 texture_id,
                 [GB_WIDTH as f32 * SCALE, GB_HEIGHT as f32 * SCALE],
             );
+        });
+
+        egui::Window::new("Disassembly").show(ctx, |ui| {
+            selectable_text(ui, &instruction::dbg::tmp_disasm(cpu, 20));
+        });
+
+        egui::Window::new("GB Info").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.heading("CPU");
+
+                    ui.monospace(format!("AF: {:#06X}", cpu::dbg::af(cpu)));
+                    ui.monospace(format!("BC: {:#06X}", cpu::dbg::bc(cpu)));
+                    ui.monospace(format!("DE: {:#06X}", cpu::dbg::de(cpu)));
+                    ui.monospace(format!("HL: {:#06X}", cpu::dbg::hl(cpu)));
+                    ui.add_space(10.0);
+                    ui.monospace(format!("SP: {:#06X}", cpu::dbg::sp(cpu)));
+                    ui.monospace(format!("PC: {:#06X}", cpu::dbg::pc(cpu)));
+                });
+
+                ui.vertical(|ui| {
+                    ui.heading("PPU");
+
+                    ui.monospace("LY: ?");
+                    ui.monospace("SCX: ?");
+                });
+            });
+
+            ui.add_space(10.0);
+
+            let _ = ui.selectable_label(cpu::dbg::ime(cpu), "IME");
+            ui.horizontal(|ui| {
+                let irq = cpu.int_request();
+
+                ui.label("IRQ:");
+                let _ = ui.selectable_label(irq & 0b01 == 0x01, "VBlank");
+                let _ = ui.selectable_label(irq >> 1 & 0x01 == 0x01, "LCD STAT");
+                let _ = ui.selectable_label(irq >> 2 & 0x01 == 0x01, "Timer");
+                let _ = ui.selectable_label(irq >> 3 & 0x01 == 0x01, "Serial");
+                let _ = ui.selectable_label(irq >> 4 & 0x01 == 0x01, "Joypad");
+            });
+
+            ui.horizontal(|ui| {
+                let ie = cpu.int_enable();
+
+                let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
+                let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
+                let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
+
+                ui.label("IE:");
+                ui.add_space(q_len - (e_len - r_len));
+                let _ = ui.selectable_label(ie & 0b01 == 0x01, "VBlank");
+                let _ = ui.selectable_label(ie >> 1 & 0x01 == 0x01, "LCD STAT");
+                let _ = ui.selectable_label(ie >> 2 & 0x01 == 0x01, "Timer");
+                let _ = ui.selectable_label(ie >> 3 & 0x01 == 0x01, "Serial");
+                let _ = ui.selectable_label(ie >> 4 & 0x01 == 0x01, "Joypad");
+            });
+
+            ui.add_space(10.0);
+
+            ui.horizontal(|ui| {
+                let flags = cpu::dbg::flags(cpu);
+
+                let _ = ui.selectable_label((flags >> 7 & 0x01) == 0x01, "Zero");
+                let _ = ui.selectable_label((flags >> 6 & 0x01) == 0x01, "Negative");
+                let _ = ui.selectable_label((flags >> 5 & 0x01) == 0x01, "Half-Carry");
+                let _ = ui.selectable_label((flags >> 4 & 0x01) == 0x01, "Carry");
+            })
         })
     });
 }
