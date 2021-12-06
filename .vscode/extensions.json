@@ -4,5 +4,6 @@
         "tamasfe.even-better-toml",
         "serayuzgur.crates",
         "vadimcn.vscode-lldb",
+        "donaldhays.rgbds-z80"
     ]
 }
