@@ -1,6 +1,6 @@
 use self::add::{Source as AddSource, Target as AddTarget};
 use self::alu::Source as AluSource;
-use self::jump::{JumpCondition, JumpLocation};
+use self::jump::{JpCond, JpLoc};
 use self::load::{Source as LDSource, Target as LDTarget};
 use self::table::{
     alu_imm_instr, alu_reg_instr, flag_instr, group1, group2, group3, jump_cond, prefix_alu,
@@ -16,7 +16,7 @@ use crate::Cycle;
 pub(crate) enum Instruction {
     NOP,
     STOP,
-    JR(JumpCondition),
+    JR(JpCond),
     LD(LDTarget, LDSource),
     ADD(AddTarget, AddSource),
     LDHL,
@@ -38,13 +38,13 @@ pub(crate) enum Instruction {
     XOR(AluSource),
     OR(AluSource),
     CP(AluSource),
-    RET(JumpCondition),
+    RET(JpCond),
     POP(Group3RegisterPair),
     RETI,
-    JP(JumpCondition, JumpLocation),
+    JP(JpCond, JpLoc),
     DI,
     EI,
-    CALL(JumpCondition),
+    CALL(JpCond),
     PUSH(Group3RegisterPair),
     RST(u8),
     RLC(Register),
@@ -293,7 +293,7 @@ impl Instruction {
                 let addr = pc.wrapping_add(byte as u16);
 
                 match cond {
-                    JumpCondition::NotZero => {
+                    JpCond::NotZero => {
                         if !flags.z() {
                             Self::jump(cpu, addr);
                             12
@@ -301,7 +301,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Zero => {
+                    JpCond::Zero => {
                         if flags.z() {
                             Self::jump(cpu, addr);
                             12
@@ -309,7 +309,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::NotCarry => {
+                    JpCond::NotCarry => {
                         if !flags.c() {
                             Self::jump(cpu, addr);
                             12
@@ -317,7 +317,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Carry => {
+                    JpCond::Carry => {
                         if flags.c() {
                             Self::jump(cpu, addr);
                             12
@@ -325,7 +325,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Always => {
+                    JpCond::Always => {
                         Self::jump(cpu, addr);
                         12
                     }
@@ -837,7 +837,7 @@ impl Instruction {
                 let flags: Flags = *cpu.flags();
 
                 match cond {
-                    JumpCondition::NotZero => {
+                    JpCond::NotZero => {
                         cpu.bus.clock(); // internal branch decision
 
                         if !flags.z() {
@@ -848,7 +848,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Zero => {
+                    JpCond::Zero => {
                         cpu.bus.clock(); // internal branch decision
 
                         if flags.z() {
@@ -859,7 +859,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::NotCarry => {
+                    JpCond::NotCarry => {
                         cpu.bus.clock(); // internal branch decision
 
                         if !flags.c() {
@@ -870,7 +870,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Carry => {
+                    JpCond::Carry => {
                         cpu.bus.clock(); // internal branch decision
 
                         if flags.c() {
@@ -881,7 +881,7 @@ impl Instruction {
                             8
                         }
                     }
-                    JumpCondition::Always => {
+                    JpCond::Always => {
                         let addr = Self::pop(cpu);
                         Self::jump(cpu, addr);
                         16
@@ -908,13 +908,13 @@ impl Instruction {
                 16
             }
             Instruction::JP(cond, location) => match location {
-                JumpLocation::HL => {
+                JpLoc::HL => {
                     // JP HL | Store HL in program counter
                     let right = cpu.register_pair(RegisterPair::HL);
                     cpu.set_register_pair(RegisterPair::PC, right);
                     4
                 }
-                JumpLocation::ImmediateWord => {
+                JpLoc::ImmediateWord => {
                     // JP cond u16 | Store u16 in program counter if condition is true
                     // JP u16      | Store u16 in program counter
                     let flags: Flags = *cpu.flags();
@@ -922,7 +922,7 @@ impl Instruction {
                     let addr = Self::imm_word(cpu);
 
                     match cond {
-                        JumpCondition::NotZero => {
+                        JpCond::NotZero => {
                             if !flags.z() {
                                 Self::jump(cpu, addr);
                                 16
@@ -930,7 +930,7 @@ impl Instruction {
                                 12
                             }
                         }
-                        JumpCondition::Zero => {
+                        JpCond::Zero => {
                             if flags.z() {
                                 Self::jump(cpu, addr);
                                 16
@@ -938,7 +938,7 @@ impl Instruction {
                                 12
                             }
                         }
-                        JumpCondition::NotCarry => {
+                        JpCond::NotCarry => {
                             if !flags.c() {
                                 Self::jump(cpu, addr);
                                 16
@@ -946,7 +946,7 @@ impl Instruction {
                                 12
                             }
                         }
-                        JumpCondition::Carry => {
+                        JpCond::Carry => {
                             if flags.c() {
                                 Self::jump(cpu, addr);
                                 16
@@ -954,7 +954,7 @@ impl Instruction {
                                 12
                             }
                         }
-                        JumpCondition::Always => {
+                        JpCond::Always => {
                             Self::jump(cpu, addr);
                             16
                         }
@@ -980,7 +980,7 @@ impl Instruction {
                 let return_addr = cpu.register_pair(RegisterPair::PC);
 
                 match cond {
-                    JumpCondition::NotZero => {
+                    JpCond::NotZero => {
                         if !flags.z() {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
@@ -990,7 +990,7 @@ impl Instruction {
                             12
                         }
                     }
-                    JumpCondition::Zero => {
+                    JpCond::Zero => {
                         if flags.z() {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
@@ -1000,7 +1000,7 @@ impl Instruction {
                             12
                         }
                     }
-                    JumpCondition::NotCarry => {
+                    JpCond::NotCarry => {
                         if !flags.c() {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
@@ -1010,7 +1010,7 @@ impl Instruction {
                             12
                         }
                     }
-                    JumpCondition::Carry => {
+                    JpCond::Carry => {
                         if flags.c() {
                             cpu.bus.clock(); // internal branch decision
                             Self::push(cpu, return_addr);
@@ -1020,7 +1020,7 @@ impl Instruction {
                             12
                         }
                     }
-                    JumpCondition::Always => {
+                    JpCond::Always => {
                         cpu.bus.clock(); // internal branch decision
                         Self::push(cpu, return_addr);
                         cpu.set_register_pair(RegisterPair::PC, addr);
@@ -1538,7 +1538,7 @@ impl Instruction {
 }
 
 impl Instruction {
-    pub(crate) fn decode(byte: u8, prefixed: bool) -> Self {
+    pub(crate) fn decode(byte: u8, prefixed: bool) -> Option<Self> {
         if prefixed {
             Self::prefixed(byte)
         } else {
@@ -1546,134 +1546,139 @@ impl Instruction {
         }
     }
 
-    fn unprefixed(byte: u8) -> Self {
+    fn unprefixed(byte: u8) -> Option<Self> {
         use Instruction::*;
 
         match byte {
             // NOP
-            0o000 => NOP,
+            0o000 => Some(NOP),
             // LD (u16), SP
-            0o010 => LD(LDTarget::IndirectImmediateWord, LDSource::SP),
+            0o010 => Some(LD(LDTarget::IndirectImmediateWord, LDSource::SP)),
             // STOP
-            0o020 => STOP,
+            0o020 => Some(STOP),
             // JR i8
-            0o030 => JR(JumpCondition::Always),
+            0o030 => Some(JR(JpCond::Always)),
             // JR cond i8
-            0o040 | 0o050 | 0o060 | 0o070 => JR(jump_cond((byte >> 3) & 0x03)),
+            0o040 | 0o050 | 0o060 | 0o070 => Some(JR(jump_cond((byte >> 3) & 0x03))),
             // LD r16, u16
-            0o001 | 0o021 | 0o041 | 0o061 => LD(
+            0o001 | 0o021 | 0o041 | 0o061 => Some(LD(
                 LDTarget::Group1(group1((byte >> 4) & 0x03)),
                 LDSource::ImmediateWord,
-            ),
+            )),
             // ADD HL, r16
-            0o011 | 0o031 | 0o051 | 0o071 => {
-                ADD(AddTarget::HL, AddSource::Group1(group1((byte >> 4) & 0x03)))
-            }
+            0o011 | 0o031 | 0o051 | 0o071 => Some(ADD(
+                AddTarget::HL,
+                AddSource::Group1(group1((byte >> 4) & 0x03)),
+            )),
             // LD (r16), A
-            0o002 | 0o022 | 0o042 | 0o062 => LD(
+            0o002 | 0o022 | 0o042 | 0o062 => Some(LD(
                 LDTarget::IndirectGroup2(group2((byte >> 4) & 0x03)),
                 LDSource::A,
-            ),
+            )),
             // LD A, (r16)
-            0o012 | 0o032 | 0o052 | 0o072 => LD(
+            0o012 | 0o032 | 0o052 | 0o072 => Some(LD(
                 LDTarget::A,
                 LDSource::IndirectGroup2(group2((byte >> 4) & 0x03)),
-            ),
+            )),
             // INC r16
-            0o003 | 0o023 | 0o043 | 0o063 => INC(AllRegisters::Group1(group1((byte >> 4) & 0x03))),
+            0o003 | 0o023 | 0o043 | 0o063 => {
+                Some(INC(AllRegisters::Group1(group1((byte >> 4) & 0x03))))
+            }
             // DEC r16
-            0o013 | 0o033 | 0o053 | 0o073 => DEC(AllRegisters::Group1(group1((byte >> 4) & 0x03))),
+            0o013 | 0o033 | 0o053 | 0o073 => {
+                Some(DEC(AllRegisters::Group1(group1((byte >> 4) & 0x03))))
+            }
             // INC r8
             0o004 | 0o014 | 0o024 | 0o034 | 0o044 | 0o054 | 0o064 | 0o074 => {
-                INC(AllRegisters::Register(register((byte >> 3) & 0x07)))
+                Some(INC(AllRegisters::Register(register((byte >> 3) & 0x07))))
             }
             // DEC r8
             0o005 | 0o015 | 0o025 | 0o035 | 0o045 | 0o055 | 0o065 | 0o075 => {
-                DEC(AllRegisters::Register(register((byte >> 3) & 0x07)))
+                Some(DEC(AllRegisters::Register(register((byte >> 3) & 0x07))))
             }
             // LD r8, u8
-            0o006 | 0o016 | 0o026 | 0o036 | 0o046 | 0o056 | 0o066 | 0o076 => LD(
+            0o006 | 0o016 | 0o026 | 0o036 | 0o046 | 0o056 | 0o066 | 0o076 => Some(LD(
                 LDTarget::Register(register((byte >> 3) & 0x07)),
                 LDSource::ImmediateByte,
-            ),
+            )),
             // RLCA, RRCA, RLA, RRA, DAA, CPL, SCF, and CCF
             0o007 | 0o017 | 0o027 | 0o037 | 0o047 | 0o057 | 0o067 | 0o077 => {
-                flag_instr((byte >> 3) & 0x07)
+                Some(flag_instr((byte >> 3) & 0x07))
             }
             // HALT
-            0o166 => HALT,
+            0o166 => Some(HALT),
             // LD r8, r8
-            0o100..=0o177 => LD(
+            0o100..=0o177 => Some(LD(
                 LDTarget::Register(register((byte >> 3) & 0x07)),
                 LDSource::Register(register(byte & 0x07)),
-            ),
+            )),
             // ADD, ADC, SUB, SBC, AND, XOR, OR, and CP
-            0o200..=0o277 => alu_reg_instr((byte >> 3) & 0x07, byte & 0x07),
+            0o200..=0o277 => Some(alu_reg_instr((byte >> 3) & 0x07, byte & 0x07)),
             // RET cond
-            0o300 | 0o310 | 0o320 | 0o330 => RET(jump_cond((byte >> 3) & 0x03)),
+            0o300 | 0o310 | 0o320 | 0o330 => Some(RET(jump_cond((byte >> 3) & 0x03))),
             // LD (0xFF00 + u8), A
-            0o340 => LD(LDTarget::IoWithImmediateOffset, LDSource::A),
+            0o340 => Some(LD(LDTarget::IoWithImmediateOffset, LDSource::A)),
             // ADD SP, i8
-            0o350 => ADD(AddTarget::SP, AddSource::ImmediateSignedByte),
+            0o350 => Some(ADD(AddTarget::SP, AddSource::ImmediateSignedByte)),
             // LD A, (0xFF00 + u8)
-            0o360 => LD(LDTarget::A, LDSource::IoWithImmediateOffset),
+            0o360 => Some(LD(LDTarget::A, LDSource::IoWithImmediateOffset)),
             // LD HL, SP + i8
-            0o370 => LDHL,
+            0o370 => Some(LDHL),
             // POP r16
-            0o301 | 0o321 | 0o341 | 0o361 => POP(group3((byte >> 4) & 0x03)),
+            0o301 | 0o321 | 0o341 | 0o361 => Some(POP(group3((byte >> 4) & 0x03))),
             // RET
-            0o311 => RET(JumpCondition::Always),
+            0o311 => Some(RET(JpCond::Always)),
             // RETI
-            0o331 => RETI,
+            0o331 => Some(RETI),
             // JP HL
-            0o351 => JP(JumpCondition::Always, JumpLocation::HL),
+            0o351 => Some(JP(JpCond::Always, JpLoc::HL)),
             // LD SP, HL
-            0o371 => LD(LDTarget::SP, LDSource::HL),
+            0o371 => Some(LD(LDTarget::SP, LDSource::HL)),
             // JP cond u16
             0o302 | 0o312 | 0o322 | 0o332 => {
-                JP(jump_cond((byte >> 3) & 0x03), JumpLocation::ImmediateWord)
+                Some(JP(jump_cond((byte >> 3) & 0x03), JpLoc::ImmediateWord))
             }
             // LD (0xFF00 + C), A
-            0o342 => LD(LDTarget::IoWithC, LDSource::A),
+            0o342 => Some(LD(LDTarget::IoWithC, LDSource::A)),
             // LD (u16), A
-            0o352 => LD(LDTarget::IndirectImmediateWord, LDSource::A),
+            0o352 => Some(LD(LDTarget::IndirectImmediateWord, LDSource::A)),
             // LD A, (0xFF00 + C)
-            0o362 => LD(LDTarget::A, LDSource::IoWithC),
+            0o362 => Some(LD(LDTarget::A, LDSource::IoWithC)),
             // LD A, (u16)
-            0o372 => LD(LDTarget::A, LDSource::IndirectImmediateWord),
+            0o372 => Some(LD(LDTarget::A, LDSource::IndirectImmediateWord)),
             // JP u16
-            0o303 => JP(JumpCondition::Always, JumpLocation::ImmediateWord),
-            // 0xCB Prefix
-            0o313 => unreachable!("{:#04X} should be handled by the prefixed decoder", byte),
+            0o303 => Some(JP(JpCond::Always, JpLoc::ImmediateWord)),
             // DI
-            0o363 => DI,
+            0o363 => Some(DI),
             // EI
-            0o373 => EI,
+            0o373 => Some(EI),
             // CALL cond u16
-            0o304 | 0o314 | 0o324 | 0o334 => CALL(jump_cond((byte >> 3) & 0x03)),
+            0o304 | 0o314 | 0o324 | 0o334 => Some(CALL(jump_cond((byte >> 3) & 0x03))),
             // PUSH r16
-            0o305 | 0o325 | 0o345 | 0o365 => PUSH(group3((byte >> 4) & 0x03)),
-            0o315 => CALL(JumpCondition::Always),
+            0o305 | 0o325 | 0o345 | 0o365 => Some(PUSH(group3((byte >> 4) & 0x03))),
+            0o315 => Some(CALL(JpCond::Always)),
             0o306 | 0o316 | 0o326 | 0o336 | 0o346 | 0o356 | 0o366 | 0o376 => {
-                alu_imm_instr((byte >> 3) & 0x07)
+                Some(alu_imm_instr((byte >> 3) & 0x07))
             }
-            0o307 | 0o317 | 0o327 | 0o337 | 0o347 | 0o357 | 0o367 | 0o377 => RST(byte & 0b00111000),
-            _ => panic!("{:#04X} is an illegal opcode", byte),
+            0o307 | 0o317 | 0o327 | 0o337 | 0o347 | 0o357 | 0o367 | 0o377 => {
+                Some(RST(byte & 0b00111000))
+            }
+            _ => None, // 0xCB is 0o313
         }
     }
 
-    fn prefixed(byte: u8) -> Self {
+    fn prefixed(byte: u8) -> Option<Self> {
         use Instruction::*;
 
         match byte {
             // RLC, RRC, RL, RR, SLA, SRA, SWAP and SRL
-            0o000..=0o077 => prefix_alu((byte >> 3) & 0x07, byte & 0x07),
+            0o000..=0o077 => Some(prefix_alu((byte >> 3) & 0x07, byte & 0x07)),
             // BIT bit, r8
-            0o100..=0o177 => BIT((byte >> 3) & 0x07, register(byte & 0x07)),
+            0o100..=0o177 => Some(BIT((byte >> 3) & 0x07, register(byte & 0x07))),
             // RES bit, r8
-            0o200..=0o277 => RES((byte >> 3) & 0x07, register(byte & 0x07)),
+            0o200..=0o277 => Some(RES((byte >> 3) & 0x07, register(byte & 0x07))),
             // SET bit, r8
-            0o300..=0o377 => SET((byte >> 3) & 0x07, register(byte & 0x07)),
+            0o300..=0o377 => Some(SET((byte >> 3) & 0x07, register(byte & 0x07))),
         }
     }
 }
@@ -1681,7 +1686,7 @@ impl Instruction {
 mod jump {
 
     #[derive(Clone, Copy)]
-    pub(crate) enum JumpCondition {
+    pub(crate) enum JpCond {
         Always,
         NotZero,
         Zero,
@@ -1689,9 +1694,9 @@ mod jump {
         Carry,
     }
 
-    impl std::fmt::Debug for JumpCondition {
+    impl std::fmt::Debug for JpCond {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            use JumpCondition::*;
+            use JpCond::*;
 
             match self {
                 Always => f.write_str(""),
@@ -1704,14 +1709,14 @@ mod jump {
     }
 
     #[derive(Clone, Copy)]
-    pub(crate) enum JumpLocation {
+    pub(crate) enum JpLoc {
         HL,
         ImmediateWord,
     }
 
-    impl std::fmt::Debug for JumpLocation {
+    impl std::fmt::Debug for JpLoc {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            use JumpLocation::*;
+            use JpLoc::*;
 
             match *self {
                 HL => f.write_str("HL"),
@@ -1871,7 +1876,7 @@ mod load {
 mod table {
     use super::add::{Source as AddSource, Target as AddTarget};
     use super::alu::Source as AluSource;
-    use super::{Instruction, JumpCondition};
+    use super::{Instruction, JpCond};
     use crate::cpu::{Register as CpuRegister, RegisterPair};
 
     #[derive(Clone, Copy)]
@@ -2074,8 +2079,8 @@ mod table {
         }
     }
 
-    pub(crate) fn jump_cond(code: u8) -> JumpCondition {
-        use JumpCondition::*;
+    pub(crate) fn jump_cond(code: u8) -> JpCond {
+        use JpCond::*;
 
         match code {
             0b00 => NotZero,
@@ -2153,7 +2158,7 @@ mod table {
 
 pub(crate) mod dbg {
     use super::add::{Source as AddSource, Target as AddTarget};
-    use super::jump::JumpCondition;
+    use super::jump::JpCond;
     use super::load::{Source as LDSource, Target as LDTarget};
     use super::{AllRegisters, BusIo, Cpu, Instruction, RegisterPair};
 
@@ -2165,7 +2170,7 @@ pub(crate) mod dbg {
             let opcode = cpu.read_byte(pc);
             pc += 1;
 
-            let instr = if opcode == 0xCB {
+            let maybe_instr = if opcode == 0xCB {
                 let opcode = cpu.read_byte(pc);
                 pc += 1;
 
@@ -2174,10 +2179,12 @@ pub(crate) mod dbg {
                 Instruction::unprefixed(opcode)
             };
 
-            let instr_asm = format!("{:04X} {:?}\n", pc - 1, instr);
-            asm.push_str(&instr_asm);
+            if let Some(instr) = maybe_instr {
+                let instr_asm = format!("{:04X} {:?}\n", pc - 1, instr);
+                asm.push_str(&instr_asm);
 
-            pc += delta::pc_inc_count(instr)
+                pc += delta::pc_inc_count(instr)
+            }
         }
 
         asm
@@ -2190,12 +2197,12 @@ pub(crate) mod dbg {
         let imm_word = (cpu.read_byte(pc + 2) as u16) << 8 | imm_byte as u16;
 
         match instr {
-            NOP => format!("NOP"),
+            NOP => "NOP".to_string(),
             LD(LDTarget::IndirectImmediateWord, LDSource::SP) => {
                 format!("LD ({:#06X}), SP", imm_word)
             }
-            STOP => format!("STOP"),
-            JR(JumpCondition::Always) => format!("JR {}", imm_byte as i8),
+            STOP => "STOP".to_string(),
+            JR(JpCond::Always) => format!("JR {}", imm_byte as i8),
             JR(cond) => format!("JR {:?} {}", cond, imm_byte as i8),
             LD(LDTarget::Group1(rp), LDSource::ImmediateWord) => {
                 format!("LD {:?} {:#06X}", rp, imm_word)
@@ -2211,7 +2218,7 @@ pub(crate) mod dbg {
     mod delta {
         use super::super::add::{Source as AddSource, Target as AddTarget};
         use super::super::alu::Source as AluSource;
-        use super::super::jump::{JumpCondition, JumpLocation};
+        use super::super::jump::{JpCond, JpLoc};
         use super::super::load::{Source as LDSource, Target as LDTarget};
         use super::super::{AllRegisters, Instruction};
 
@@ -2258,9 +2265,9 @@ pub(crate) mod dbg {
                 LDHL => 1,
                 POP(_) => 0,
                 RETI => 0,
-                JP(JumpCondition::Always, JumpLocation::HL) => 0,
+                JP(JpCond::Always, JpLoc::HL) => 0,
                 LD(LDTarget::SP, LDSource::HL) => 0,
-                JP(_, JumpLocation::ImmediateWord) => 2,
+                JP(_, JpLoc::ImmediateWord) => 2,
                 LD(LDTarget::IoWithC, LDSource::A) => 0,
                 LD(LDTarget::IndirectImmediateWord, LDSource::A) => 2,
                 LD(LDTarget::A, LDSource::IoWithC) => 0,

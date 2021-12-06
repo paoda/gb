@@ -73,12 +73,15 @@ impl Cpu {
     ///
     /// If opcode == 0xCB, then decoding costs 4 cycles.
     /// Otherwise, decoding is free
-    pub(crate) fn decode(&mut self, opcode: u8) -> Instruction {
-        if opcode == 0xCB {
-            Instruction::decode(self.fetch(), true)
+    pub(crate) fn decode(&mut self, mut opcode: u8) -> Instruction {
+        let instr = if opcode == 0xCB {
+            opcode = self.fetch();
+            Instruction::decode(opcode, true)
         } else {
             Instruction::decode(opcode, false)
-        }
+        };
+
+        instr.unwrap_or_else(|| panic!("{:#04X} is an invalid instruction", opcode))
     }
 
     /// Execute an [Instruction].
@@ -363,12 +366,15 @@ impl Cpu {
     }
 
     fn _dbg_instr(&self) -> Instruction {
-        let byte = self.read_byte(self.reg.pc);
-        if byte == 0xCB {
-            Instruction::decode(self.read_byte(self.reg.pc + 1), true)
+        let mut byte = self.read_byte(self.reg.pc);
+        let instr = if byte == 0xCB {
+            byte = self.read_byte(self.reg.pc + 1);
+            Instruction::decode(byte, true)
         } else {
             Instruction::decode(byte, false)
-        }
+        };
+
+        instr.unwrap_or_else(|| panic!("{:#04X} is an invalid instruction", byte))
     }
 }
 
@@ -518,9 +524,6 @@ pub(crate) mod dbg {
     }
 
     pub(crate) fn ime(cpu: &Cpu) -> bool {
-        match cpu.ime {
-            ImeState::Enabled => true,
-            _ => false,
-        }
+        matches!(cpu.ime, ImeState::Enabled)
     }
 }
