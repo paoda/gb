@@ -297,7 +297,11 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
                         ui.monospace(format!("WY: {}", ppu::dbg::wy(ppu)));
                     });
 
-                    ui.monospace(format!("Mode: {:?}", ppu::dbg::mode(ppu)))
+                    ui.monospace(format!(
+                        "Mode: {:?} {}",
+                        ppu::dbg::mode(ppu),
+                        ppu::dbg::dot(ppu)
+                    ))
                 });
             });
 

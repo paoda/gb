@@ -723,6 +723,7 @@ dependencies = [
  "egui_wgpu_backend",
  "egui_winit_platform",
  "gilrs",
+ "once_cell",
  "pollster",
  "rodio",
  "rtrb",

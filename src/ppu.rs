@@ -10,6 +10,8 @@ use types::{
     ObjectPaletteKind, ObjectSize, Pixels, RenderPriority, TileDataAddress,
 };
 
+use once_cell::sync::Lazy;
+
 mod dma;
 mod types;
 
@@ -32,6 +34,14 @@ const LIGHT_GRAY: [u8; 4] = 0xAEBA89FFu32.to_be_bytes();
 const DARK_GRAY: [u8; 4] = 0x5E6745FFu32.to_be_bytes();
 const BLACK: [u8; 4] = 0x202020FFu32.to_be_bytes();
 
+static BLANK_SCREEN: Lazy<Box<[u8; (GB_WIDTH * 4) * GB_HEIGHT]>> = Lazy::new(|| {
+    WHITE
+        .repeat(GB_WIDTH * GB_HEIGHT)
+        .into_boxed_slice()
+        .try_into()
+        .unwrap()
+});
+
 #[derive(Debug)]
 pub struct Ppu {
     pub(crate) int: Interrupt,
@@ -48,7 +58,7 @@ pub struct Ppu {
     fetch: PixelFetcher,
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
-    pub(crate) frame_buf: Box<[u8; GB_WIDTH * GB_HEIGHT * 4]>,
+    pub(crate) frame_buf: Box<[u8; (GB_WIDTH * 4) * GB_HEIGHT]>,
     win_stat: WindowStatus,
 
     scanline_start: bool,
@@ -70,15 +80,24 @@ impl BusIo for Ppu {
 
 impl Ppu {
     pub(crate) fn tick(&mut self) {
-        self.dot += 1;
-
         if !self.ctrl.lcd_enabled() {
+            if self.dot > 0 {
+                // Check ensures this expensive operation only happens once
+                self.frame_buf.copy_from_slice(BLANK_SCREEN.as_ref());
+            }
+
+            self.stat.set_mode(PpuMode::HBlank);
+            self.pos.line_y = 0;
+            self.dot = 0;
             return;
         }
+
+        self.dot += 1;
 
         match self.stat.mode() {
             PpuMode::OamScan => {
                 // Cycles 1 -> 80
+
                 if self.dot >= 80 {
                     self.x_pos = 0;
                     self.scanline_start = true;
@@ -104,12 +123,7 @@ impl Ppu {
                 self.scan_oam();
             }
             PpuMode::Drawing => {
-                if self.ctrl.lcd_enabled() {
-                    // Only Draw when the LCD Is Enabled
-                    self.draw();
-                } else {
-                    self.reset();
-                }
+                self.draw();
 
                 if self.x_pos == 160 {
                     if self.stat.hblank_int() {
@@ -413,14 +427,6 @@ impl Ppu {
                 self.fifo.back.clear();
             }
         }
-    }
-
-    fn reset(&mut self) {
-        self.pos.line_y = 0;
-        self.stat.set_mode(PpuMode::HBlank);
-
-        let mut blank = WHITE.repeat(self.frame_buf.len() / 4);
-        self.frame_buf.swap_with_slice(&mut blank);
     }
 
     fn clock_fifo(&mut self) -> Option<GrayShade> {
@@ -913,6 +919,7 @@ struct WindowStatus {
 
 pub(crate) mod dbg {
     use super::{Ppu, PpuMode};
+    use crate::Cycle;
 
     pub(crate) fn ly(ppu: &Ppu) -> u8 {
         ppu.pos.line_y
@@ -936,5 +943,9 @@ pub(crate) mod dbg {
 
     pub(crate) fn wy(ppu: &Ppu) -> i16 {
         ppu.pos.window_y as i16
+    }
+
+    pub(crate) fn dot(ppu: &Ppu) -> Cycle {
+        ppu.dot
     }
 }
