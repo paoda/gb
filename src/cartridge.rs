@@ -61,8 +61,9 @@ impl Cartridge {
             MbcKind::Mbc2(hw) => Box::new(Mbc2::new(hw, rom_cap)),
             MbcKind::Mbc3(hw @ Mbc3Hardware::Rtc) => Box::new(Mbc3::new(hw, ram_cap)),
             MbcKind::Mbc3(hw @ Mbc3Hardware::RtcBatteryRam) => Box::new(Mbc3::new(hw, ram_cap)),
-            MbcKind::Mbc4(hw @ Mbc5Hardware::None) => Box::new(Mbc5::new(hw, ram_cap, rom_cap)),
-            MbcKind::Mbc4(hw @ Mbc5Hardware::BatteryRam) => {
+            MbcKind::Mbc3(hw @ Mbc3Hardware::BatteryRam) => Box::new(Mbc3::new(hw, ram_cap)),
+            MbcKind::Mbc5(hw @ Mbc5Hardware::None) => Box::new(Mbc5::new(hw, ram_cap, rom_cap)),
+            MbcKind::Mbc5(hw @ Mbc5Hardware::BatteryRam) => {
                 Box::new(Mbc5::new(hw, ram_cap, rom_cap))
             }
             kind => todo!("ROMS with {:?} are currently unsupported", kind),
@@ -107,12 +108,12 @@ impl Cartridge {
             0x11 => Mbc3(Mbc3Hardware::None),
             0x12 => Mbc3(Mbc3Hardware::Ram),
             0x13 => Mbc3(Mbc3Hardware::BatteryRam),
-            0x19 => Mbc4(Mbc5Hardware::None),
-            0x1A => Mbc4(Mbc5Hardware::Ram),
-            0x1B => Mbc4(Mbc5Hardware::BatteryRam),
-            0x1C => Mbc4(Mbc5Hardware::Rumble),
-            0x1D => Mbc4(Mbc5Hardware::RumbleRam),
-            0x1E => Mbc4(Mbc5Hardware::RumbleBatteryRam),
+            0x19 => Mbc5(Mbc5Hardware::None),
+            0x1A => Mbc5(Mbc5Hardware::Ram),
+            0x1B => Mbc5(Mbc5Hardware::BatteryRam),
+            0x1C => Mbc5(Mbc5Hardware::Rumble),
+            0x1D => Mbc5(Mbc5Hardware::RumbleRam),
+            0x1E => Mbc5(Mbc5Hardware::RumbleBatteryRam),
             id => unimplemented!("MBC with code {:#04X} is unsupported", id),
         }
     }
@@ -748,7 +749,7 @@ enum MbcKind {
     Mbc1(Mbc1Hardware),
     Mbc2(Mbc2Hardware),
     Mbc3(Mbc3Hardware),
-    Mbc4(Mbc5Hardware),
+    Mbc5(Mbc5Hardware),
 }
 
 #[derive(Debug, Clone, Copy)]
