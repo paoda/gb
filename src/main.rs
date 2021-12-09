@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
 use egui_wgpu_backend::RenderPass;
+use gb::gui::EmuMode;
 use gb::{emu, gui};
 use gilrs::Gilrs;
 use gui::GuiState;
@@ -129,7 +130,19 @@ fn main() {
                     emu::save_and_exit(&cpu, control_flow);
                 }
 
-                emu::run_frame(&mut cpu, &mut gamepad, last_key);
+                match app.mode {
+                    EmuMode::Running => emu::run_frame(&mut cpu, &mut gamepad, last_key),
+                    EmuMode::StepFrame if gui::kbd::space_released(&last_key) => {
+                        emu::run_frame(&mut cpu, &mut gamepad, last_key)
+                    }
+                    EmuMode::Step if gui::kbd::space_released(&last_key) => {
+                        emu::run(&mut cpu, &mut gamepad, last_key, 4);
+                    }
+                    _ => {}
+                };
+
+                // Input has been consumed, reset it
+                last_key = gui::unused_key();
 
                 window.request_redraw();
             }

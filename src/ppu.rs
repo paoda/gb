@@ -910,3 +910,31 @@ struct WindowStatus {
     /// drawing from the window tile map is true
     enabled: bool,
 }
+
+pub(crate) mod dbg {
+    use super::{Ppu, PpuMode};
+
+    pub(crate) fn ly(ppu: &Ppu) -> u8 {
+        ppu.pos.line_y
+    }
+
+    pub(crate) fn scx(ppu: &Ppu) -> u8 {
+        ppu.pos.scroll_x
+    }
+
+    pub(crate) fn scy(ppu: &Ppu) -> u8 {
+        ppu.pos.scroll_y
+    }
+
+    pub(crate) fn mode(ppu: &Ppu) -> PpuMode {
+        ppu.stat.mode()
+    }
+
+    pub(crate) fn wx(ppu: &Ppu) -> i16 {
+        ppu.pos.window_x as i16
+    }
+
+    pub(crate) fn wy(ppu: &Ppu) -> i16 {
+        ppu.pos.window_y as i16
+    }
+}

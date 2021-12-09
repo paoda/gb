@@ -58,6 +58,7 @@ pub(crate) enum Instruction {
     BIT(u8, Register),
     RES(u8, Register),
     SET(u8, Register),
+    Invalid,
 }
 
 impl std::fmt::Debug for Instruction {
@@ -109,6 +110,7 @@ impl std::fmt::Debug for Instruction {
             BIT(b, r) => write!(f, "BIT {}, {:?}", b, r),
             RES(b, r) => write!(f, "RES {}, {:?}", b, r),
             SET(b, r) => write!(f, "SET {}, {:?}", b, r),
+            Invalid => f.write_str("???"),
         }
     }
 }
@@ -1294,6 +1296,7 @@ impl Instruction {
                     }
                 }
             }
+            Instruction::Invalid => panic!("Attempted to execute invalid instruction"),
         }
     }
 
@@ -1538,7 +1541,7 @@ impl Instruction {
 }
 
 impl Instruction {
-    pub(crate) fn decode(byte: u8, prefixed: bool) -> Option<Self> {
+    pub(crate) fn decode(byte: u8, prefixed: bool) -> Self {
         if prefixed {
             Self::prefixed(byte)
         } else {
@@ -1546,139 +1549,132 @@ impl Instruction {
         }
     }
 
-    fn unprefixed(byte: u8) -> Option<Self> {
+    fn unprefixed(byte: u8) -> Self {
         use Instruction::*;
 
         match byte {
             // NOP
-            0o000 => Some(NOP),
+            0o000 => NOP,
             // LD (u16), SP
-            0o010 => Some(LD(LDTarget::IndirectImmediateWord, LDSource::SP)),
+            0o010 => LD(LDTarget::IndirectImmediateWord, LDSource::SP),
             // STOP
-            0o020 => Some(STOP),
+            0o020 => STOP,
             // JR i8
-            0o030 => Some(JR(JpCond::Always)),
+            0o030 => JR(JpCond::Always),
             // JR cond i8
-            0o040 | 0o050 | 0o060 | 0o070 => Some(JR(jump_cond((byte >> 3) & 0x03))),
+            0o040 | 0o050 | 0o060 | 0o070 => JR(jump_cond((byte >> 3) & 0x03)),
             // LD r16, u16
-            0o001 | 0o021 | 0o041 | 0o061 => Some(LD(
+            0o001 | 0o021 | 0o041 | 0o061 => LD(
                 LDTarget::Group1(group1((byte >> 4) & 0x03)),
                 LDSource::ImmediateWord,
-            )),
+            ),
             // ADD HL, r16
-            0o011 | 0o031 | 0o051 | 0o071 => Some(ADD(
-                AddTarget::HL,
-                AddSource::Group1(group1((byte >> 4) & 0x03)),
-            )),
+            0o011 | 0o031 | 0o051 | 0o071 => {
+                ADD(AddTarget::HL, AddSource::Group1(group1((byte >> 4) & 0x03)))
+            }
             // LD (r16), A
-            0o002 | 0o022 | 0o042 | 0o062 => Some(LD(
+            0o002 | 0o022 | 0o042 | 0o062 => LD(
                 LDTarget::IndirectGroup2(group2((byte >> 4) & 0x03)),
                 LDSource::A,
-            )),
+            ),
             // LD A, (r16)
-            0o012 | 0o032 | 0o052 | 0o072 => Some(LD(
+            0o012 | 0o032 | 0o052 | 0o072 => LD(
                 LDTarget::A,
                 LDSource::IndirectGroup2(group2((byte >> 4) & 0x03)),
-            )),
+            ),
             // INC r16
-            0o003 | 0o023 | 0o043 | 0o063 => {
-                Some(INC(AllRegisters::Group1(group1((byte >> 4) & 0x03))))
-            }
+            0o003 | 0o023 | 0o043 | 0o063 => INC(AllRegisters::Group1(group1((byte >> 4) & 0x03))),
             // DEC r16
-            0o013 | 0o033 | 0o053 | 0o073 => {
-                Some(DEC(AllRegisters::Group1(group1((byte >> 4) & 0x03))))
-            }
+            0o013 | 0o033 | 0o053 | 0o073 => DEC(AllRegisters::Group1(group1((byte >> 4) & 0x03))),
             // INC r8
             0o004 | 0o014 | 0o024 | 0o034 | 0o044 | 0o054 | 0o064 | 0o074 => {
-                Some(INC(AllRegisters::Register(register((byte >> 3) & 0x07))))
+                INC(AllRegisters::Register(register((byte >> 3) & 0x07)))
             }
             // DEC r8
             0o005 | 0o015 | 0o025 | 0o035 | 0o045 | 0o055 | 0o065 | 0o075 => {
-                Some(DEC(AllRegisters::Register(register((byte >> 3) & 0x07))))
+                DEC(AllRegisters::Register(register((byte >> 3) & 0x07)))
             }
             // LD r8, u8
-            0o006 | 0o016 | 0o026 | 0o036 | 0o046 | 0o056 | 0o066 | 0o076 => Some(LD(
+            0o006 | 0o016 | 0o026 | 0o036 | 0o046 | 0o056 | 0o066 | 0o076 => LD(
                 LDTarget::Register(register((byte >> 3) & 0x07)),
                 LDSource::ImmediateByte,
-            )),
+            ),
             // RLCA, RRCA, RLA, RRA, DAA, CPL, SCF, and CCF
             0o007 | 0o017 | 0o027 | 0o037 | 0o047 | 0o057 | 0o067 | 0o077 => {
-                Some(flag_instr((byte >> 3) & 0x07))
+                flag_instr((byte >> 3) & 0x07)
             }
             // HALT
-            0o166 => Some(HALT),
+            0o166 => HALT,
             // LD r8, r8
-            0o100..=0o177 => Some(LD(
+            0o100..=0o177 => LD(
                 LDTarget::Register(register((byte >> 3) & 0x07)),
                 LDSource::Register(register(byte & 0x07)),
-            )),
+            ),
             // ADD, ADC, SUB, SBC, AND, XOR, OR, and CP
-            0o200..=0o277 => Some(alu_reg_instr((byte >> 3) & 0x07, byte & 0x07)),
+            0o200..=0o277 => alu_reg_instr((byte >> 3) & 0x07, byte & 0x07),
             // RET cond
-            0o300 | 0o310 | 0o320 | 0o330 => Some(RET(jump_cond((byte >> 3) & 0x03))),
+            0o300 | 0o310 | 0o320 | 0o330 => RET(jump_cond((byte >> 3) & 0x03)),
             // LD (0xFF00 + u8), A
-            0o340 => Some(LD(LDTarget::IoWithImmediateOffset, LDSource::A)),
+            0o340 => LD(LDTarget::IoWithImmediateOffset, LDSource::A),
             // ADD SP, i8
-            0o350 => Some(ADD(AddTarget::SP, AddSource::ImmediateSignedByte)),
+            0o350 => ADD(AddTarget::SP, AddSource::ImmediateSignedByte),
             // LD A, (0xFF00 + u8)
-            0o360 => Some(LD(LDTarget::A, LDSource::IoWithImmediateOffset)),
+            0o360 => LD(LDTarget::A, LDSource::IoWithImmediateOffset),
             // LD HL, SP + i8
-            0o370 => Some(LDHL),
+            0o370 => LDHL,
             // POP r16
-            0o301 | 0o321 | 0o341 | 0o361 => Some(POP(group3((byte >> 4) & 0x03))),
+            0o301 | 0o321 | 0o341 | 0o361 => POP(group3((byte >> 4) & 0x03)),
             // RET
-            0o311 => Some(RET(JpCond::Always)),
+            0o311 => RET(JpCond::Always),
             // RETI
-            0o331 => Some(RETI),
+            0o331 => RETI,
             // JP HL
-            0o351 => Some(JP(JpCond::Always, JpLoc::HL)),
+            0o351 => JP(JpCond::Always, JpLoc::HL),
             // LD SP, HL
-            0o371 => Some(LD(LDTarget::SP, LDSource::HL)),
+            0o371 => LD(LDTarget::SP, LDSource::HL),
             // JP cond u16
             0o302 | 0o312 | 0o322 | 0o332 => {
-                Some(JP(jump_cond((byte >> 3) & 0x03), JpLoc::ImmediateWord))
+                JP(jump_cond((byte >> 3) & 0x03), JpLoc::ImmediateWord)
             }
             // LD (0xFF00 + C), A
-            0o342 => Some(LD(LDTarget::IoWithC, LDSource::A)),
+            0o342 => LD(LDTarget::IoWithC, LDSource::A),
             // LD (u16), A
-            0o352 => Some(LD(LDTarget::IndirectImmediateWord, LDSource::A)),
+            0o352 => LD(LDTarget::IndirectImmediateWord, LDSource::A),
             // LD A, (0xFF00 + C)
-            0o362 => Some(LD(LDTarget::A, LDSource::IoWithC)),
+            0o362 => LD(LDTarget::A, LDSource::IoWithC),
             // LD A, (u16)
-            0o372 => Some(LD(LDTarget::A, LDSource::IndirectImmediateWord)),
+            0o372 => LD(LDTarget::A, LDSource::IndirectImmediateWord),
             // JP u16
-            0o303 => Some(JP(JpCond::Always, JpLoc::ImmediateWord)),
+            0o303 => JP(JpCond::Always, JpLoc::ImmediateWord),
             // DI
-            0o363 => Some(DI),
+            0o363 => DI,
             // EI
-            0o373 => Some(EI),
+            0o373 => EI,
             // CALL cond u16
-            0o304 | 0o314 | 0o324 | 0o334 => Some(CALL(jump_cond((byte >> 3) & 0x03))),
+            0o304 | 0o314 | 0o324 | 0o334 => CALL(jump_cond((byte >> 3) & 0x03)),
             // PUSH r16
-            0o305 | 0o325 | 0o345 | 0o365 => Some(PUSH(group3((byte >> 4) & 0x03))),
-            0o315 => Some(CALL(JpCond::Always)),
+            0o305 | 0o325 | 0o345 | 0o365 => PUSH(group3((byte >> 4) & 0x03)),
+            0o315 => CALL(JpCond::Always),
             0o306 | 0o316 | 0o326 | 0o336 | 0o346 | 0o356 | 0o366 | 0o376 => {
-                Some(alu_imm_instr((byte >> 3) & 0x07))
+                alu_imm_instr((byte >> 3) & 0x07)
             }
-            0o307 | 0o317 | 0o327 | 0o337 | 0o347 | 0o357 | 0o367 | 0o377 => {
-                Some(RST(byte & 0b00111000))
-            }
-            _ => None, // 0xCB is 0o313
+            0o307 | 0o317 | 0o327 | 0o337 | 0o347 | 0o357 | 0o367 | 0o377 => RST(byte & 0b00111000),
+            _ => Invalid, // 0xCB is 0o313
         }
     }
 
-    fn prefixed(byte: u8) -> Option<Self> {
+    fn prefixed(byte: u8) -> Self {
         use Instruction::*;
 
         match byte {
             // RLC, RRC, RL, RR, SLA, SRA, SWAP and SRL
-            0o000..=0o077 => Some(prefix_alu((byte >> 3) & 0x07, byte & 0x07)),
+            0o000..=0o077 => prefix_alu((byte >> 3) & 0x07, byte & 0x07),
             // BIT bit, r8
-            0o100..=0o177 => Some(BIT((byte >> 3) & 0x07, register(byte & 0x07))),
+            0o100..=0o177 => BIT((byte >> 3) & 0x07, register(byte & 0x07)),
             // RES bit, r8
-            0o200..=0o277 => Some(RES((byte >> 3) & 0x07, register(byte & 0x07))),
+            0o200..=0o277 => RES((byte >> 3) & 0x07, register(byte & 0x07)),
             // SET bit, r8
-            0o300..=0o377 => Some(SET((byte >> 3) & 0x07, register(byte & 0x07))),
+            0o300..=0o377 => SET((byte >> 3) & 0x07, register(byte & 0x07)),
         }
     }
 }
@@ -2163,7 +2159,7 @@ pub(crate) mod dbg {
     use super::{AllRegisters, BusIo, Cpu, Instruction, RegisterPair};
 
     pub(crate) fn tmp_disasm(cpu: &Cpu, limit: u8) -> String {
-        let mut asm = String::new();
+        let mut sm83_asm = String::new();
         let mut pc = cpu.register_pair(RegisterPair::PC);
 
         for _ in 0..limit {
@@ -2179,15 +2175,17 @@ pub(crate) mod dbg {
                 Instruction::unprefixed(opcode)
             };
 
-            if let Some(instr) = maybe_instr {
-                let instr_asm = format!("{:04X} {:?}\n", pc - 1, instr);
-                asm.push_str(&instr_asm);
-
-                pc += delta::pc_inc_count(instr)
+            match maybe_instr {
+                Instruction::Invalid => {}
+                instr => {
+                    let asm = format!("{:04X} {:?}\n", pc - 1, instr);
+                    sm83_asm.push_str(&asm);
+                    pc += delta::pc_inc_count(instr)
+                }
             }
         }
 
-        asm
+        sm83_asm
     }
 
     fn disasm(cpu: &Cpu, pc: u16, instr: Instruction) -> String {

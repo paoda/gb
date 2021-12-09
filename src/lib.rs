@@ -1,3 +1,5 @@
+#![allow(clippy::derivable_impls)] // Will remove this if bitfield-rs allows default impls
+
 pub use apu::gen::init as spsc_init;
 pub type Cycle = u64;
 

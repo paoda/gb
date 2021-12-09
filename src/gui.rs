@@ -26,6 +26,7 @@ pub struct GuiState {
     /// When true, egui winit should exit the application
     pub quit: bool,
     pub title: String,
+    pub mode: EmuMode,
 }
 
 impl GuiState {
@@ -33,8 +34,17 @@ impl GuiState {
         Self {
             title,
             quit: Default::default(),
+            mode: EmuMode::Running,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmuMode {
+    Running,
+    StepFrame,
+    Stopped,
+    Step,
 }
 
 /// To avoid using an [Option<KeyboardInput>] to keep track of user input from winit,
@@ -223,7 +233,7 @@ pub fn execute_render_pass(
 
 #[inline]
 pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
-    use crate::{cpu, instruction};
+    use crate::{cpu, instruction, ppu};
 
     fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
         ui.add(egui::TextEdit::multiline(&mut text).code_editor())
@@ -247,6 +257,17 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
             selectable_text(ui, &instruction::dbg::tmp_disasm(cpu, 20));
         });
 
+        egui::Window::new("Settings").show(ctx, |ui| {
+            egui::ComboBox::from_label("Emulation Mode")
+                .selected_text(format!("{:?}", app.mode))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut app.mode, EmuMode::Running, "Running");
+                    ui.selectable_value(&mut app.mode, EmuMode::Stopped, "Stopped");
+                    ui.selectable_value(&mut app.mode, EmuMode::StepFrame, "Step Frame");
+                    ui.selectable_value(&mut app.mode, EmuMode::Step, "Step");
+                })
+        });
+
         egui::Window::new("GB Info").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
@@ -262,10 +283,21 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
                 });
 
                 ui.vertical(|ui| {
+                    let ppu = &cpu.bus.ppu;
+
                     ui.heading("PPU");
 
-                    ui.monospace("LY: ?");
-                    ui.monospace("SCX: ?");
+                    ui.monospace(format!("LY: {}", ppu::dbg::ly(ppu)));
+                    ui.horizontal(|ui| {
+                        ui.monospace(format!("SCX: {}", ppu::dbg::scx(ppu)));
+                        ui.monospace(format!("SCY: {}", ppu::dbg::scy(ppu)));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.monospace(format!("WX: {}", ppu::dbg::wx(ppu)));
+                        ui.monospace(format!("WY: {}", ppu::dbg::wy(ppu)));
+                    });
+
+                    ui.monospace(format!("Mode: {:?}", ppu::dbg::mode(ppu)))
                 });
             });
 
@@ -311,4 +343,13 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
             })
         })
     });
+}
+
+pub mod kbd {
+    use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
+
+    pub fn space_released(input: &KeyboardInput) -> bool {
+        let keycode = input.virtual_keycode;
+        matches!(input.state, ElementState::Released if keycode == Some(VirtualKeyCode::Space))
+    }
 }

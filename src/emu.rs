@@ -18,7 +18,13 @@ pub const CYCLES_IN_FRAME: Cycle = 456 * 154; // 456 Cycles times 154 scanlines
 pub(crate) const SM83_CLOCK_SPEED: u64 = 0x40_0000; // Hz which is 4.194304Mhz
 const DEFAULT_TITLE: &str = "Game Boy Screen";
 
-pub fn run_frame(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput) -> Cycle {
+#[inline]
+pub fn run_frame(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput) {
+    run(cpu, gamepad, key, CYCLES_IN_FRAME)
+}
+
+#[inline]
+pub fn run(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput, cycles: Cycle) {
     let mut elapsed = 0;
 
     if let Some(event) = gamepad.next_event() {
@@ -26,11 +32,9 @@ pub fn run_frame(cpu: &mut Cpu, gamepad: &mut Gilrs, key: KeyboardInput) -> Cycl
     }
     crate::joypad::handle_keyboard_input(&mut cpu.bus.joyp, key);
 
-    while elapsed < CYCLES_IN_FRAME {
+    while elapsed < cycles {
         elapsed += cpu.step();
     }
-
-    elapsed
 }
 
 pub fn save_and_exit(cpu: &Cpu, control_flow: &mut ControlFlow) {
