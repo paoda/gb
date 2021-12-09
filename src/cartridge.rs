@@ -70,21 +70,23 @@ impl Cartridge {
     }
 
     fn detect_title(title_mem: &[u8; ROM_TITLE_MAX_SIZE]) -> Option<String> {
+        use std::str::from_utf8;
+
         const ALT_TITLE_LEN: usize = ROM_MANUFACTURER_START - ROM_TITLE_START;
 
-        // byte slice we have here is purposely not null terminated
+        // ascii byte slie does not have a null-terminator
         let ascii = match title_mem.iter().position(|b| *b == 0x00) {
-            Some(end) => &title_mem[0..end],
-            None => &title_mem[0..ROM_TITLE_MAX_SIZE],
+            Some(end) => &title_mem[..end],
+            None => &title_mem[..ROM_TITLE_MAX_SIZE],
         };
 
-        match std::str::from_utf8(ascii).ok() {
-            None => match std::str::from_utf8(&title_mem[0..ALT_TITLE_LEN]).ok() {
+        match from_utf8(ascii).map(str::trim).ok() {
+            None => match from_utf8(&title_mem[..ALT_TITLE_LEN]).map(str::trim).ok() {
                 Some("") | None => None,
-                Some(title) => Some(String::from(title.trim())),
+                Some(title) => Some(String::from(title)),
             },
             Some("") => None,
-            Some(title) => Some(String::from(title.trim())),
+            Some(title) => Some(String::from(title)),
         }
     }
 
@@ -949,5 +951,15 @@ mod tests {
             Some(String::from("GRAND THEFT")),
             Cartridge::detect_title(&title)
         );
+    }
+
+    #[test]
+    fn all_whitespace_title() {
+        let title = [
+            0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ];
+
+        assert_eq!(None, Cartridge::detect_title(&title));
     }
 }
