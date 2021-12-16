@@ -2155,8 +2155,11 @@ mod table {
 }
 
 pub(crate) mod dbg {
+    use std::borrow::Cow;
+
     use super::add::{Source as AddSource, Target as AddTarget};
-    use super::jump::JpCond;
+    use super::alu::Source as AluSource;
+    use super::jump::{JpCond, JpLoc};
     use super::load::{Source as LDSource, Target as LDTarget};
     use super::{AllRegisters, BusIo, Cpu, Instruction, RegisterPair};
 
@@ -2190,28 +2193,140 @@ pub(crate) mod dbg {
         sm83_asm
     }
 
-    fn disasm(cpu: &Cpu, pc: u16, instr: Instruction) -> String {
+    pub(crate) fn new_disasm(cpu: &Cpu, limit: u8) -> String {
+        let mut assembly = String::new();
+        let mut pc = cpu.register_pair(RegisterPair::PC);
+
+        for _ in 0..limit {
+            let opcode = cpu.read_byte(pc);
+            pc += 1;
+
+            let maybe_instr = if opcode == 0xCB {
+                let opcode = cpu.read_byte(pc);
+                pc += 1;
+
+                Instruction::prefixed(opcode)
+            } else {
+                Instruction::unprefixed(opcode)
+            };
+
+            match maybe_instr {
+                Instruction::Invalid => {}
+                instr => {
+                    let output = format!("${:04X} {}\n", pc - 1, disasm(cpu, pc, instr));
+                    assembly.push_str(&output);
+                    pc += delta::pc_inc_count(instr);
+                }
+            }
+        }
+
+        assembly
+    }
+
+    // TODO: It might be better if I pass in a mutable writer instead of usnig a String
+    fn disasm(cpu: &Cpu, pc: u16, instr: Instruction) -> Cow<str> {
         use Instruction::*;
 
         let imm_byte = cpu.read_byte(pc + 1);
         let imm_word = (cpu.read_byte(pc + 2) as u16) << 8 | imm_byte as u16;
 
         match instr {
-            NOP => "NOP".to_string(),
+            // Unprefixed Instructions
+            NOP => "NOP".into(),
             LD(LDTarget::IndirectImmediateWord, LDSource::SP) => {
-                format!("LD ({:#06X}), SP", imm_word)
+                format!("LD ({:#06X}), SP", imm_word).into()
             }
-            STOP => "STOP".to_string(),
-            JR(JpCond::Always) => format!("JR {}", imm_byte as i8),
-            JR(cond) => format!("JR {:?} {}", cond, imm_byte as i8),
+            STOP => "STOP".into(),
+            JR(JpCond::Always) => format!("JR {}", imm_byte as i8).into(),
+            JR(cond) => format!("JR {:?} {}", cond, imm_byte as i8).into(),
             LD(LDTarget::Group1(rp), LDSource::ImmediateWord) => {
-                format!("LD {:?} {:#06X}", rp, imm_word)
+                format!("LD {:?} {:#06X}", rp, imm_word).into()
             }
-            ADD(AddTarget::HL, AddSource::Group1(rp)) => format!("ADD HL, {:?}", rp),
-            LD(LDTarget::IndirectGroup2(rp), LDSource::A) => format!("LD ({:?}), A", rp),
-            LD(LDTarget::A, LDSource::IndirectGroup2(rp)) => format!("LD A, ({:?})", rp),
+            ADD(AddTarget::HL, AddSource::Group1(rp)) => format!("ADD HL, {:?}", rp).into(),
+            LD(LDTarget::IndirectGroup2(rp), LDSource::A) => format!("LD ({:?}), A", rp).into(),
+            LD(LDTarget::A, LDSource::IndirectGroup2(rp)) => format!("LD A, ({:?})", rp).into(),
+            INC(AllRegisters::Group1(rp)) => format!("INC {:?}", rp).into(),
+            DEC(AllRegisters::Group1(rp)) => format!("DEC {:?}", rp).into(),
+            INC(AllRegisters::Register(reg)) => format!("INC {:?}", reg).into(),
+            DEC(AllRegisters::Register(reg)) => format!("DEC {:?}", reg).into(),
+            LD(LDTarget::Register(reg), LDSource::ImmediateByte) => {
+                format!("LD {:?}, {:#04X}", reg, imm_byte).into()
+            }
+            RLCA => "RLCA".into(),
+            RRCA => "RRCA".into(),
+            RLA => "RLA".into(),
+            RRA => "RRA".into(),
+            DAA => "DAA".into(),
+            CPL => "CPL".into(),
+            SCF => "SCF".into(),
+            CCF => "CCF".into(),
+            HALT => "HALT".into(),
+            LD(LDTarget::Register(left), LDSource::Register(right)) => {
+                format!("LD {:?}, {:?}", left, right).into()
+            }
+            ADD(AddTarget::A, AddSource::Register(reg)) => format!("ADD A, {:?}", reg).into(),
+            ADC(AluSource::Register(reg)) => format!("ADC {:?}", reg).into(),
+            SUB(AluSource::Register(reg)) => format!("SUB {:?}", reg).into(),
+            SBC(AluSource::Register(reg)) => format!("SBC {:?}", reg).into(),
+            AND(AluSource::Register(reg)) => format!("AND {:?}", reg).into(),
+            XOR(AluSource::Register(reg)) => format!("XOR {:?}", reg).into(),
+            OR(AluSource::Register(reg)) => format!("OR {:?}", reg).into(),
+            CP(AluSource::Register(reg)) => format!("CP {:?}", reg).into(),
+            RET(JpCond::Always) => "RET".into(),
+            RET(cond) => format!("RET {:?}", cond).into(),
+            LD(LDTarget::IoWithImmediateOffset, LDSource::A) => {
+                format!("LD ({:#06X}) , A", 0xFF00 + imm_byte as u16).into()
+            }
+            ADD(AddTarget::SP, AddSource::ImmediateSignedByte) => {
+                format!("ADD SP, {}", imm_byte as i8).into()
+            }
+            LD(LDTarget::A, LDSource::IoWithImmediateOffset) => {
+                format!("LD A, ({:#06X})", 0xFF00 + imm_byte as u16).into()
+            }
+            LDHL => format!("LD HL, SP + {}", imm_byte as i8).into(),
+            POP(rp) => format!("POP {:?}", rp).into(),
+            RETI => "RETI".into(),
+            JP(JpCond::Always, JpLoc::HL) => "JP HL".into(),
+            LD(LDTarget::SP, LDSource::HL) => "LD SP, HL".into(),
+            JP(JpCond::Always, JpLoc::ImmediateWord) => format!("JP {:#06X}", imm_word).into(),
+            JP(cond, JpLoc::ImmediateWord) => format!("JP {:?} {:#06X}", cond, imm_word).into(),
+            LD(LDTarget::IoWithC, LDSource::A) => "LD (0xFF00 + C), A".into(),
+            LD(LDTarget::IndirectImmediateWord, LDSource::A) => {
+                format!("LD ({:#06X}), A", imm_byte).into()
+            }
+            LD(LDTarget::A, LDSource::IoWithC) => "LD A, (0xFF00 + C)".into(),
+            LD(LDTarget::A, LDSource::IndirectImmediateWord) => {
+                format!("LD A, ({:#06X})", imm_word).into()
+            }
+            DI => "DI".into(),
+            EI => "EI".into(),
+            CALL(cond) => format!("CALL {:?} {:#06X}", cond, imm_word).into(),
+            PUSH(rp) => format!("PUSH {:?}", rp).into(),
+            ADD(AddTarget::A, AddSource::ImmediateByte) => {
+                format!("ADD A, {:#04X}", imm_byte).into()
+            }
+            ADC(AluSource::ImmediateByte) => format!("ADC {:#04X}", imm_byte).into(),
+            SUB(AluSource::ImmediateByte) => format!("SUB {:#04X}", imm_byte).into(),
+            SBC(AluSource::ImmediateByte) => format!("SBC {:#04X}", imm_byte).into(),
+            AND(AluSource::ImmediateByte) => format!("AND {:#04X}", imm_byte).into(),
+            XOR(AluSource::ImmediateByte) => format!("XOR {:#04X}", imm_byte).into(),
+            OR(AluSource::ImmediateByte) => format!("OR {:#04X}", imm_byte).into(),
+            CP(AluSource::ImmediateByte) => format!("CP {:#04X}", imm_byte).into(),
+            RST(v) => format!("RST {:#04X}", v).into(),
 
-            _ => todo!(),
+            // Prefixed Instructions
+            RLC(reg) => format!("RLC {:?}", reg).into(),
+            RRC(reg) => format!("RRC {:?}", reg).into(),
+            RL(reg) => format!("RL {:?}", reg).into(),
+            RR(reg) => format!("RR {:?}", reg).into(),
+            SLA(reg) => format!("SLA {:?}", reg).into(),
+            SRA(reg) => format!("SRA {:?}", reg).into(),
+            SWAP(reg) => format!("SWAP {:?}", reg).into(),
+            SRL(reg) => format!("SRL {:?}", reg).into(),
+            BIT(bit, reg) => format!("BIT {}, {:?}", bit, reg).into(),
+            RES(bit, reg) => format!("RES {}, {:?}", bit, reg).into(),
+            SET(bit, reg) => format!("SET {}, {:?}", bit, reg).into(),
+            _ => unreachable!("{:?} is an illegal instruction", instr),
         }
     }
 
