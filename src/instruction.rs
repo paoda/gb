@@ -1654,7 +1654,9 @@ impl Instruction {
             0o304 | 0o314 | 0o324 | 0o334 => CALL(jump_cond((byte >> 3) & 0x03)),
             // PUSH r16
             0o305 | 0o325 | 0o345 | 0o365 => PUSH(group3((byte >> 4) & 0x03)),
+            // CALL u16
             0o315 => CALL(JpCond::Always),
+            // ADD, ADC, SUB, SBC, AND, XOR, OR, and CP
             0o306 | 0o316 | 0o326 | 0o336 | 0o346 | 0o356 | 0o366 | 0o376 => {
                 alu_imm_instr((byte >> 3) & 0x07)
             }
