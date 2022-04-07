@@ -2073,7 +2073,7 @@ mod table {
             0b101 => L,
             0b110 => IndirectHL,
             0b111 => A,
-            _ => unreachable!("{:#04X} is not a valid Register"),
+            _ => unreachable!("{:#04X} is not a valid Register", code),
         }
     }
 

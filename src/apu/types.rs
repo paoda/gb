@@ -169,7 +169,7 @@ pub(super) mod ch4 {
             match byte & 0x01 {
                 0b00 => Self::Short,
                 0b01 => Self::Long,
-                _ => unreachable!("{:#04X} is not a valid value for CounterWidth"),
+                _ => unreachable!("{:#04X} is not a valid value for CounterWidth", byte),
             }
         }
     }

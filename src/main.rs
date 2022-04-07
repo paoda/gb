@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, Command};
 use egui_wgpu_backend::RenderPass;
 use gb::gui::EmuMode;
 use gb::{emu, gui};
@@ -14,22 +14,22 @@ use winit::event_loop::EventLoop;
 const AUDIO_ENABLED: bool = true;
 
 fn main() {
-    let app = App::new(crate_name!())
+    let app = Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!());
 
     let m = app
         .arg(
-            Arg::with_name("rom")
+            Arg::new("rom")
                 .value_name("ROM_FILE")
                 .takes_value(true)
                 .index(1)
                 .help("Path to the Game ROM"),
         )
         .arg(
-            Arg::with_name("boot")
-                .short("b")
+            Arg::new("boot")
+                .short('b')
                 .long("boot")
                 .value_name("FILE")
                 .takes_value(true)

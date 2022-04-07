@@ -117,7 +117,7 @@ pub fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfigur
         format,
         width: size.width as u32,
         height: size.height as u32,
-        present_mode: PresentMode::Mailbox,
+        present_mode: PresentMode::Immediate,
     }
 }
 
