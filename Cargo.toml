@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = "1.0"
 bitfield = "0.13"
 clap = { version = "3.1", features = ["cargo"] }
-gilrs = "0.8"
+gilrs = "0.9"
 winit = "0.26"
 egui = "0.15"
 wgpu = "0.11"
