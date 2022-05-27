@@ -4,14 +4,14 @@ use crate::cartridge::Cartridge;
 use crate::cpu::Cpu;
 use crate::{Cycle, GB_HEIGHT, GB_WIDTH};
 use clap::crate_name;
+use egui_winit::winit::event::KeyboardInput;
+use egui_winit::winit::event_loop::ControlFlow;
 use gilrs::Gilrs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
-use winit::event::KeyboardInput;
-use winit::event_loop::ControlFlow;
 
 pub const SM83_CYCLE_TIME: Duration = Duration::from_nanos(1_000_000_000 / SM83_CLOCK_SPEED);
 pub const CYCLES_IN_FRAME: Cycle = 456 * 154; // 456 Cycles times 154 scanlines

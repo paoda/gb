@@ -1,6 +1,9 @@
-use egui::{ClippedMesh, CtxRef, TextureId};
-use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
-use egui_winit_platform::Platform;
+use egui_wgpu::wgpu;
+use egui_winit::egui;
+use egui_winit::winit;
+
+use egui::{ClippedPrimitive, Context, TextureId};
+use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 use wgpu::{
     Adapter, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue, RequestDeviceError,
     Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
@@ -121,20 +124,6 @@ pub fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfigur
     }
 }
 
-pub fn platform_desc(window: &Window) -> Platform {
-    use egui::FontDefinitions;
-    use egui_winit_platform::PlatformDescriptor;
-
-    let size = window.inner_size();
-    Platform::new(PlatformDescriptor {
-        physical_width: size.width as u32,
-        physical_height: size.height as u32,
-        scale_factor: window.scale_factor(),
-        font_definitions: FontDefinitions::default(),
-        ..Default::default()
-    })
-}
-
 pub fn texture_size() -> Extent3d {
     Extent3d {
         width: GB_WIDTH as u32,
@@ -184,14 +173,6 @@ pub fn write_to_texture(
     );
 }
 
-pub fn expose_texture_to_egui(
-    render_pass: &mut RenderPass,
-    device: &Device,
-    texture: &Texture,
-) -> TextureId {
-    render_pass.egui_texture_from_wgpu_texture(device, texture, FILTER_MODE)
-}
-
 #[inline]
 pub fn create_view(frame: &SurfaceTexture) -> TextureView {
     use wgpu::TextureViewDescriptor;
@@ -208,31 +189,19 @@ pub fn create_command_encoder(device: &Device) -> CommandEncoder {
     })
 }
 
-#[inline]
-pub fn create_screen_descriptor(
-    window: &Window,
-    config: &SurfaceConfiguration,
-) -> ScreenDescriptor {
-    ScreenDescriptor {
-        physical_width: config.width,
-        physical_height: config.height,
-        scale_factor: window.scale_factor() as f32,
-    }
-}
-
-#[inline]
+car#[inline]
 pub fn execute_render_pass(
     render_pass: &mut RenderPass,
     encoder: &mut CommandEncoder,
     view: &TextureView,
-    jobs: Vec<ClippedMesh>,
+    jobs: Vec<ClippedPrimitive>,
     descriptor: &ScreenDescriptor,
-) -> Result<(), BackendError> {
+) {
     render_pass.execute(encoder, view, &jobs, descriptor, Some(wgpu::Color::BLACK))
 }
 
 #[inline]
-pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
+pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &Context, texture_id: TextureId) {
     use crate::{cpu, instruction, ppu};
 
     fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
@@ -240,7 +209,7 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
     }
 
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        egui::menu::menu(ui, "File", |ui| {
+        ui.menu_button("File", |ui| {
             if ui.button("Quit").clicked() {
                 app.quit = true;
             }
@@ -322,9 +291,12 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
             ui.horizontal(|ui| {
                 let ie = cpu.int_enable();
 
-                let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
-                let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
-                let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
+                let style = ctx.style();
+                let font_id = egui::TextStyle::Body.resolve(&style);
+
+                let r_len = ctx.fonts().glyph_width(&font_id, 'R');
+                let e_len = ctx.fonts().glyph_width(&font_id, 'E');
+                let q_len = ctx.fonts().glyph_width(&font_id, 'Q');
 
                 ui.label("IE:");
                 ui.add_space(q_len - (e_len - r_len));
@@ -350,7 +322,7 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
 }
 
 pub mod kbd {
-    use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
+    use egui_winit::winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
 
     pub fn space_released(input: &KeyboardInput) -> bool {
         let keycode = input.virtual_keycode;

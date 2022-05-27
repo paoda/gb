@@ -1,5 +1,5 @@
+use egui_winit::winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
 use gilrs::{Button, Event as GamepadEvent, EventType as GamepadEventType};
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
 
 #[derive(Debug)]
 pub struct Joypad {

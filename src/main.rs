@@ -1,15 +1,16 @@
 use std::time::Instant;
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, Command};
-use egui_wgpu_backend::RenderPass;
+use egui_wgpu::renderer::RenderPass;
 use gb::gui::EmuMode;
 use gb::{emu, gui};
 use gilrs::Gilrs;
 use gui::GuiState;
 use rodio::{OutputStream, Sink};
 use tracing_subscriber::EnvFilter;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
+
+use egui_winit::winit::event::{Event, WindowEvent};
+use egui_winit::winit::event_loop::{EventLoop, EventLoopProxy};
 
 const AUDIO_ENABLED: bool = true;
 
@@ -48,7 +49,7 @@ fn main() {
 
     // --Here lies a lot of winit + wgpu Boilerplate--
     let event_loop: EventLoop<Event<()>> = EventLoop::with_user_event();
-    let window = gui::build_window(&event_loop).expect("build window");
+    let window = gui::build_window(&event_loop).expect("create winit window");
 
     let (instance, surface) = gui::create_surface(&window);
     let adapter = gui::request_adapter(&instance, &surface).expect("request adaptor");
@@ -59,7 +60,7 @@ fn main() {
 
     let mut config = gui::surface_config(&window, format);
     surface.configure(&device, &config);
-    let mut platform = gui::platform_desc(&window);
+    let mut state = egui_winit::State::new(8192, &window);
     let mut render_pass = RenderPass::new(&device, format, 1);
 
     // We interrupt your boiler plate to initialize the emulator so that
@@ -79,7 +80,9 @@ fn main() {
     let texture_size = gui::texture_size();
     let texture = gui::create_texture(&device, texture_size);
     gui::write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
-    let texture_id = gui::expose_texture_to_egui(&mut render_pass, &device, &texture);
+    let texture_id = todo!("Expose Texture ID to egui");
+
+    render_pass.
 
     // Load ROM if filepath was provided
     if let Some(path) = m.value_of("rom") {
@@ -116,14 +119,13 @@ fn main() {
 
     // Set up state for the Immediate-mode GUI
     let mut app = GuiState::new(rom_title);
+    let mut ctx = egui_winit::egui::Context::default();
     let mut last_key = gui::unused_key();
 
     // used for egui animations
     let start_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
-        platform.handle_event(&event);
-
         match event {
             Event::MainEventsCleared => {
                 if app.quit {
@@ -147,8 +149,6 @@ fn main() {
                 window.request_redraw();
             }
             Event::RedrawRequested(..) => {
-                platform.update_time(start_time.elapsed().as_secs_f64());
-
                 let data = emu::pixel_buf(&cpu);
                 gui::write_to_texture(&queue, &texture, data, texture_size);
 
@@ -172,7 +172,7 @@ fn main() {
                 let screen_descriptor = gui::create_screen_descriptor(&window, &config);
 
                 // Upload all resources for the GPU.
-                render_pass.update_texture(&device, &queue, &platform.context().texture());
+                render_pass.update_texture(&device, &queue, todo!(), todo!());
                 render_pass.update_user_textures(&device, &queue);
                 render_pass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
@@ -192,18 +192,23 @@ fn main() {
                 // Redraw egui
                 output_frame.present();
             }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => {
-                    config.width = size.width;
-                    config.height = size.height;
-                    surface.configure(&device, &config);
+            Event::WindowEvent { event, .. } => {
+                let exclusive_use = state.on_event(&ctx, &event);
+                if !exclusive_use {
+                    match event {
+                        WindowEvent::Resized(size) => {
+                            config.width = size.width;
+                            config.height = size.height;
+                            surface.configure(&device, &config);
+                        }
+                        WindowEvent::CloseRequested => {
+                            emu::save_and_exit(&cpu, control_flow);
+                        }
+                        WindowEvent::KeyboardInput { input, .. } => last_key = input,
+                        _ => {}
+                    }
                 }
-                WindowEvent::CloseRequested => {
-                    emu::save_and_exit(&cpu, control_flow);
-                }
-                WindowEvent::KeyboardInput { input, .. } => last_key = input,
-                _ => {}
-            },
+            }
             _ => {}
         }
     });
