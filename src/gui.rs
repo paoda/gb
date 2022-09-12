@@ -58,7 +58,7 @@ impl Gui {
 
         let texture_size = texture_size();
         let texture = create_texture(&device, texture_size);
-        write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
+        write_to_texture(&queue, &texture, emu::pixel_buf(cpu), texture_size);
 
         let view = texture.create_view(&TextureViewDescriptor::default());
         let texture_id = expose_texture_to_egui(&mut render_pass, &device, &view);
@@ -83,25 +83,25 @@ impl Gui {
         }
     }
 
-    pub fn maybe_quit(self: &Self, cpu: &Cpu, control_flow: &mut ControlFlow) {
+    pub fn maybe_quit(&self, cpu: &Cpu, control_flow: &mut ControlFlow) {
         if self.should_quit {
             emu::save_and_exit(cpu, control_flow);
         }
     }
 
-    pub fn request_redraw(self: &Self) {
+    pub fn request_redraw(&self) {
         self.window.request_redraw();
     }
 
-    pub fn handle_event<T>(self: &mut Self, event: &Event<T>) {
+    pub fn handle_event<T>(&mut self, event: &Event<T>) {
         self.platform.handle_event(event);
     }
 
-    pub fn update_time(self: &mut Self, elapsed_seconds: f64) {
+    pub fn update_time(&mut self, elapsed_seconds: f64) {
         self.platform.update_time(elapsed_seconds);
     }
 
-    pub fn resize(self: &mut Self, size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
         // See: https://github.com/rust-windowing/winit/issues/208
         if size.width > 0 && size.height > 0 {
             self.surface_config.width = size.width;
@@ -110,7 +110,7 @@ impl Gui {
         }
     }
 
-    pub fn paint(self: &mut Self, cpu: &Cpu) {
+    pub fn paint(&mut self, cpu: &Cpu) {
         use wgpu::SurfaceError;
 
         let data = emu::pixel_buf(cpu);
@@ -170,7 +170,7 @@ impl Gui {
     }
 
     #[inline]
-    pub fn draw_egui(self: &mut Self, cpu: &Cpu, ctx: &Context, texture_id: TextureId) {
+    pub fn draw_egui(&mut self, cpu: &Cpu, ctx: &Context, texture_id: TextureId) {
         use crate::{cpu, instruction, ppu};
 
         fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {

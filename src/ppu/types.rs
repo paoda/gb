@@ -335,7 +335,7 @@ impl From<ObjectPaletteKind> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum RenderPriority {
     Object = 0,
     BackgroundAndWindow = 1,

@@ -64,8 +64,7 @@ pub fn rom_title(cpu: &Cpu) -> &str {
     cpu.bus
         .cart
         .as_ref()
-        .map(|c| c.title.as_deref())
-        .flatten()
+        .and_then(|c| c.title.as_deref())
         .unwrap_or(DEFAULT_TITLE)
 }
 
