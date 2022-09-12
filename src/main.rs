@@ -8,8 +8,9 @@ use gilrs::Gilrs;
 use gui::GuiState;
 use rodio::{OutputStream, Sink};
 use tracing_subscriber::EnvFilter;
+use wgpu::TextureViewDescriptor;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
+use winit::event_loop::{EventLoop, EventLoopBuilder};
 
 const AUDIO_ENABLED: bool = true;
 
@@ -47,15 +48,13 @@ fn main() {
         .init();
 
     // --Here lies a lot of winit + wgpu Boilerplate--
-    let event_loop: EventLoop<Event<()>> = EventLoop::with_user_event();
+    let event_loop: EventLoop<Event<()>> = EventLoopBuilder::with_user_event().build();
     let window = gui::build_window(&event_loop).expect("build window");
 
     let (instance, surface) = gui::create_surface(&window);
     let adapter = gui::request_adapter(&instance, &surface).expect("request adaptor");
     let (device, queue) = gui::request_device(&adapter).expect("request device");
-    let format = surface
-        .get_preferred_format(&adapter)
-        .expect("get surface format");
+    let format = surface.get_supported_formats(&adapter)[0]; // First is preferred
 
     let mut config = gui::surface_config(&window, format);
     surface.configure(&device, &config);
@@ -79,7 +78,9 @@ fn main() {
     let texture_size = gui::texture_size();
     let texture = gui::create_texture(&device, texture_size);
     gui::write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
-    let texture_id = gui::expose_texture_to_egui(&mut render_pass, &device, &texture);
+
+    let view = texture.create_view(&TextureViewDescriptor::default());
+    let texture_id = gui::expose_texture_to_egui(&mut render_pass, &device, &view);
 
     // Load ROM if filepath was provided
     if let Some(path) = m.value_of("rom") {
@@ -165,15 +166,16 @@ fn main() {
                 platform.begin_frame();
                 gui::draw_egui(&cpu, &mut app, &platform.context(), texture_id);
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
-                let (_, paint_commands) = platform.end_frame(Some(&window));
-                let paint_jobs = platform.context().tessellate(paint_commands);
+                let full_output = platform.end_frame(Some(&window));
+                let paint_jobs = platform.context().tessellate(full_output.shapes);
 
                 let mut encoder = gui::create_command_encoder(&device);
                 let screen_descriptor = gui::create_screen_descriptor(&window, &config);
-
+                let tdelta = full_output.textures_delta;
                 // Upload all resources for the GPU.
-                render_pass.update_texture(&device, &queue, &platform.context().texture());
-                render_pass.update_user_textures(&device, &queue);
+                render_pass
+                    .add_textures(&device, &queue, &tdelta)
+                    .expect("add texture ok");
                 render_pass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
                 // Record all render passes.

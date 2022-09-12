@@ -1,4 +1,4 @@
-use egui::{ClippedMesh, CtxRef, TextureId};
+use egui::{ClippedPrimitive, Context, TextureId};
 use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 use wgpu::{
@@ -117,7 +117,7 @@ pub fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfigur
         format,
         width: size.width as u32,
         height: size.height as u32,
-        present_mode: PresentMode::Immediate,
+        present_mode: PresentMode::Mailbox,
     }
 }
 
@@ -187,9 +187,9 @@ pub fn write_to_texture(
 pub fn expose_texture_to_egui(
     render_pass: &mut RenderPass,
     device: &Device,
-    texture: &Texture,
+    view: &TextureView,
 ) -> TextureId {
-    render_pass.egui_texture_from_wgpu_texture(device, texture, FILTER_MODE)
+    render_pass.egui_texture_from_wgpu_texture(device, view, FILTER_MODE)
 }
 
 #[inline]
@@ -225,14 +225,14 @@ pub fn execute_render_pass(
     render_pass: &mut RenderPass,
     encoder: &mut CommandEncoder,
     view: &TextureView,
-    jobs: Vec<ClippedMesh>,
+    jobs: Vec<ClippedPrimitive>,
     descriptor: &ScreenDescriptor,
 ) -> Result<(), BackendError> {
     render_pass.execute(encoder, view, &jobs, descriptor, Some(wgpu::Color::BLACK))
 }
 
 #[inline]
-pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: TextureId) {
+pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &Context, texture_id: TextureId) {
     use crate::{cpu, instruction, ppu};
 
     fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
@@ -240,7 +240,7 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
     }
 
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        egui::menu::menu(ui, "File", |ui| {
+        ui.menu_button("File", |ui| {
             if ui.button("Quit").clicked() {
                 app.quit = true;
             }
@@ -322,12 +322,13 @@ pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &CtxRef, texture_id: Textur
             ui.horizontal(|ui| {
                 let ie = cpu.int_enable();
 
-                let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
-                let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
-                let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
+                // TODO: Reimplement this
+                // let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
+                // let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
+                // let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
 
                 ui.label("IE:");
-                ui.add_space(q_len - (e_len - r_len));
+                // ui.add_space(q_len - (e_len - r_len));
                 let _ = ui.selectable_label(ie & 0b01 == 0x01, "VBlank");
                 let _ = ui.selectable_label(ie >> 1 & 0x01 == 0x01, "LCD STAT");
                 let _ = ui.selectable_label(ie >> 2 & 0x01 == 0x01, "Timer");
