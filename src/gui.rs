@@ -1,18 +1,19 @@
-use egui::{ClippedPrimitive, Context, TextureId};
-use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
+use egui::{Context, TextureId};
+use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 use wgpu::{
-    Adapter, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue, RequestDeviceError,
-    Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
-    TextureView,
+    Adapter, Backends, Color, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue,
+    RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages,
+    TextureView, TextureViewDescriptor,
 };
+use winit::dpi::PhysicalSize;
 use winit::error::OsError;
-use winit::event::{ElementState, KeyboardInput};
-use winit::event_loop::EventLoop;
+use winit::event::{ElementState, Event, KeyboardInput};
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
 use crate::cpu::Cpu;
-use crate::{GB_HEIGHT, GB_WIDTH};
+use crate::{emu, GB_HEIGHT, GB_WIDTH};
 
 const EGUI_DIMENSIONS: (usize, usize) = (1280, 720);
 const FILTER_MODE: FilterMode = FilterMode::Nearest;
@@ -20,22 +21,271 @@ const WINDOW_TITLE: &str = "DMG-01 Emulator";
 
 const SCALE: f32 = 3.0;
 
-/// Holds GUI State
-#[derive(Debug, Clone)]
-pub struct GuiState {
-    /// When true, egui winit should exit the application
-    pub quit: bool,
+pub struct Gui {
+    pub should_quit: bool,
     pub title: String,
     pub mode: EmuMode,
+
+    window: Window,
+    platform: Platform,
+
+    surface: Surface,
+    device: Device,
+    queue: Queue,
+    surface_config: SurfaceConfiguration,
+    render_pass: RenderPass,
+
+    texture: Texture,
+    texture_size: Extent3d,
+    texture_id: TextureId,
 }
 
-impl GuiState {
-    pub fn new(title: String) -> Self {
+impl Gui {
+    pub fn new<T>(title: String, event_loop: &EventLoop<T>, cpu: &Cpu) -> Self {
+        let window = build_window(event_loop).expect("build window");
+
+        let instance = Instance::new(Backends::PRIMARY);
+        let surface = unsafe { instance.create_surface(&window) };
+
+        let adapter = request_adapter(&instance, &surface).expect("request adaptor");
+        let (device, queue) = request_device(&adapter).expect("request device");
+        let texture_format = surface.get_supported_formats(&adapter)[0]; // First is preferred
+
+        let surface_config = surface_config(&window, texture_format);
+        surface.configure(&device, &surface_config);
+        let platform = platform(&window);
+        let mut render_pass = RenderPass::new(&device, texture_format, 1);
+
+        let texture_size = texture_size();
+        let texture = create_texture(&device, texture_size);
+        write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
+
+        let view = texture.create_view(&TextureViewDescriptor::default());
+        let texture_id = expose_texture_to_egui(&mut render_pass, &device, &view);
+
         Self {
+            should_quit: Default::default(),
             title,
-            quit: Default::default(),
             mode: EmuMode::Running,
+
+            window,
+            platform,
+
+            surface,
+            device,
+            queue,
+            surface_config,
+            render_pass,
+
+            texture,
+            texture_size,
+            texture_id,
         }
+    }
+
+    pub fn maybe_quit(self: &Self, cpu: &Cpu, control_flow: &mut ControlFlow) {
+        if self.should_quit {
+            emu::save_and_exit(cpu, control_flow);
+        }
+    }
+
+    pub fn request_redraw(self: &Self) {
+        self.window.request_redraw();
+    }
+
+    pub fn handle_event<T>(self: &mut Self, event: &Event<T>) {
+        self.platform.handle_event(event);
+    }
+
+    pub fn update_time(self: &mut Self, elapsed_seconds: f64) {
+        self.platform.update_time(elapsed_seconds);
+    }
+
+    pub fn resize(self: &mut Self, size: PhysicalSize<u32>) {
+        // See: https://github.com/rust-windowing/winit/issues/208
+        if size.width > 0 && size.height > 0 {
+            self.surface_config.width = size.width;
+            self.surface_config.height = size.height;
+            self.surface.configure(&self.device, &self.surface_config);
+        }
+    }
+
+    pub fn paint(self: &mut Self, cpu: &Cpu) {
+        use wgpu::SurfaceError;
+
+        let data = emu::pixel_buf(cpu);
+        write_to_texture(&self.queue, &self.texture, data, self.texture_size);
+
+        let output_frame = match self.surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(SurfaceError::Outdated) => return, // Occurs on minimization on Windows
+            Err(e) => {
+                eprintln!("Dropped frame with error: {}", e);
+                return;
+            }
+        };
+
+        let output_view = output_frame
+            .texture
+            .create_view(&TextureViewDescriptor::default());
+
+        // Begin to draw Egui components
+        self.platform.begin_frame();
+        self.draw_egui(cpu, &self.platform.context(), self.texture_id);
+
+        // End the UI frame. We could now handle the output and draw the UI with the backend.
+        let full_output = self.platform.end_frame(Some(&self.window));
+        let paint_jobs = self.platform.context().tessellate(full_output.shapes);
+
+        let mut encoder = create_command_encoder(&self.device);
+        let screen_descriptor = create_screen_descriptor(&self.window, &self.surface_config);
+        let tdelta = full_output.textures_delta;
+        // Upload all resources for the GPU.
+        self.render_pass
+            .add_textures(&self.device, &self.queue, &tdelta)
+            .expect("add texture ok");
+        self.render_pass
+            .update_buffers(&self.device, &self.queue, &paint_jobs, &screen_descriptor);
+
+        // Record all render passes.
+        self.render_pass
+            .execute(
+                &mut encoder,
+                &output_view,
+                &paint_jobs,
+                &screen_descriptor,
+                Some(Color::BLACK),
+            )
+            .expect("execute render pass");
+
+        // Submit the commands.
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Redraw egui
+        output_frame.present();
+
+        self.render_pass
+            .remove_textures(tdelta)
+            .expect("remove texture delta");
+    }
+
+    #[inline]
+    pub fn draw_egui(self: &mut Self, cpu: &Cpu, ctx: &Context, texture_id: TextureId) {
+        use crate::{cpu, instruction, ppu};
+
+        fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
+            ui.add(egui::TextEdit::multiline(&mut text).code_editor())
+        }
+
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.menu_button("File", |ui| {
+                if ui.button("Quit").clicked() {
+                    self.should_quit = true;
+                }
+            });
+
+            egui::Window::new(&self.title).show(ctx, |ui| {
+                ui.image(
+                    texture_id,
+                    [GB_WIDTH as f32 * SCALE, GB_HEIGHT as f32 * SCALE],
+                );
+            });
+
+            egui::Window::new("Disassembly").show(ctx, |ui| {
+                selectable_text(ui, &instruction::dbg::tmp_disasm(cpu, 20));
+            });
+
+            egui::Window::new("Settings").show(ctx, |ui| {
+                egui::ComboBox::from_label("Emulation Mode")
+                    .selected_text(format!("{:?}", self.mode))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.mode, EmuMode::Running, "Running");
+                        ui.selectable_value(&mut self.mode, EmuMode::Stopped, "Stopped");
+                        ui.selectable_value(&mut self.mode, EmuMode::StepFrame, "Step Frame");
+                        ui.selectable_value(&mut self.mode, EmuMode::Step, "Step");
+                    })
+            });
+
+            egui::Window::new("GB Info").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.heading("CPU");
+
+                        ui.monospace(format!("AF: {:#06X}", cpu::dbg::af(cpu)));
+                        ui.monospace(format!("BC: {:#06X}", cpu::dbg::bc(cpu)));
+                        ui.monospace(format!("DE: {:#06X}", cpu::dbg::de(cpu)));
+                        ui.monospace(format!("HL: {:#06X}", cpu::dbg::hl(cpu)));
+                        ui.add_space(10.0);
+                        ui.monospace(format!("SP: {:#06X}", cpu::dbg::sp(cpu)));
+                        ui.monospace(format!("PC: {:#06X}", cpu::dbg::pc(cpu)));
+                    });
+
+                    ui.vertical(|ui| {
+                        let ppu = &cpu.bus.ppu;
+
+                        ui.heading("PPU");
+
+                        ui.monospace(format!("LY: {}", ppu::dbg::ly(ppu)));
+                        ui.horizontal(|ui| {
+                            ui.monospace(format!("SCX: {}", ppu::dbg::scx(ppu)));
+                            ui.monospace(format!("SCY: {}", ppu::dbg::scy(ppu)));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.monospace(format!("WX: {}", ppu::dbg::wx(ppu)));
+                            ui.monospace(format!("WY: {}", ppu::dbg::wy(ppu)));
+                        });
+
+                        ui.monospace(format!(
+                            "Mode: {:?} {}",
+                            ppu::dbg::mode(ppu),
+                            ppu::dbg::dot(ppu)
+                        ))
+                    });
+                });
+
+                ui.add_space(10.0);
+
+                let _ = ui.selectable_label(cpu::dbg::ime(cpu), "IME");
+                ui.horizontal(|ui| {
+                    let irq = cpu.int_request();
+
+                    ui.label("IRQ:");
+                    let _ = ui.selectable_label(irq & 0b01 == 0x01, "VBlank");
+                    let _ = ui.selectable_label(irq >> 1 & 0x01 == 0x01, "LCD STAT");
+                    let _ = ui.selectable_label(irq >> 2 & 0x01 == 0x01, "Timer");
+                    let _ = ui.selectable_label(irq >> 3 & 0x01 == 0x01, "Serial");
+                    let _ = ui.selectable_label(irq >> 4 & 0x01 == 0x01, "Joypad");
+                });
+
+                ui.horizontal(|ui| {
+                    let ie = cpu.int_enable();
+
+                    // TODO: Reimplement this
+                    // let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
+                    // let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
+                    // let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
+
+                    ui.label("IE:");
+                    // ui.add_space(q_len - (e_len - r_len));
+                    let _ = ui.selectable_label(ie & 0b01 == 0x01, "VBlank");
+                    let _ = ui.selectable_label(ie >> 1 & 0x01 == 0x01, "LCD STAT");
+                    let _ = ui.selectable_label(ie >> 2 & 0x01 == 0x01, "Timer");
+                    let _ = ui.selectable_label(ie >> 3 & 0x01 == 0x01, "Serial");
+                    let _ = ui.selectable_label(ie >> 4 & 0x01 == 0x01, "Joypad");
+                });
+
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    let flags = cpu::dbg::flags(cpu);
+
+                    let _ = ui.selectable_label((flags >> 7 & 0x01) == 0x01, "Zero");
+                    let _ = ui.selectable_label((flags >> 6 & 0x01) == 0x01, "Negative");
+                    let _ = ui.selectable_label((flags >> 5 & 0x01) == 0x01, "Half-Carry");
+                    let _ = ui.selectable_label((flags >> 4 & 0x01) == 0x01, "Carry");
+                })
+            })
+        });
     }
 }
 
@@ -61,8 +311,7 @@ pub fn unused_key() -> KeyboardInput {
     }
 }
 
-pub fn build_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
-    use winit::dpi::PhysicalSize;
+fn build_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
     use winit::window::WindowBuilder;
 
     WindowBuilder::new()
@@ -77,38 +326,30 @@ pub fn build_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
         .build(event_loop)
 }
 
-pub fn create_surface(window: &Window) -> (Instance, Surface) {
-    use wgpu::Backends;
-
-    let instance = Instance::new(Backends::PRIMARY);
-    let surface = unsafe { instance.create_surface(window) };
-    (instance, surface)
-}
-
-pub fn request_adapter(instance: &Instance, surface: &Surface) -> Option<Adapter> {
+fn request_adapter(instance: &Instance, surface: &Surface) -> Option<Adapter> {
     use wgpu::{PowerPreference, RequestAdapterOptions};
 
     pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
         power_preference: PowerPreference::HighPerformance,
-        force_fallback_adapter: false, // TODO: What do I want to do with this?
         compatible_surface: Some(surface),
+        force_fallback_adapter: false, // TODO: What do I want to do with this?
     }))
 }
 
-pub fn request_device(adapter: &Adapter) -> Result<(Device, Queue), RequestDeviceError> {
+fn request_device(adapter: &Adapter) -> Result<(Device, Queue), RequestDeviceError> {
     use wgpu::{DeviceDescriptor, Features, Limits};
 
     pollster::block_on(adapter.request_device(
         &DeviceDescriptor {
-            label: None,
             features: Features::default(),
             limits: Limits::default(),
+            label: None,
         },
         None,
     ))
 }
 
-pub fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfiguration {
+fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfiguration {
     use wgpu::PresentMode;
 
     let size = window.inner_size();
@@ -121,7 +362,7 @@ pub fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfigur
     }
 }
 
-pub fn platform_desc(window: &Window) -> Platform {
+fn platform(window: &Window) -> Platform {
     use egui::FontDefinitions;
     use egui_winit_platform::PlatformDescriptor;
 
@@ -135,7 +376,7 @@ pub fn platform_desc(window: &Window) -> Platform {
     })
 }
 
-pub fn texture_size() -> Extent3d {
+fn texture_size() -> Extent3d {
     Extent3d {
         width: GB_WIDTH as u32,
         height: GB_HEIGHT as u32,
@@ -143,7 +384,7 @@ pub fn texture_size() -> Extent3d {
     }
 }
 
-pub fn create_texture(device: &Device, size: Extent3d) -> Texture {
+fn create_texture(device: &Device, size: Extent3d) -> Texture {
     use wgpu::{TextureDescriptor, TextureDimension};
 
     device.create_texture(&TextureDescriptor {
@@ -158,7 +399,7 @@ pub fn create_texture(device: &Device, size: Extent3d) -> Texture {
 }
 
 #[inline]
-pub fn write_to_texture(
+fn write_to_texture(
     queue: &Queue,
     texture: &Texture,
     data: &[u8; GB_WIDTH * 4 * GB_HEIGHT],
@@ -184,7 +425,7 @@ pub fn write_to_texture(
     );
 }
 
-pub fn expose_texture_to_egui(
+fn expose_texture_to_egui(
     render_pass: &mut RenderPass,
     device: &Device,
     view: &TextureView,
@@ -193,14 +434,7 @@ pub fn expose_texture_to_egui(
 }
 
 #[inline]
-pub fn create_view(frame: &SurfaceTexture) -> TextureView {
-    use wgpu::TextureViewDescriptor;
-
-    frame.texture.create_view(&TextureViewDescriptor::default())
-}
-
-#[inline]
-pub fn create_command_encoder(device: &Device) -> CommandEncoder {
+fn create_command_encoder(device: &Device) -> CommandEncoder {
     use wgpu::CommandEncoderDescriptor;
 
     device.create_command_encoder(&CommandEncoderDescriptor {
@@ -209,145 +443,12 @@ pub fn create_command_encoder(device: &Device) -> CommandEncoder {
 }
 
 #[inline]
-pub fn create_screen_descriptor(
-    window: &Window,
-    config: &SurfaceConfiguration,
-) -> ScreenDescriptor {
+fn create_screen_descriptor(window: &Window, config: &SurfaceConfiguration) -> ScreenDescriptor {
     ScreenDescriptor {
         physical_width: config.width,
         physical_height: config.height,
         scale_factor: window.scale_factor() as f32,
     }
-}
-
-#[inline]
-pub fn execute_render_pass(
-    render_pass: &mut RenderPass,
-    encoder: &mut CommandEncoder,
-    view: &TextureView,
-    jobs: Vec<ClippedPrimitive>,
-    descriptor: &ScreenDescriptor,
-) -> Result<(), BackendError> {
-    render_pass.execute(encoder, view, &jobs, descriptor, Some(wgpu::Color::BLACK))
-}
-
-#[inline]
-pub fn draw_egui(cpu: &Cpu, app: &mut GuiState, ctx: &Context, texture_id: TextureId) {
-    use crate::{cpu, instruction, ppu};
-
-    fn selectable_text(ui: &mut egui::Ui, mut text: &str) -> egui::Response {
-        ui.add(egui::TextEdit::multiline(&mut text).code_editor())
-    }
-
-    egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        ui.menu_button("File", |ui| {
-            if ui.button("Quit").clicked() {
-                app.quit = true;
-            }
-        });
-
-        egui::Window::new(&app.title).show(ctx, |ui| {
-            ui.image(
-                texture_id,
-                [GB_WIDTH as f32 * SCALE, GB_HEIGHT as f32 * SCALE],
-            );
-        });
-
-        egui::Window::new("Disassembly").show(ctx, |ui| {
-            selectable_text(ui, &instruction::dbg::tmp_disasm(cpu, 20));
-        });
-
-        egui::Window::new("Settings").show(ctx, |ui| {
-            egui::ComboBox::from_label("Emulation Mode")
-                .selected_text(format!("{:?}", app.mode))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut app.mode, EmuMode::Running, "Running");
-                    ui.selectable_value(&mut app.mode, EmuMode::Stopped, "Stopped");
-                    ui.selectable_value(&mut app.mode, EmuMode::StepFrame, "Step Frame");
-                    ui.selectable_value(&mut app.mode, EmuMode::Step, "Step");
-                })
-        });
-
-        egui::Window::new("GB Info").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.heading("CPU");
-
-                    ui.monospace(format!("AF: {:#06X}", cpu::dbg::af(cpu)));
-                    ui.monospace(format!("BC: {:#06X}", cpu::dbg::bc(cpu)));
-                    ui.monospace(format!("DE: {:#06X}", cpu::dbg::de(cpu)));
-                    ui.monospace(format!("HL: {:#06X}", cpu::dbg::hl(cpu)));
-                    ui.add_space(10.0);
-                    ui.monospace(format!("SP: {:#06X}", cpu::dbg::sp(cpu)));
-                    ui.monospace(format!("PC: {:#06X}", cpu::dbg::pc(cpu)));
-                });
-
-                ui.vertical(|ui| {
-                    let ppu = &cpu.bus.ppu;
-
-                    ui.heading("PPU");
-
-                    ui.monospace(format!("LY: {}", ppu::dbg::ly(ppu)));
-                    ui.horizontal(|ui| {
-                        ui.monospace(format!("SCX: {}", ppu::dbg::scx(ppu)));
-                        ui.monospace(format!("SCY: {}", ppu::dbg::scy(ppu)));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.monospace(format!("WX: {}", ppu::dbg::wx(ppu)));
-                        ui.monospace(format!("WY: {}", ppu::dbg::wy(ppu)));
-                    });
-
-                    ui.monospace(format!(
-                        "Mode: {:?} {}",
-                        ppu::dbg::mode(ppu),
-                        ppu::dbg::dot(ppu)
-                    ))
-                });
-            });
-
-            ui.add_space(10.0);
-
-            let _ = ui.selectable_label(cpu::dbg::ime(cpu), "IME");
-            ui.horizontal(|ui| {
-                let irq = cpu.int_request();
-
-                ui.label("IRQ:");
-                let _ = ui.selectable_label(irq & 0b01 == 0x01, "VBlank");
-                let _ = ui.selectable_label(irq >> 1 & 0x01 == 0x01, "LCD STAT");
-                let _ = ui.selectable_label(irq >> 2 & 0x01 == 0x01, "Timer");
-                let _ = ui.selectable_label(irq >> 3 & 0x01 == 0x01, "Serial");
-                let _ = ui.selectable_label(irq >> 4 & 0x01 == 0x01, "Joypad");
-            });
-
-            ui.horizontal(|ui| {
-                let ie = cpu.int_enable();
-
-                // TODO: Reimplement this
-                // let r_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'R');
-                // let e_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'E');
-                // let q_len = ctx.fonts().glyph_width(egui::TextStyle::Body, 'Q');
-
-                ui.label("IE:");
-                // ui.add_space(q_len - (e_len - r_len));
-                let _ = ui.selectable_label(ie & 0b01 == 0x01, "VBlank");
-                let _ = ui.selectable_label(ie >> 1 & 0x01 == 0x01, "LCD STAT");
-                let _ = ui.selectable_label(ie >> 2 & 0x01 == 0x01, "Timer");
-                let _ = ui.selectable_label(ie >> 3 & 0x01 == 0x01, "Serial");
-                let _ = ui.selectable_label(ie >> 4 & 0x01 == 0x01, "Joypad");
-            });
-
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                let flags = cpu::dbg::flags(cpu);
-
-                let _ = ui.selectable_label((flags >> 7 & 0x01) == 0x01, "Zero");
-                let _ = ui.selectable_label((flags >> 6 & 0x01) == 0x01, "Negative");
-                let _ = ui.selectable_label((flags >> 5 & 0x01) == 0x01, "Half-Carry");
-                let _ = ui.selectable_label((flags >> 4 & 0x01) == 0x01, "Carry");
-            })
-        })
-    });
 }
 
 pub mod kbd {

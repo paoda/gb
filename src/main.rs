@@ -1,14 +1,11 @@
 use std::time::Instant;
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, Command};
-use egui_wgpu_backend::RenderPass;
-use gb::gui::EmuMode;
+use gb::gui::{EmuMode, Gui};
 use gb::{emu, gui};
 use gilrs::Gilrs;
-use gui::GuiState;
 use rodio::{OutputStream, Sink};
 use tracing_subscriber::EnvFilter;
-use wgpu::TextureViewDescriptor;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{EventLoop, EventLoopBuilder};
 
@@ -47,22 +44,7 @@ fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    // --Here lies a lot of winit + wgpu Boilerplate--
-    let event_loop: EventLoop<Event<()>> = EventLoopBuilder::with_user_event().build();
-    let window = gui::build_window(&event_loop).expect("build window");
-
-    let (instance, surface) = gui::create_surface(&window);
-    let adapter = gui::request_adapter(&instance, &surface).expect("request adaptor");
-    let (device, queue) = gui::request_device(&adapter).expect("request device");
-    let format = surface.get_supported_formats(&adapter)[0]; // First is preferred
-
-    let mut config = gui::surface_config(&window, format);
-    surface.configure(&device, &config);
-    let mut platform = gui::platform_desc(&window);
-    let mut render_pass = RenderPass::new(&device, format, 1);
-
-    // We interrupt your boiler plate to initialize the emulator so that
-    // we can copy it's empty pixel buffer to the GPU
+    // Init CPU
     let mut cpu = match m.value_of("boot") {
         Some(path) => {
             tracing::info!("User-provided boot ROM");
@@ -74,22 +56,12 @@ fn main() {
         }
     };
 
-    // Set up the wgpu (and then EGUI) texture we'll be working with.
-    let texture_size = gui::texture_size();
-    let texture = gui::create_texture(&device, texture_size);
-    gui::write_to_texture(&queue, &texture, emu::pixel_buf(&cpu), texture_size);
-
-    let view = texture.create_view(&TextureViewDescriptor::default());
-    let texture_id = gui::expose_texture_to_egui(&mut render_pass, &device, &view);
-
     // Load ROM if filepath was provided
     if let Some(path) = m.value_of("rom") {
         tracing::info!("User-provided cartridge ROM");
         emu::read_game_rom(&mut cpu, path).expect("read game rom from path");
     }
-
     emu::load_save(&mut cpu);
-
     let rom_title = emu::rom_title(&cpu).to_string();
 
     tracing::info!("Initialize Gamepad");
@@ -116,20 +88,20 @@ fn main() {
     }
 
     // Set up state for the Immediate-mode GUI
-    let mut app = GuiState::new(rom_title);
-    let mut last_key = gui::unused_key();
+    let event_loop: EventLoop<Event<()>> = EventLoopBuilder::with_user_event().build();
+
+    let mut app = Gui::new(rom_title, &event_loop, &cpu);
+    let mut last_key = gui::unused_key(); // TODO: Fix this awful impl
 
     // used for egui animations
     let start_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
-        platform.handle_event(&event);
+        app.handle_event(&event);
 
         match event {
             Event::MainEventsCleared => {
-                if app.quit {
-                    emu::save_and_exit(&cpu, control_flow);
-                }
+                app.maybe_quit(&cpu, control_flow);
 
                 match app.mode {
                     EmuMode::Running => emu::run_frame(&mut cpu, &mut gamepad, last_key),
@@ -145,64 +117,14 @@ fn main() {
                 // Input has been consumed, reset it
                 last_key = gui::unused_key();
 
-                window.request_redraw();
+                app.request_redraw();
             }
             Event::RedrawRequested(..) => {
-                platform.update_time(start_time.elapsed().as_secs_f64());
-
-                let data = emu::pixel_buf(&cpu);
-                gui::write_to_texture(&queue, &texture, data, texture_size);
-
-                let output_frame = match surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(e) => {
-                        eprintln!("Dropped frame with error: {}", e);
-                        return;
-                    }
-                };
-                let output_view = gui::create_view(&output_frame);
-
-                // Begin to draw Egui components
-                platform.begin_frame();
-                gui::draw_egui(&cpu, &mut app, &platform.context(), texture_id);
-                // End the UI frame. We could now handle the output and draw the UI with the backend.
-                let full_output = platform.end_frame(Some(&window));
-                let paint_jobs = platform.context().tessellate(full_output.shapes);
-
-                let mut encoder = gui::create_command_encoder(&device);
-                let screen_descriptor = gui::create_screen_descriptor(&window, &config);
-                let tdelta = full_output.textures_delta;
-                // Upload all resources for the GPU.
-                render_pass
-                    .add_textures(&device, &queue, &tdelta)
-                    .expect("add texture ok");
-                render_pass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
-
-                // Record all render passes.
-                gui::execute_render_pass(
-                    &mut render_pass,
-                    &mut encoder,
-                    &output_view,
-                    paint_jobs,
-                    &screen_descriptor,
-                )
-                .expect("record render passes");
-
-                // Submit the commands.
-                queue.submit(std::iter::once(encoder.finish()));
-
-                // Redraw egui
-                output_frame.present();
+                app.update_time(start_time.elapsed().as_secs_f64());
             }
             Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => {
-                    config.width = size.width;
-                    config.height = size.height;
-                    surface.configure(&device, &config);
-                }
-                WindowEvent::CloseRequested => {
-                    emu::save_and_exit(&cpu, control_flow);
-                }
+                WindowEvent::Resized(size) => app.resize(size),
+                WindowEvent::CloseRequested => emu::save_and_exit(&cpu, control_flow),
                 WindowEvent::KeyboardInput { input, .. } => last_key = input,
                 _ => {}
             },
