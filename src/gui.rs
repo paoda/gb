@@ -2,9 +2,9 @@ use egui::{Context, TextureId};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 use wgpu::{
-    Adapter, Backends, Color, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue,
-    RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor, CompositeAlphaMode,
+    Adapter, Backends, Color, CommandEncoder, CompositeAlphaMode, Device, Extent3d, FilterMode,
+    Instance, Queue, RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::error::OsError;
@@ -350,7 +350,11 @@ fn request_device(adapter: &Adapter) -> Result<(Device, Queue), RequestDeviceErr
     ))
 }
 
-fn surface_config(window: &Window, alpha_mode: CompositeAlphaMode,  format: TextureFormat) -> SurfaceConfiguration {
+fn surface_config(
+    window: &Window,
+    alpha_mode: CompositeAlphaMode,
+    format: TextureFormat,
+) -> SurfaceConfiguration {
     use wgpu::PresentMode;
 
     let size = window.inner_size();
@@ -360,7 +364,7 @@ fn surface_config(window: &Window, alpha_mode: CompositeAlphaMode,  format: Text
         width: size.width as u32,
         height: size.height as u32,
         present_mode: PresentMode::Immediate,
-        alpha_mode
+        alpha_mode,
     }
 }
 
