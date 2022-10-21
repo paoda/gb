@@ -4,7 +4,7 @@ use egui_winit_platform::Platform;
 use wgpu::{
     Adapter, Backends, Color, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue,
     RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor,
+    TextureView, TextureViewDescriptor, CompositeAlphaMode,
 };
 use winit::dpi::PhysicalSize;
 use winit::error::OsError;
@@ -51,7 +51,8 @@ impl Gui {
         let (device, queue) = request_device(&adapter).expect("request device");
         let texture_format = surface.get_supported_formats(&adapter)[0]; // First is preferred
 
-        let surface_config = surface_config(&window, texture_format);
+        let alpha_mode = surface.get_supported_alpha_modes(&adapter)[0];
+        let surface_config = surface_config(&window, alpha_mode, texture_format);
         surface.configure(&device, &surface_config);
         let platform = platform(&window);
         let mut render_pass = RenderPass::new(&device, texture_format, 1);
@@ -349,7 +350,7 @@ fn request_device(adapter: &Adapter) -> Result<(Device, Queue), RequestDeviceErr
     ))
 }
 
-fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfiguration {
+fn surface_config(window: &Window, alpha_mode: CompositeAlphaMode,  format: TextureFormat) -> SurfaceConfiguration {
     use wgpu::PresentMode;
 
     let size = window.inner_size();
@@ -358,7 +359,8 @@ fn surface_config(window: &Window, format: TextureFormat) -> SurfaceConfiguratio
         format,
         width: size.width as u32,
         height: size.height as u32,
-        present_mode: PresentMode::Mailbox,
+        present_mode: PresentMode::Immediate,
+        alpha_mode
     }
 }
 
