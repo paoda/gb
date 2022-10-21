@@ -121,6 +121,7 @@ fn main() {
             }
             Event::RedrawRequested(..) => {
                 app.update_time(start_time.elapsed().as_secs_f64());
+                app.paint(&cpu);
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::Resized(size) => app.resize(size),
