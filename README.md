@@ -1,10 +1,9 @@
 # Rekai's Gameboy Emulator
-[![Build Status](https://ci.paoda.moe/api/badges/paoda/gb/status.svg)](https://ci.paoda.moe/paoda/gb)
 
 ### Status
 * From [Blargg Test ROMs](https://github.com/L-P/blargg-test-roms/)
     * [x] cpu_instrs
-    * [ ] instr_timing (kind of)
+    * [x] instr_timing
     * [x] mem_timing
     * [x] mem_timing-2
     * [ ] dmg_sound (partial) 
@@ -21,9 +20,15 @@
 Supports: ROM-only, MBC1, MBC2, MBC3 and MBC5 games.
 
 
+### Compiling
+This project was last successfully built on [Rust 1.64.0](https://github.com/rust-lang/rust/tree/1.64.0)
+
+1. `git clone https://github.com/paoda/gb`
+2. `cd gb`
+3. `cargo run --release`
 
 ### Controls
-Controls are defined [here](https://git.musuka.dev/paoda/gb/src/branch/main/src/joypad.rs#L114)
+Controls are defined [here](https://github.com/paoda/gb/blob/85940c874460b9cb31bf9b8211bf7dda596d114a/src/joypad.rs#L114)
 
 Key | Button
 --- | ---
