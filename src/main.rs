@@ -1,6 +1,7 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
-use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, Command};
+use clap::{arg, command, value_parser};
 use gb::gui::{EmuMode, Gui};
 use gb::{emu, gui};
 use gilrs::Gilrs;
@@ -12,26 +13,16 @@ use winit::event_loop::{EventLoop, EventLoopBuilder};
 const AUDIO_ENABLED: bool = true;
 
 fn main() {
-    let app = Command::new(crate_name!())
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!());
-
-    let m = app
+    let m = command!()
         .arg(
-            Arg::new("rom")
-                .value_name("ROM_FILE")
-                .takes_value(true)
-                .index(1)
-                .help("Path to the Game ROM"),
+            arg!(-b --boot <FILE> "path to boot ROM")
+                .required(false)
+                .value_parser(value_parser!(PathBuf)),
         )
         .arg(
-            Arg::new("boot")
-                .short('b')
-                .long("boot")
-                .value_name("FILE")
-                .takes_value(true)
-                .help("Path to Boot ROM"),
+            arg!([ROM_FILE] "path to game ROM")
+                .required(true)
+                .value_parser(value_parser!(PathBuf)),
         )
         .get_matches();
 
@@ -45,7 +36,7 @@ fn main() {
         .init();
 
     // Init CPU
-    let mut cpu = match m.value_of("boot") {
+    let mut cpu = match m.get_one::<PathBuf>("boot") {
         Some(path) => {
             tracing::info!("User-provided boot ROM");
             emu::from_boot_rom(path).expect("initialize emulator with custom boot rom")
@@ -57,7 +48,7 @@ fn main() {
     };
 
     // Load ROM if filepath was provided
-    if let Some(path) = m.value_of("rom") {
+    if let Some(path) = m.get_one::<PathBuf>("ROM_FILE") {
         tracing::info!("User-provided cartridge ROM");
         emu::read_game_rom(&mut cpu, path).expect("read game rom from path");
     }
