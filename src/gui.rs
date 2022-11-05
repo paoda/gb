@@ -363,7 +363,7 @@ fn surface_config(
         format,
         width: size.width as u32,
         height: size.height as u32,
-        present_mode: PresentMode::Immediate,
+        present_mode: PresentMode::Mailbox,
         alpha_mode,
     }
 }

@@ -44,7 +44,8 @@ pub fn save_and_exit(cpu: &Cpu, control_flow: &mut ControlFlow) {
 
 #[inline]
 pub fn pixel_buf(cpu: &Cpu) -> &[u8; GB_HEIGHT * GB_WIDTH * 4] {
-    cpu.bus.ppu.frame_buf.as_ref()
+    use crate::ppu::Device;
+    cpu.bus.ppu.frame_buf.get(Device::Host)
 }
 
 pub fn from_boot_rom<P: AsRef<Path>>(path: P) -> std::io::Result<Cpu> {

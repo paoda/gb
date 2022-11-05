@@ -58,7 +58,7 @@ pub struct Ppu {
     fetch: PixelFetcher,
     fifo: PixelFifo,
     obj_buffer: ObjectBuffer,
-    pub(crate) frame_buf: Box<[u8; (GB_WIDTH * 4) * GB_HEIGHT]>,
+    pub(crate) frame_buf: FrameBuffer,
     win_stat: WindowStatus,
 
     scanline_start: bool,
@@ -83,7 +83,9 @@ impl Ppu {
         if !self.ctrl.lcd_enabled() {
             if self.dot > 0 {
                 // Check ensures this expensive operation only happens once
-                self.frame_buf.copy_from_slice(BLANK_SCREEN.as_ref());
+                self.frame_buf
+                    .get_mut(Device::Guest)
+                    .copy_from_slice(BLANK_SCREEN.as_ref());
             }
 
             self.stat.set_mode(PpuMode::HBlank);
@@ -177,6 +179,9 @@ impl Ppu {
                             // Enable Vblank LCDStat Interrupt
                             self.int.set_lcd_stat(true);
                         }
+
+                        // Screen is done drawing
+                        self.frame_buf.swap();
 
                         PpuMode::VBlank
                     } else {
@@ -411,8 +416,8 @@ impl Ppu {
                 let x = self.x_pos as usize;
 
                 let i = (GB_WIDTH * 4) * y + (x * 4);
-                self.frame_buf[i..(i + rgba.len())].copy_from_slice(&rgba);
 
+                self.frame_buf.get_mut(Device::Guest)[i..(i + rgba.len())].copy_from_slice(&rgba);
                 self.x_pos += 1;
             }
 
@@ -474,7 +479,7 @@ impl Default for Ppu {
         Self {
             vram: Box::new([0u8; VRAM_SIZE]),
             dot: Default::default(),
-            frame_buf: Box::new([0; GB_WIDTH * GB_HEIGHT * 4]),
+            frame_buf: FrameBuffer::new().expect("create frame buffers"),
             int: Default::default(),
             ctrl: LCDControl(0),
             monochrome: Default::default(),
@@ -948,4 +953,64 @@ pub(crate) mod dbg {
     pub(crate) fn dot(ppu: &Ppu) -> Cycle {
         ppu.dot
     }
+}
+
+#[derive(Debug)]
+pub struct FrameBuffer {
+    buf: [Box<[u8; Self::FRAME_LEN]>; 2],
+    current: bool,
+}
+
+#[derive(PartialEq)]
+pub enum Device {
+    Guest,
+    Host,
+}
+
+impl FrameBuffer {
+    const FRAME_LEN: usize = GB_WIDTH * std::mem::size_of::<u32>() * GB_HEIGHT;
+
+    pub fn new() -> Result<Self, FrameBufferError> {
+        Ok(Self {
+            buf: [
+                vec![0; Self::FRAME_LEN]
+                    .into_boxed_slice()
+                    .try_into()
+                    .map_err(|_| FrameBufferError::TryFrom)?,
+                vec![0; Self::FRAME_LEN]
+                    .into_boxed_slice()
+                    .try_into()
+                    .map_err(|_| FrameBufferError::TryFrom)?,
+            ],
+            current: false,
+        })
+    }
+
+    pub fn swap(&mut self) {
+        self.current = !self.current;
+    }
+
+    pub fn get_mut(&mut self, device: Device) -> &mut [u8; Self::FRAME_LEN] {
+        let idx = match device {
+            Device::Guest => self.current,
+            Device::Host => !self.current,
+        };
+
+        &mut *self.buf[idx as usize]
+    }
+
+    pub fn get(&self, device: Device) -> &[u8; Self::FRAME_LEN] {
+        let idx = match device {
+            Device::Guest => self.current,
+            Device::Host => !self.current,
+        };
+
+        &*self.buf[idx as usize]
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FrameBufferError {
+    #[error("Failed to coerce boxed slice to boxed array")]
+    TryFrom,
 }
