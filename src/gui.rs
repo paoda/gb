@@ -1,11 +1,12 @@
 use egui::{Context, TextureId};
-use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+use egui_wgpu_backend::{wgpu, RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 use wgpu::{
-    Adapter, Backends, Color, CommandEncoder, CompositeAlphaMode, Device, Extent3d, FilterMode,
-    Instance, Queue, RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    Adapter, CommandEncoder, Device, Extent3d, FilterMode, Instance, Queue, RequestDeviceError,
+    Surface, SurfaceCapabilities, SurfaceConfiguration, Texture, TextureView,
+    TextureViewDescriptor,
 };
+
 use winit::dpi::PhysicalSize;
 use winit::error::OsError;
 use winit::event::{ElementState, Event, KeyboardInput};
@@ -42,20 +43,26 @@ pub struct Gui {
 
 impl Gui {
     pub fn new<T>(title: String, event_loop: &EventLoop<T>, cpu: &Cpu) -> Self {
+        use wgpu::InstanceDescriptor;
+
         let window = build_window(event_loop).expect("build window");
 
-        let instance = Instance::new(Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(&window) };
+        let instance = Instance::new(InstanceDescriptor::default());
+        let surface = unsafe {
+            instance
+                .create_surface(&window)
+                .expect("create wgpu instance surface")
+        };
 
         let adapter = request_adapter(&instance, &surface).expect("request adaptor");
         let (device, queue) = request_device(&adapter).expect("request device");
-        let texture_format = surface.get_supported_formats(&adapter)[0]; // First is preferred
 
-        let alpha_mode = surface.get_supported_alpha_modes(&adapter)[0];
-        let surface_config = surface_config(&window, alpha_mode, texture_format);
+        let capabilities = surface.get_capabilities(&adapter);
+
+        let surface_config = surface_config(&window, capabilities);
         surface.configure(&device, &surface_config);
         let platform = platform(&window);
-        let mut render_pass = RenderPass::new(&device, texture_format, 1);
+        let mut render_pass = RenderPass::new(&device, surface_config.format, 1);
 
         let texture_size = texture_size();
         let texture = create_texture(&device, texture_size);
@@ -112,7 +119,7 @@ impl Gui {
     }
 
     pub fn paint(&mut self, cpu: &Cpu) {
-        use wgpu::SurfaceError;
+        use wgpu::{Color, SurfaceError};
 
         let data = emu::pixel_buf(cpu);
         write_to_texture(&self.queue, &self.texture, data, self.texture_size);
@@ -350,21 +357,18 @@ fn request_device(adapter: &Adapter) -> Result<(Device, Queue), RequestDeviceErr
     ))
 }
 
-fn surface_config(
-    window: &Window,
-    alpha_mode: CompositeAlphaMode,
-    format: TextureFormat,
-) -> SurfaceConfiguration {
-    use wgpu::PresentMode;
+fn surface_config(window: &Window, capabilities: SurfaceCapabilities) -> SurfaceConfiguration {
+    use egui_wgpu_backend::wgpu::{PresentMode, TextureFormat, TextureUsages};
 
     let size = window.inner_size();
     SurfaceConfiguration {
         usage: TextureUsages::RENDER_ATTACHMENT,
-        format,
+        format: capabilities.formats[0],
         width: size.width as u32,
         height: size.height as u32,
         present_mode: PresentMode::Fifo,
-        alpha_mode,
+        alpha_mode: capabilities.alpha_modes[0],
+        view_formats: vec![TextureFormat::Bgra8UnormSrgb],
     }
 }
 
@@ -391,16 +395,17 @@ fn texture_size() -> Extent3d {
 }
 
 fn create_texture(device: &Device, size: Extent3d) -> Texture {
-    use wgpu::{TextureDescriptor, TextureDimension};
+    use wgpu::{TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
 
     device.create_texture(&TextureDescriptor {
         size,
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8UnormSrgb,
+        format: TextureFormat::Bgra8Unorm,
         usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
         label: Some("gb_pixel_buffer"),
+        view_formats: &[TextureFormat::Bgra8Unorm],
     })
 }
 
