@@ -368,7 +368,7 @@ fn surface_config(window: &Window, capabilities: SurfaceCapabilities) -> Surface
         height: size.height as u32,
         present_mode: PresentMode::Fifo,
         alpha_mode: capabilities.alpha_modes[0],
-        view_formats: vec![TextureFormat::Bgra8UnormSrgb],
+        view_formats: vec![TextureFormat::Rgba8UnormSrgb],
     }
 }
 
